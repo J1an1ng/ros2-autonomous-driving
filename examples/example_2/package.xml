@@ -4,7 +4,7 @@
   <version>0.0.2</version>
   <description>Simple ROS 2 talker/listener example</description>
 
-  <maintainer email="markus.ryll@tum.de">Markus Ryll/maintainer>
+  <maintainer email="markus.ryll@tum.de">Markus Ryll</maintainer>
   <license>TODO</license>
 
   <!-- Build tool -->

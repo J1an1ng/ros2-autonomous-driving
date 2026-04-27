@@ -30,3 +30,4 @@ sudo apt install ros-jazzy-desktop
 
 6) Setup environment
 source /opt/ros/jazzy/setup.bash
+ros2
