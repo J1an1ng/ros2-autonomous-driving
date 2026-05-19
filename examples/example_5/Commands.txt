@@ -1,0 +1,53 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%        Example 5       %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+colcon build
+source install/setup.bash
+sudo apt install ros-jazzy-urdf-tutorial
+roslaunch urdf_tutorial display.launch model:=src/r2d2/urdf/r2d2_complete.xml
+Show the urdf-file
+
+roslaunch r2d2 display.launch
+Add Robot Model in rviz
+
+
+roslaunch gazebo_ros empty_world.launch
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%     ROS Services       %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+roscore
+rosrun roscpp_tutorials add_two_ints
+service call /add_two_ints
+
+rosrun roscpp_tutorials add_two_ints_clients 1 2
+
+Show issues 
+- rosrun roscpp_tutorials add_two_ints_clients 1 2 3
+- RUN (without the server): rosrun roscpp_tutorials add_two_ints_clients 1 2
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%       Example 5        %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Download https://syncandshare.lrz.de/getlink/fiT6WFmoF5tB72JD59k3Pd/UnityPlayer.zip
+Unzip the file 
+Make the executable executable
+
+catkin build
+source devel/setup.bash
+roslaunch simulation unity_ros.launch
+
+rqt_graph
+rostopic list -> Go over the topics
+rqt_image_view
+
+rosbag record --all
+rqt_bag
+rosbag play ***** --rate=1 --loop
+
+
+rosclean purge
+
+
