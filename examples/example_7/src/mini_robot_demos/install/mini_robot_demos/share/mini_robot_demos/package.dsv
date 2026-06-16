@@ -1,0 +1,5 @@
+source;share/mini_robot_demos/local_setup.bash
+source;share/mini_robot_demos/local_setup.dsv
+source;share/mini_robot_demos/local_setup.ps1
+source;share/mini_robot_demos/local_setup.sh
+source;share/mini_robot_demos/local_setup.zsh
