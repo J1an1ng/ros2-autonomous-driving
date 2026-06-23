@@ -1,31 +1,34 @@
-#include <ros/ros.h>
-#include <simulation/VehicleControl.h>
-#include "math.h"
-constexpr float loop_interval = 0.05;
+#include <cmath>
+
+#include <rclcpp/rclcpp.hpp>
+#include <simulation/msg/vehicle_control.hpp>
+
+constexpr float loop_interval = 0.05F;
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "dummy_controller_node");
-    ros::NodeHandle nh;
-    ros::Publisher pub = nh.advertise<simulation::VehicleControl>("car_command", 1);
-    ros::Rate loop_rate(1 / loop_interval);
-    float elapsed_time = 0.0f;
+  rclcpp::init(argc, argv);
 
-    while (ros::ok())
-    {
-        simulation::VehicleControl msg;
-        msg.Throttle = 0.5f; // Throttle value from -1 to 1, this is the torque applied to the motors
-        msg.Steering =  sin(6.28 * elapsed_time) * 0.5; //Steering value from -1 to 1, in which: positive value <=> turning right
-        msg.Brake = 0.0f; // Brake value from 0 to 1, this will apply brake torque to stop the car
-        msg.Reserved = 0.0f; // Not used!
+  auto node = std::make_shared<rclcpp::Node>("dummy_controller_node");
+  auto pub = node->create_publisher<simulation::msg::VehicleControl>("car_command", rclcpp::QoS(1));
+  rclcpp::Rate loop_rate(1.0F / loop_interval);
+  float elapsed_time = 0.0F;
 
-        pub.publish(msg);
+  while (rclcpp::ok())
+  {
+    simulation::msg::VehicleControl msg;
+    msg.throttle = 0.5F;  // Throttle value from -1 to 1, this is the torque applied to the motors
+    msg.steering = std::sin(6.28F * elapsed_time) * 0.5F;  // Positive value <=> turning right
+    msg.brake = 0.0F;  // Brake value from 0 to 1, this will apply brake torque to stop the car
+    msg.reserved = 0.0F;  // Not used
 
-        ros::spinOnce();
-        loop_rate.sleep();
-        elapsed_time += loop_interval;
+    pub->publish(msg);
 
-    }
+    rclcpp::spin_some(node);
+    loop_rate.sleep();
+    elapsed_time += loop_interval;
+  }
 
-    return 0;
+  rclcpp::shutdown();
+  return 0;
 }
