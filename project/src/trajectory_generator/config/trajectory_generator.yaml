@@ -1,0 +1,11 @@
+trajectory_generator_node:
+  ros__parameters:
+    map_frame: world
+    vehicle_frame: OurCar/INS
+    update_rate: 10.0
+    path_resolution: 1.0
+    min_target_distance: 0.5
+    default_speed: 2.0
+    max_speed: 8.0
+    slow_speed: 2.0
+    stop_speed: 0.0
