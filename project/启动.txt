@@ -1,0 +1,22 @@
+cd /home/tao/project
+source /opt/ros/jazzy/setup.bash
+sudo apt-get install \
+  ros-jazzy-octomap-server \
+  ros-jazzy-octomap-ros \
+  ros-jazzy-octomap-msgs \
+  ros-jazzy-octomap-rviz-plugins
+colcon build --packages-select perception
+source install/setup.bash
+ros2 launch perception perception.launch.py
+
+
+
+cd /home/tao/project
+source /opt/ros/jazzy/setup.bash
+colcon build
+source install/setup.bash
+ros2 launch simulation simulation_demo.launch.py
+
+ros2 topic echo /perception/traffic_light_state
+ros2 topic echo /perception/octomap/projected_map --once
+ros2 topic echo /perception/extended_map --once

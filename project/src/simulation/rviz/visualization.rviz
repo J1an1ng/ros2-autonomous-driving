@@ -125,7 +125,7 @@ Visualization Manager:
       Length: 1
       Name: Seg Camera
       Radius: 0.10000000149011612
-      Reference Frame: OOurCar/Sensors/SegCamera
+      Reference Frame: OurCar/Sensors/SemanticCamera
       Show Trail: false
       Value: true
     - Alpha: 1
@@ -241,18 +241,6 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
-    - Class: octomap_rviz_plugin/OccupancyGrid
-      Enabled: false
-      Max. Height Display: 3.4028234663852886e+38
-      Max. Octree Depth: 16
-      Min. Height Display: -3.4028234663852886e+38
-      Name: Octomap_3D
-      Octomap Topic: /perception/octomap/octomap_binary
-      Queue Size: 5
-      Value: false
-      Voxel Alpha: 1
-      Voxel Coloring: Z-Axis
-      Voxel Rendering: Occupied Voxels
     - Class: rviz_default_plugins/Image
       Enabled: true
       Image Topic: /Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/image_raw

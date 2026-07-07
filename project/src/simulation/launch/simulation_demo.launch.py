@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -30,16 +30,23 @@ def generate_launch_description():
 
         static_tf('tf_nominal_center', [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center']),
         static_tf('tf_sensors', [0.8199998, 0, 1.269, 0, 0, 0, 1, 'OurCar/Center', 'OurCar/Sensors/SensorBase']),
-        static_tf('tf_segmentation_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/SegCamera']),
+        static_tf('tf_semantic_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/SemanticCamera']),
         static_tf('tf_depth_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera']),
-        static_tf('tf_RGB_camera_left', [0, 0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft']),
-        static_tf('tf_RGB_camera_right', [0, -0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight']),
+        static_tf('tf_rgb_camera_left', [0, 0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft']),
+        static_tf('tf_rgb_camera_right', [0, -0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight']),
 
         Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
             arguments=['-d', PathJoinSubstitution([FindPackageShare('simulation'), 'rviz', 'visualization.rviz'])],
+            output='screen',
+        ),
+        ExecuteProcess(
+            cmd=[PathJoinSubstitution([
+                FindPackageShare('simulation'),
+                'unity_sim', 'Build_Ubuntu', 'AD_Sim.x86_64'
+            ])],
             output='screen',
         ),
     ])

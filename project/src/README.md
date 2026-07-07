@@ -4,7 +4,7 @@
 
 This repository is part of the "Introduction to ROS" course project **Autonomous Driving**. It contains a Unity-based driving simulation package and a dummy controller to demonstrate how to control the vehicle from ROS 2.
 
-The repository contains two ROS 2 packages:
+The repository contains three ROS 2 packages:
 
 - `simulation/`
   - Unity bridge and simulation integration package.
@@ -15,6 +15,11 @@ The repository contains two ROS 2 packages:
 - `dummy_controller/`
   - A simple ROS 2 node that publishes vehicle control commands.
   - Publishes `simulation/msg/VehicleControl` messages to `/car_command`.
+
+- `perception/`
+  - Detects traffic lights.
+  - Converts depth images into point clouds and filters obstacle points.
+  - Starts OctoMap server to publish a 3D OctoMap and a projected occupancy grid.
 
 ## System Requirements
 
@@ -44,7 +49,12 @@ sudo apt install \
   ros-jazzy-std-msgs \
   ros-jazzy-sensor-msgs \
   ros-jazzy-geometry-msgs \
+  ros-jazzy-nav-msgs \
   ros-jazzy-tf2-ros \
+  ros-jazzy-octomap-server \
+  ros-jazzy-octomap-ros \
+  ros-jazzy-octomap-msgs \
+  ros-jazzy-octomap-rviz-plugins \
   ros-jazzy-rosidl-default-generators \
   ros-jazzy-ament-index-cpp \
   ros-jazzy-rviz2
@@ -59,6 +69,7 @@ your_ros2_workspace/
 └── src/
     ├── simulation/
     ├── dummy_controller/
+    ├── perception/
     ├── setup_script.sh
     └── README.md
 ```
@@ -98,10 +109,10 @@ colcon build
 source install/setup.bash
 ```
 
-To build only the two project packages:
+To build only the project packages:
 
 ```bash
-colcon build --packages-select simulation dummy_controller
+colcon build --packages-select simulation dummy_controller perception
 source install/setup.bash
 ```
 
@@ -112,6 +123,37 @@ Start the Unity bridge and simulation integration package:
 ```bash
 source ~/ros2_ws/install/setup.bash
 ros2 launch simulation simulation.launch.py
+```
+
+This starts both the ROS bridge and the included Ubuntu Unity simulation window.
+To additionally open RViz and the static sensor transforms, run:
+
+```bash
+ros2 launch simulation simulation_demo.launch.py
+```
+
+To run only the ROS bridge without opening Unity:
+
+```bash
+ros2 launch simulation simulation_no_Unity.launch.py
+```
+
+Start the perception pipeline in another terminal after sourcing the workspace:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch perception perception.launch.py
+```
+
+The occupancy mapping pipeline publishes:
+
+```text
+/perception/pcl/points
+/perception/pcl/points_preprocessed
+/perception/octomap/octomap_binary
+/perception/octomap/projected_map
+/perception/extended_map
 ```
 
 If your launch file accepts a config file argument, you can pass it explicitly:
@@ -129,7 +171,7 @@ In another terminal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/ros2_ws/install/setup.bash
+source ~/project/install/setup.bash
 ros2 launch dummy_controller dummy_controller.launch.py
 ```
 

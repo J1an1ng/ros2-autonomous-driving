@@ -5,6 +5,27 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
+def static_tf(name, args):
+    return Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name=name,
+        arguments=[str(a) for a in args],
+        output='screen',
+    )
+
+
+def vehicle_sensor_transforms():
+    return [
+        static_tf('tf_nominal_center', [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center']),
+        static_tf('tf_sensors', [0.8199998, 0, 1.269, 0, 0, 0, 1, 'OurCar/Center', 'OurCar/Sensors/SensorBase']),
+        static_tf('tf_semantic_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/SemanticCamera']),
+        static_tf('tf_depth_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera']),
+        static_tf('tf_rgb_camera_left', [0, 0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft']),
+        static_tf('tf_rgb_camera_right', [0, -0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight']),
+    ]
+
+
 def generate_launch_description():
     config_file = LaunchConfiguration('config_file')
     default_config = PathJoinSubstitution([
@@ -35,4 +56,5 @@ def generate_launch_description():
             output='screen',
             parameters=[{'config_file': config_file}],
         ),
+        *vehicle_sensor_transforms(),
     ])

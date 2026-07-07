@@ -1,31 +1,44 @@
-#include <ros/ros.h>
-#include <simulation/VehicleControl.h>
-#include "math.h"
-constexpr float loop_interval = 0.05;
+#include <chrono>
+#include <cmath>
+#include <memory>
 
-int main(int argc, char **argv)
+#include "rclcpp/rclcpp.hpp"
+#include "simulation/msg/vehicle_control.hpp"
+
+using namespace std::chrono_literals;
+
+class DummyController : public rclcpp::Node
 {
-    ros::init(argc, argv, "dummy_controller_node");
-    ros::NodeHandle nh;
-    ros::Publisher pub = nh.advertise<simulation::VehicleControl>("car_command", 1);
-    ros::Rate loop_rate(1 / loop_interval);
-    float elapsed_time = 0.0f;
+public:
+  DummyController()
+  : Node("dummy_controller_node")
+  {
+    publisher_ = create_publisher<simulation::msg::VehicleControl>("car_command", 1);
+    timer_ = create_wall_timer(50ms, [this]() {publish_command();});
+  }
 
-    while (ros::ok())
-    {
-        simulation::VehicleControl msg;
-        msg.Throttle = 0.5f; // Throttle value from -1 to 1, this is the torque applied to the motors
-        msg.Steering =  sin(6.28 * elapsed_time) * 0.5; //Steering value from -1 to 1, in which: positive value <=> turning right
-        msg.Brake = 0.0f; // Brake value from 0 to 1, this will apply brake torque to stop the car
-        msg.Reserved = 0.0f; // Not used!
+private:
+  void publish_command()
+  {
+    simulation::msg::VehicleControl msg;
+    msg.throttle = 0.5F;
+    msg.steering = std::sin(2.0F * std::acos(-1.0F) * elapsed_time_) * 0.5F;
+    msg.brake = 0.0F;
+    msg.reserved = 0.0F;
 
-        pub.publish(msg);
+    publisher_->publish(msg);
+    elapsed_time_ += 0.05F;
+  }
 
-        ros::spinOnce();
-        loop_rate.sleep();
-        elapsed_time += loop_interval;
+  rclcpp::Publisher<simulation::msg::VehicleControl>::SharedPtr publisher_;
+  rclcpp::TimerBase::SharedPtr timer_;
+  float elapsed_time_{0.0F};
+};
 
-    }
-
-    return 0;
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<DummyController>());
+  rclcpp::shutdown();
+  return 0;
 }
