@@ -138,3 +138,97 @@ def test_planning_speed_timeout_fails_safe_to_zero():
 
     assert output.target_speed == 0.0
     assert output.reason == "planning_speed_timeout"
+
+
+def test_merge_vehicle_limits_speed_and_uses_hysteresis():
+    machine = make_machine(
+        merge_trigger_distance=10.0,
+        merge_release_margin=2.0,
+        merge_target_speed=2.0,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(6.0, 0.0)
+    machine.update_obstacle_distances(float("inf"), 9.0, 0.0)
+
+    slowing = machine.evaluate(0.1)
+    machine.update_planning_speed(6.0, 0.2)
+    machine.update_obstacle_distances(float("inf"), 11.0, 0.2)
+    hysteresis = machine.evaluate(0.2)
+    machine.update_obstacle_distances(float("inf"), 12.1, 0.3)
+    released = machine.evaluate(0.3)
+
+    assert slowing.state == DecisionState.SLOWING_FOR_MERGE
+    assert slowing.target_speed == pytest.approx(2.0)
+    assert hysteresis.state == DecisionState.SLOWING_FOR_MERGE
+    assert released.state == DecisionState.CRUISE
+    assert released.target_speed == pytest.approx(6.0)
+
+
+def test_emergency_braking_has_priority_over_traffic_and_merge():
+    machine = make_machine(emergency_min_distance=4.0, merge_target_speed=2.0)
+    machine.update_route("stop_zone", 25)
+    machine.update_planning_speed(6.0, 0.0)
+    machine.update_vehicle_speed(3.0, 0.0)
+    machine.update_traffic_light(TrafficLight.RED, 0.0)
+    machine.update_obstacle_distances(2.0, 5.0, 0.0)
+
+    output = machine.evaluate(0.1)
+
+    assert output.state == DecisionState.EMERGENCY_BRAKING
+    assert output.target_speed == 0.0
+    assert output.stop_required
+    assert output.reason == "front_obstacle_emergency"
+
+
+def test_emergency_threshold_grows_with_vehicle_speed():
+    machine = make_machine(
+        emergency_min_distance=2.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=5.0,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(10.0, 0.0)
+    machine.update_obstacle_distances(14.0, float("inf"), 0.0)
+
+    output = machine.evaluate(0.1)
+
+    # 10 * 0.5 + 10^2 / (2 * 5) = 15 metres.
+    assert output.state == DecisionState.EMERGENCY_BRAKING
+
+
+def test_emergency_releases_only_after_clear_margin():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_release_margin=2.0,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(5.0, 0.0)
+    machine.update_vehicle_speed(0.0, 0.0)
+    machine.update_obstacle_distances(3.0, float("inf"), 0.0)
+    assert machine.evaluate(0.1).state == DecisionState.EMERGENCY_BRAKING
+
+    machine.update_planning_speed(5.0, 0.2)
+    machine.update_vehicle_speed(0.0, 0.2)
+    machine.update_obstacle_distances(5.0, float("inf"), 0.2)
+    assert machine.evaluate(0.2).state == DecisionState.EMERGENCY_BRAKING
+
+    machine.update_obstacle_distances(6.1, float("inf"), 0.3)
+    released = machine.evaluate(0.3)
+    assert released.state == DecisionState.CRUISE
+    assert released.target_speed == pytest.approx(5.0)
+
+
+def test_stale_emergency_observation_remains_fail_safe():
+    machine = make_machine(obstacle_timeout=0.2, emergency_min_distance=4.0)
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(5.0, 0.0)
+    machine.update_vehicle_speed(0.0, 0.0)
+    machine.update_obstacle_distances(2.0, float("inf"), 0.0)
+    machine.evaluate(0.1)
+    machine.update_planning_speed(5.0, 0.3)
+
+    stale = machine.evaluate(0.3)
+
+    assert stale.state == DecisionState.EMERGENCY_BRAKING
+    assert stale.target_speed == 0.0

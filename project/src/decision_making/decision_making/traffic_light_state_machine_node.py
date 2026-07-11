@@ -5,6 +5,7 @@ import math
 import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from std_msgs.msg import Bool, Float32, Int32, String, UInt8
 
 from decision_making.traffic_light_state_machine import TrafficLightStateMachine
@@ -18,17 +19,32 @@ class TrafficLightStateMachineNode(Node):
             "controlled_route_states",
             ["intersection_approach", "stop_zone", "intersection"],
         )
-        self.declare_parameter("traffic_light_waypoint_ids", [])
+        self.declare_parameter(
+            "traffic_light_waypoint_ids", Parameter.Type.INTEGER_ARRAY
+        )
         self.declare_parameter("stopped_speed_threshold", 0.15)
         self.declare_parameter("traffic_light_timeout", 0.75)
         self.declare_parameter("planning_speed_timeout", 0.5)
         self.declare_parameter("vehicle_speed_timeout", 0.5)
         self.declare_parameter("green_release_delay", 0.3)
         self.declare_parameter("treat_yellow_as_red", True)
+        self.declare_parameter("obstacle_timeout", 0.5)
+        self.declare_parameter("emergency_min_distance", 4.0)
+        self.declare_parameter("emergency_reaction_time", 0.5)
+        self.declare_parameter("emergency_deceleration", 5.0)
+        self.declare_parameter("emergency_release_margin", 2.0)
+        self.declare_parameter("merge_trigger_distance", 10.0)
+        self.declare_parameter("merge_release_margin", 2.0)
+        self.declare_parameter("merge_target_speed", 2.0)
         self.declare_parameter("update_rate", 20.0)
 
         controlled_states = self.get_parameter("controlled_route_states").value
-        waypoint_ids = self.get_parameter("traffic_light_waypoint_ids").value
+        waypoint_ids = self.get_parameter_or(
+            "traffic_light_waypoint_ids",
+            Parameter(
+                "traffic_light_waypoint_ids", Parameter.Type.INTEGER_ARRAY, []
+            ),
+        ).value
         self.machine = TrafficLightStateMachine(
             controlled_route_states=controlled_states,
             traffic_light_waypoint_ids=waypoint_ids,
@@ -38,10 +54,20 @@ class TrafficLightStateMachineNode(Node):
             vehicle_speed_timeout=self.get_parameter("vehicle_speed_timeout").value,
             green_release_delay=self.get_parameter("green_release_delay").value,
             treat_yellow_as_red=self.get_parameter("treat_yellow_as_red").value,
+            obstacle_timeout=self.get_parameter("obstacle_timeout").value,
+            emergency_min_distance=self.get_parameter("emergency_min_distance").value,
+            emergency_reaction_time=self.get_parameter("emergency_reaction_time").value,
+            emergency_deceleration=self.get_parameter("emergency_deceleration").value,
+            emergency_release_margin=self.get_parameter("emergency_release_margin").value,
+            merge_trigger_distance=self.get_parameter("merge_trigger_distance").value,
+            merge_release_margin=self.get_parameter("merge_release_margin").value,
+            merge_target_speed=self.get_parameter("merge_target_speed").value,
         )
 
         self.route_state = ""
         self.waypoint_id = None
+        self.front_obstacle_distance = math.inf
+        self.merge_obstacle_distance = math.inf
 
         self.create_subscription(
             UInt8,
@@ -71,6 +97,18 @@ class TrafficLightStateMachineNode(Node):
             TwistStamped,
             "/OurCar/INS/twist",
             self.twist_callback,
+            10,
+        )
+        self.create_subscription(
+            Float32,
+            "/decision/front_obstacle_distance",
+            self.front_obstacle_callback,
+            10,
+        )
+        self.create_subscription(
+            Float32,
+            "/decision/merge_obstacle_distance",
+            self.merge_obstacle_callback,
             10,
         )
 
@@ -110,6 +148,22 @@ class TrafficLightStateMachineNode(Node):
         speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
         self.machine.update_vehicle_speed(speed, self.now_seconds())
 
+    def front_obstacle_callback(self, msg: Float32) -> None:
+        self.front_obstacle_distance = msg.data
+        self.machine.update_obstacle_distances(
+            self.front_obstacle_distance,
+            self.merge_obstacle_distance,
+            self.now_seconds(),
+        )
+
+    def merge_obstacle_callback(self, msg: Float32) -> None:
+        self.merge_obstacle_distance = msg.data
+        self.machine.update_obstacle_distances(
+            self.front_obstacle_distance,
+            self.merge_obstacle_distance,
+            self.now_seconds(),
+        )
+
     def timer_callback(self) -> None:
         output = self.machine.evaluate(self.now_seconds())
 
@@ -129,7 +183,10 @@ class TrafficLightStateMachineNode(Node):
         debug_msg.data = (
             f"state={output.state.name} reason={output.reason} "
             f"route_state={self.machine.route_state} waypoint_id={self.machine.waypoint_id} "
-            f"light={self.machine.traffic_light.name} target_speed={output.target_speed:.3f}"
+            f"light={self.machine.traffic_light.name} "
+            f"front_distance={self.machine.front_obstacle_distance:.3f} "
+            f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
+            f"target_speed={output.target_speed:.3f}"
         )
         self.debug_pub.publish(debug_msg)
 

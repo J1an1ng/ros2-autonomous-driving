@@ -13,4 +13,27 @@ traffic_light_state_machine_node:
     vehicle_speed_timeout: 0.5
     green_release_delay: 0.3
     treat_yellow_as_red: true
+    obstacle_timeout: 0.5
+    emergency_min_distance: 4.0
+    emergency_reaction_time: 0.5
+    emergency_deceleration: 5.0
+    emergency_release_margin: 2.0
+    merge_trigger_distance: 10.0
+    merge_release_margin: 2.0
+    merge_target_speed: 2.0
     update_rate: 20.0
+
+obstacle_monitor_node:
+  ros__parameters:
+    pointcloud_topic: /perception/pcl/points_preprocessed
+    vehicle_frame: OurCar/INS
+    front_min_x: 0.5
+    front_max_x: 30.0
+    front_half_width: 1.2
+    merge_min_x: 0.5
+    merge_max_x: 15.0
+    # REP-103 vehicle coordinates: +x forward, +y left, therefore right is -y.
+    merge_right_min_y: -4.0
+    merge_right_max_y: -0.8
+    min_z: -1.0
+    max_z: 2.0

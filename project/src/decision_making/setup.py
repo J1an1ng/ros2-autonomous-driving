@@ -7,7 +7,7 @@ package_name = "decision_making"
 
 setup(
     name=package_name,
-    version="0.1.0",
+    version="0.2.0",
     packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -26,6 +26,7 @@ setup(
         "console_scripts": [
             "traffic_light_state_machine_node = "
             "decision_making.traffic_light_state_machine_node:main",
+            "obstacle_monitor_node = decision_making.obstacle_monitor_node:main",
         ],
     },
 )
