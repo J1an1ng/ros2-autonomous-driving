@@ -46,6 +46,26 @@ Type: geometry_msgs/msg/PoseStamped
 
 Description:The currently selected target waypoint. This topic can be used by the trajectory planner as the next short-term goal.
 
+/route/local_path
+
+Type:
+
+nav_msgs/msg/Path
+
+Description:
+A local navigation path containing up to five consecutive waypoints starting from the current route index.
+For example, if the current route index is 10, the local path normally contains:
+
+10
+11
+12
+13
+14
+
+Near the end of the route, fewer than five waypoints may be published.
+
+This topic provides the trajectory planner with information about the road geometry ahead, especially at curves and intersections.
+
 /route/speed_limit
 
 Type: std_msgs/msg/Float32
@@ -114,4 +134,4 @@ ros2 topic echo /route/target_pose
 ros2 topic echo /route/speed_limit
 ros2 topic echo /route/current_waypoint_id
 ros2 topic echo /route/route_state
-
+ros2 topic echo /route/local_path
