@@ -1,0 +1,16 @@
+traffic_light_state_machine_node:
+  ros__parameters:
+    controlled_route_states:
+      - intersection_approach
+      - stop_zone
+      - intersection
+    # Empty means that route-state gating applies to every waypoint. Replace
+    # this with the four verified traffic-light waypoint IDs after track tests.
+    traffic_light_waypoint_ids: []
+    stopped_speed_threshold: 0.15
+    traffic_light_timeout: 0.75
+    planning_speed_timeout: 0.5
+    vehicle_speed_timeout: 0.5
+    green_release_delay: 0.3
+    treat_yellow_as_red: true
+    update_rate: 20.0
