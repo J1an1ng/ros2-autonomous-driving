@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='linux',
     maintainer_email='linux@todo.todo',
-    description='Minimal trajectory generation package for autonomous driving.',
+    description='Reference path generation package for autonomous driving.',
     license='TODO: License declaration',
     extras_require={
         'test': [
