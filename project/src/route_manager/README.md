@@ -34,6 +34,9 @@ It performs the following tasks:
 
 Loads the predefined route from route_map.yaml.
 Reads the current vehicle pose from TF.
+Initializes route progress from the nearest heading-compatible waypoint after
+TF first becomes available. The initialization callback publishes that
+waypoint without immediately marking it reached.
 Checks the distance between the vehicle and the current waypoint.
 Switches to the next waypoint when the vehicle is close enough.
 Publishes the selected waypoint as the current target pose.

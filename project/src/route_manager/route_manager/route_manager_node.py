@@ -3,6 +3,8 @@
 import math
 from pathlib import Path as FilePath
 
+from route_manager.route_progress import RouteProgress
+
 import yaml
 import rclpy
 from rclpy.node import Node
@@ -65,7 +67,10 @@ class RouteManagerNode(Node):
 
         # Load route
         self.waypoints = self.load_route_file(self.route_file)
-        self.current_index = 0
+        self.route_progress = RouteProgress(
+            self.waypoints,
+            self.reach_distance
+        )
 
         # TF
         self.tf_buffer = Buffer()
@@ -196,44 +201,26 @@ class RouteManagerNode(Node):
             return None
 
         translation = transform.transform.translation
+        rotation = transform.transform.rotation
 
         ego_x = float(translation.x)
         ego_y = float(translation.y)
-
-        return ego_x, ego_y
-
-    def update_current_waypoint(self, ego_x, ego_y):
-        if not self.waypoints:
-            return
-
-        if self.current_index >= len(self.waypoints):
-            self.current_index = len(self.waypoints) - 1
-            return
-
-        current_wp = self.waypoints[self.current_index]
-
-        distance = distance_2d(
-            ego_x,
-            ego_y,
-            float(current_wp["x"]),
-            float(current_wp["y"])
+        ego_yaw = math.atan2(
+            2.0 * (
+                rotation.w * rotation.z
+                + rotation.x * rotation.y
+            ),
+            1.0 - 2.0 * (
+                rotation.y * rotation.y
+                + rotation.z * rotation.z
+            )
         )
 
-        if (
-            distance < self.reach_distance
-            and self.current_index < len(self.waypoints) - 1
-        ):
-            reached_id = int(
-                current_wp.get("id", self.current_index)
-            )
+        return ego_x, ego_y, ego_yaw
 
-            self.current_index += 1
-
-            self.get_logger().info(
-                f"Reached waypoint {reached_id}, "
-                f"switching to waypoint index "
-                f"{self.current_index}"
-            )
+    @property
+    def current_index(self):
+        return self.route_progress.current_index
 
     def get_target_waypoint(self):
         target_index = min(
@@ -358,12 +345,33 @@ class RouteManagerNode(Node):
         if ego_pose is None:
             return
 
-        ego_x, ego_y = ego_pose
-
-        self.update_current_waypoint(
+        ego_x, ego_y, ego_yaw = ego_pose
+        previous_index = self.current_index
+        self.route_progress.update(
             ego_x,
-            ego_y
+            ego_y,
+            ego_yaw
         )
+
+        if previous_index is None:
+            selected_wp = self.waypoints[self.current_index]
+            selected_id = int(
+                selected_wp.get('id', self.current_index)
+            )
+            self.get_logger().info(
+                f'Initialized route at waypoint {selected_id}, '
+                f'index {self.current_index}'
+            )
+        elif self.current_index != previous_index:
+            reached_wp = self.waypoints[previous_index]
+            reached_id = int(
+                reached_wp.get('id', previous_index)
+            )
+            self.get_logger().info(
+                f'Reached waypoint {reached_id}, '
+                f'switching to waypoint index '
+                f'{self.current_index}'
+            )
 
         target_wp, target_index = (
             self.get_target_waypoint()
