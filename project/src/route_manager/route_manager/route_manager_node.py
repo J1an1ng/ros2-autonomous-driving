@@ -3,7 +3,7 @@
 import math
 from pathlib import Path as FilePath
 
-from route_manager.route_progress import RouteProgress
+from route_manager.route_progress import RouteProgress, select_local_waypoints
 
 import yaml
 import rclpy
@@ -292,16 +292,11 @@ class RouteManagerNode(Node):
             )
             return
 
-        start_index = self.current_index
-
-        end_index = min(
-            start_index + self.local_path_size,
-            len(self.waypoints)
+        local_waypoints = select_local_waypoints(
+            self.waypoints,
+            self.current_index,
+            self.local_path_size,
         )
-
-        local_waypoints = self.waypoints[
-            start_index:end_index
-        ]
 
         path_msg = NavPath()
         path_msg.header.stamp = (

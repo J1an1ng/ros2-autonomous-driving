@@ -3,6 +3,16 @@
 import math
 
 
+def select_local_waypoints(waypoints, current_index, local_path_size):
+    """Return a bounded local-path window including the previous waypoint."""
+    start_index = max(int(current_index) - 1, 0)
+    end_index = min(
+        start_index + max(int(local_path_size), 0),
+        len(waypoints),
+    )
+    return waypoints[start_index:end_index]
+
+
 class RouteProgress:
     """Select and advance the current route waypoint."""
 

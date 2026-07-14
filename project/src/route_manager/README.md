@@ -56,16 +56,22 @@ Type:
 nav_msgs/msg/Path
 
 Description:
-A local navigation path containing up to five consecutive waypoints starting from the current route index.
-For example, if the current route index is 10, the local path normally contains:
+A local navigation path containing up to `local_path_size` consecutive
+waypoints. It begins at the waypoint before the current target so the path
+retains the segment currently occupied by the vehicle. At the beginning of the
+route, the start index is clamped to zero.
 
-10
-11
-12
-13
-14
+For example, if the current route index is 20 and `local_path_size` is 5, the
+local path normally contains:
 
-Near the end of the route, fewer than five waypoints may be published.
+19
+20
+21
+22
+23
+
+Near the end of the route, fewer than `local_path_size` waypoints may be
+published.
 
 This topic provides the trajectory planner with information about the road geometry ahead, especially at curves and intersections.
 

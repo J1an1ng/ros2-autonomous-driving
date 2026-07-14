@@ -17,7 +17,7 @@
 import math
 from pathlib import Path
 
-from route_manager.route_progress import RouteProgress
+from route_manager.route_progress import RouteProgress, select_local_waypoints
 
 import yaml
 
@@ -75,3 +75,49 @@ def test_initialization_callback_does_not_immediately_advance():
     progress.update(**ego_pose)
 
     assert progress.current_index == 20
+
+
+def test_local_path_at_route_start_begins_at_waypoint_zero():
+    """The previous-waypoint rule clamps safely at the route start."""
+    waypoints = load_route_waypoints()
+
+    local_waypoints = select_local_waypoints(
+        waypoints,
+        current_index=0,
+        local_path_size=5,
+    )
+
+    assert [waypoint['id'] for waypoint in local_waypoints] == [0, 1, 2, 3, 4]
+
+
+def test_local_path_for_waypoint_20_begins_at_waypoint_19():
+    """The local path retains the segment leading to the current target."""
+    waypoints = load_route_waypoints()
+
+    local_waypoints = select_local_waypoints(
+        waypoints,
+        current_index=20,
+        local_path_size=5,
+    )
+
+    assert [waypoint['id'] for waypoint in local_waypoints] == [
+        19,
+        20,
+        21,
+        22,
+        23,
+    ]
+
+
+def test_local_path_at_route_end_stays_within_route():
+    """The final local path stays within the route."""
+    waypoints = load_route_waypoints()
+    last_index = len(waypoints) - 1
+
+    local_waypoints = select_local_waypoints(
+        waypoints,
+        current_index=last_index,
+        local_path_size=5,
+    )
+
+    assert local_waypoints == waypoints[last_index - 1:last_index + 1]
