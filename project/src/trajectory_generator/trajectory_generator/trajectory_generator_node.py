@@ -48,6 +48,7 @@ class TrajectoryGeneratorNode(Node):
         self.trajectory_generator = TrajectoryGenerator(config)
 
         self.target_pose_msg = None
+        self.local_path = []
         self.speed_limit = None
         self.route_state = ""
         self.current_waypoint_id = None
@@ -59,6 +60,12 @@ class TrajectoryGeneratorNode(Node):
             PoseStamped,
             "/route/target_pose",
             self.target_pose_callback,
+            10,
+        )
+        self.create_subscription(
+            Path,
+            "/route/local_path",
+            self.local_path_callback,
             10,
         )
         self.create_subscription(
@@ -97,6 +104,11 @@ class TrajectoryGeneratorNode(Node):
     def target_pose_callback(self, msg):
         self.target_pose_msg = msg
 
+    def local_path_callback(self, msg):
+        self.local_path = [
+            self.pose_stamped_to_pose2d(pose_msg) for pose_msg in msg.poses
+        ]
+
     def speed_limit_callback(self, msg):
         self.speed_limit = float(msg.data)
 
@@ -131,7 +143,7 @@ class TrajectoryGeneratorNode(Node):
             yaw=float(yaw),
         )
 
-    def target_pose_to_pose2d(self, msg):
+    def pose_stamped_to_pose2d(self, msg):
         position = msg.pose.position
         orientation = msg.pose.orientation
         yaw = quaternion_to_yaw(
@@ -166,17 +178,17 @@ class TrajectoryGeneratorNode(Node):
         return path_msg
 
     def timer_callback(self):
-        if self.target_pose_msg is None:
-            return
-
         ego_pose = self.get_ego_pose()
         if ego_pose is None:
             return
 
-        target_pose = self.target_pose_to_pose2d(self.target_pose_msg)
+        target_pose = None
+        if self.target_pose_msg is not None:
+            target_pose = self.pose_stamped_to_pose2d(self.target_pose_msg)
         trajectory = self.trajectory_generator.generate(
             ego_pose=ego_pose,
             target_pose=target_pose,
+            local_path=self.local_path,
             speed_limit=self.speed_limit,
             route_state=self.route_state,
         )

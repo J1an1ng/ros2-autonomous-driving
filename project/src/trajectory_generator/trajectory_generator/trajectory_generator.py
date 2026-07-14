@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
-from trajectory_generator.path_processor import interpolate_path
+from trajectory_generator.path_processor import (
+    interpolate_path,
+    process_local_path,
+)
 from trajectory_generator.velocity_profile import select_target_speed
 
 
@@ -24,13 +27,26 @@ class TrajectoryGenerator:
     def __init__(self, config):
         self.config = config
 
-    def generate(self, ego_pose, target_pose, speed_limit, route_state):
-        path_points = interpolate_path(
+    def generate(
+        self,
+        ego_pose,
+        target_pose,
+        speed_limit,
+        route_state,
+        local_path=None,
+    ):
+        path_points = process_local_path(
+            route_points=local_path or [],
             ego_pose=ego_pose,
-            target_pose=target_pose,
             path_resolution=self.config.path_resolution,
-            min_target_distance=self.config.min_target_distance,
         )
+        if not path_points and target_pose is not None:
+            path_points = interpolate_path(
+                ego_pose=ego_pose,
+                target_pose=target_pose,
+                path_resolution=self.config.path_resolution,
+                min_target_distance=self.config.min_target_distance,
+            )
         target_speed = select_target_speed(
             route_state=route_state,
             speed_limit=speed_limit,
