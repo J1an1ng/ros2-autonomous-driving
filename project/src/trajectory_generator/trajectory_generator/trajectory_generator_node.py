@@ -28,6 +28,14 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter("update_rate", 10.0)
         self.declare_parameter("path_resolution", 1.0)
         self.declare_parameter("min_target_distance", 0.5)
+        self.declare_parameter("smoothing_strength", 0.25)
+        self.declare_parameter("max_curvature", 2.0)
+        self.declare_parameter("max_yaw_step", 1.1)
+        self.declare_parameter("max_start_distance", 5.0)
+        self.declare_parameter("max_spline_deviation", 2.0)
+        self.declare_parameter("continuity_blend_distance", 5.0)
+        self.declare_parameter("continuity_candidate_weight", 0.5)
+        self.declare_parameter("max_continuity_deviation", 2.0)
         self.declare_parameter("default_speed", 2.0)
         self.declare_parameter("max_speed", 8.0)
         self.declare_parameter("slow_speed", 2.0)
@@ -40,6 +48,26 @@ class TrajectoryGeneratorNode(Node):
         config = TrajectoryGeneratorConfig(
             path_resolution=float(self.get_parameter("path_resolution").value),
             min_target_distance=float(self.get_parameter("min_target_distance").value),
+            smoothing_strength=float(
+                self.get_parameter("smoothing_strength").value
+            ),
+            max_curvature=float(self.get_parameter("max_curvature").value),
+            max_yaw_step=float(self.get_parameter("max_yaw_step").value),
+            max_start_distance=float(
+                self.get_parameter("max_start_distance").value
+            ),
+            max_spline_deviation=float(
+                self.get_parameter("max_spline_deviation").value
+            ),
+            continuity_blend_distance=float(
+                self.get_parameter("continuity_blend_distance").value
+            ),
+            continuity_candidate_weight=float(
+                self.get_parameter("continuity_candidate_weight").value
+            ),
+            max_continuity_deviation=float(
+                self.get_parameter("max_continuity_deviation").value
+            ),
             default_speed=float(self.get_parameter("default_speed").value),
             max_speed=float(self.get_parameter("max_speed").value),
             slow_speed=float(self.get_parameter("slow_speed").value),
@@ -48,6 +76,7 @@ class TrajectoryGeneratorNode(Node):
         self.trajectory_generator = TrajectoryGenerator(config)
 
         self.target_pose_msg = None
+        self.local_path = []
         self.speed_limit = None
         self.route_state = ""
         self.current_waypoint_id = None
@@ -59,6 +88,12 @@ class TrajectoryGeneratorNode(Node):
             PoseStamped,
             "/route/target_pose",
             self.target_pose_callback,
+            10,
+        )
+        self.create_subscription(
+            Path,
+            "/route/local_path",
+            self.local_path_callback,
             10,
         )
         self.create_subscription(
@@ -97,6 +132,11 @@ class TrajectoryGeneratorNode(Node):
     def target_pose_callback(self, msg):
         self.target_pose_msg = msg
 
+    def local_path_callback(self, msg):
+        self.local_path = [
+            self.pose_stamped_to_pose2d(pose_msg) for pose_msg in msg.poses
+        ]
+
     def speed_limit_callback(self, msg):
         self.speed_limit = float(msg.data)
 
@@ -131,7 +171,7 @@ class TrajectoryGeneratorNode(Node):
             yaw=float(yaw),
         )
 
-    def target_pose_to_pose2d(self, msg):
+    def pose_stamped_to_pose2d(self, msg):
         position = msg.pose.position
         orientation = msg.pose.orientation
         yaw = quaternion_to_yaw(
@@ -166,20 +206,25 @@ class TrajectoryGeneratorNode(Node):
         return path_msg
 
     def timer_callback(self):
-        if self.target_pose_msg is None:
-            return
-
         ego_pose = self.get_ego_pose()
         if ego_pose is None:
             return
 
-        target_pose = self.target_pose_to_pose2d(self.target_pose_msg)
+        target_pose = None
+        if self.target_pose_msg is not None:
+            target_pose = self.pose_stamped_to_pose2d(self.target_pose_msg)
         trajectory = self.trajectory_generator.generate(
             ego_pose=ego_pose,
             target_pose=target_pose,
+            local_path=self.local_path,
             speed_limit=self.speed_limit,
             route_state=self.route_state,
         )
+        if trajectory.path_status:
+            self.get_logger().warn(
+                trajectory.path_status,
+                throttle_duration_sec=2.0,
+            )
 
         path_msg = self.path_points_to_msg(trajectory.path_points)
         speed_msg = Float32()
