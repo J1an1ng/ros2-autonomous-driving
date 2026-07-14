@@ -65,7 +65,13 @@ install(DIRECTORY
   rviz
   scripts
   test_scripts
+  unity_sim
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  unity_sim/Build_Ubuntu/AD_Sim.x86_64
+  DESTINATION share/${PROJECT_NAME}/unity_sim/Build_Ubuntu
 )
 
 ament_export_dependencies(rosidl_default_runtime)

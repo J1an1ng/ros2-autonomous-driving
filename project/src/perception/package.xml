@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>perception</name>
+  <version>0.1.0</version>
+  <description>Perception nodes for the autonomous driving project.</description>
+  <maintainer email="tao@example.com">tao</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>octomap_server</exec_depend>
+  <exec_depend>octomap_rviz_plugins</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

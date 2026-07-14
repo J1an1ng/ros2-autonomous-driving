@@ -2,7 +2,7 @@
 <package format="3">
   <name>dummy_controller</name>
   <version>0.0.6657</version>
-  <description>The dummy_controller package</description>
+  <description>A simple ROS 2 controller that publishes vehicle commands.</description>
 
   <maintainer email="jiaming.zhang@tum.de">Jiaming zhang</maintainer>
   <license>TODO</license>

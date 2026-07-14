@@ -48,13 +48,39 @@ source install/setup.bash
 
 ## Launch
 
-Run the bridge only:
+Start the ROS bridge and Unity simulation window:
 
 ```bash
 ros2 launch simulation simulation.launch.py
 ```
 
-or with an explicit Unity config file:
+This also publishes the static vehicle sensor transforms:
+
+```text
+OurCar/INS -> OurCar/Center
+OurCar/Center -> OurCar/Sensors/SensorBase
+OurCar/Sensors/SensorBase -> OurCar/Sensors/DepthCamera
+OurCar/Sensors/SensorBase -> OurCar/Sensors/RGBCameraLeft
+OurCar/Sensors/SensorBase -> OurCar/Sensors/RGBCameraRight
+OurCar/Sensors/SensorBase -> OurCar/Sensors/SemanticCamera
+```
+
+Together with the dynamic `world -> OurCar/INS` transform from the true-state stream,
+these frames provide the complete TF chain from each sensor to `world`.
+
+Start the bridge, Unity, TF publishers, and RViz:
+
+```bash
+ros2 launch simulation simulation_demo.launch.py
+```
+
+Run only the bridge when Unity is already running elsewhere:
+
+```bash
+ros2 launch simulation simulation_no_Unity.launch.py
+```
+
+Use an explicit Unity config file when needed:
 
 ```bash
 ros2 launch simulation simulation.launch.py \
@@ -110,5 +136,6 @@ Topics are created dynamically from Unity object names, for example:
 ## Notes
 
 - The original ROS1 launch files are kept as `*.ros1` references.
-- Unity is not started automatically in the ROS2 launch file. Start Unity separately unless you adapt `scripts/run_unity.sh` to your local Unity build path.
+- `simulation.launch.py` and `simulation_demo.launch.py` start the included Ubuntu Unity build automatically.
+- The included Unity build requires a graphical Linux session. For WSL or remote machines, run Unity on the host machine and use `simulation_no_Unity.launch.py`.
 - The JSON parameter reader is retained as a diagnostic/config reader. In ROS2, parameters are node-local, so the receiver and transmitter also read the config file themselves.
