@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import math
-from pathlib import Path
+from pathlib import Path as FilePath
 
 import yaml
 import rclpy
@@ -9,16 +9,19 @@ from rclpy.node import Node
 
 from std_msgs.msg import Int32, Float32, String
 from geometry_msgs.msg import PoseStamped, Quaternion
+from nav_msgs.msg import Path as NavPath
 from tf2_ros import Buffer, TransformListener, TransformException
 
 
 def yaw_deg_to_quaternion(yaw_deg):
-    yaw = math.radians(yaw_deg)
+    yaw = math.radians(float(yaw_deg))
+
     q = Quaternion()
     q.x = 0.0
     q.y = 0.0
     q.z = math.sin(yaw / 2.0)
     q.w = math.cos(yaw / 2.0)
+
     return q
 
 
@@ -27,53 +30,153 @@ def distance_2d(x1, y1, x2, y2):
 
 
 class RouteManagerNode(Node):
+
     def __init__(self):
         super().__init__("route_manager_node")
 
+        # Parameters
         self.declare_parameter("route_file", "")
         self.declare_parameter("map_frame", "world")
         self.declare_parameter("vehicle_frame", "OurCar/INS")
         self.declare_parameter("waypoint_reach_distance", 3.0)
         self.declare_parameter("lookahead_index", 1)
+        self.declare_parameter("local_path_size", 5)
 
         self.route_file = self.get_parameter("route_file").value
         self.map_frame = self.get_parameter("map_frame").value
         self.vehicle_frame = self.get_parameter("vehicle_frame").value
-        self.reach_distance = float(self.get_parameter("waypoint_reach_distance").value)
-        self.lookahead_index = int(self.get_parameter("lookahead_index").value)
 
+        self.reach_distance = float(
+            self.get_parameter("waypoint_reach_distance").value
+        )
+
+        self.lookahead_index = int(
+            self.get_parameter("lookahead_index").value
+        )
+
+        self.local_path_size = int(
+            self.get_parameter("local_path_size").value
+        )
+
+        if self.local_path_size <= 0:
+            raise RuntimeError(
+                "Parameter local_path_size must be greater than 0."
+            )
+
+        # Load route
         self.waypoints = self.load_route_file(self.route_file)
         self.current_index = 0
 
+        # TF
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.tf_listener = TransformListener(
+            self.tf_buffer,
+            self
+        )
 
-        self.target_pose_pub = self.create_publisher(PoseStamped, "/route/target_pose", 10)
-        self.speed_limit_pub = self.create_publisher(Float32, "/route/speed_limit", 10)
-        self.current_wp_pub = self.create_publisher(Int32, "/route/current_waypoint_id", 10)
-        self.route_state_pub = self.create_publisher(String, "/route/route_state", 10)
+        # Publishers
+        self.target_pose_pub = self.create_publisher(
+            PoseStamped,
+            "/route/target_pose",
+            10
+        )
 
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.speed_limit_pub = self.create_publisher(
+            Float32,
+            "/route/speed_limit",
+            10
+        )
+
+        self.current_wp_pub = self.create_publisher(
+            Int32,
+            "/route/current_waypoint_id",
+            10
+        )
+
+        self.route_state_pub = self.create_publisher(
+            String,
+            "/route/route_state",
+            10
+        )
+
+        self.local_path_pub = self.create_publisher(
+            NavPath,
+            "/route/local_path",
+            10
+        )
+
+        # Timer: 10 Hz
+        self.timer = self.create_timer(
+            0.1,
+            self.timer_callback
+        )
 
         self.get_logger().info("Route Manager started.")
-        self.get_logger().info(f"Loaded {len(self.waypoints)} waypoints.")
-        self.get_logger().info(f"map_frame: {self.map_frame}")
-        self.get_logger().info(f"vehicle_frame: {self.vehicle_frame}")
+        self.get_logger().info(
+            f"Loaded {len(self.waypoints)} waypoints."
+        )
+        self.get_logger().info(
+            f"map_frame: {self.map_frame}"
+        )
+        self.get_logger().info(
+            f"vehicle_frame: {self.vehicle_frame}"
+        )
+        self.get_logger().info(
+            f"local_path_size: {self.local_path_size}"
+        )
 
     def load_route_file(self, route_file):
         if not route_file:
-            raise RuntimeError("Parameter route_file is empty.")
+            raise RuntimeError(
+                "Parameter route_file is empty."
+            )
 
-        path = Path(route_file)
+        path = FilePath(route_file)
+
         if not path.exists():
-            raise RuntimeError(f"Route file does not exist: {route_file}")
+            raise RuntimeError(
+                f"Route file does not exist: {route_file}"
+            )
 
-        with open(path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+        if not path.is_file():
+            raise RuntimeError(
+                f"Route path is not a file: {route_file}"
+            )
+
+        with open(path, "r", encoding="utf-8") as file:
+            data = yaml.safe_load(file)
+
+        if not isinstance(data, dict):
+            raise RuntimeError(
+                "Route file does not contain a valid YAML dictionary."
+            )
 
         waypoints = data.get("waypoints", [])
-        if not waypoints:
-            raise RuntimeError("No waypoints found in route file.")
+
+        if not isinstance(waypoints, list) or not waypoints:
+            raise RuntimeError(
+                "No valid waypoints found in route file."
+            )
+
+        required_fields = ["x", "y"]
+
+        for index, waypoint in enumerate(waypoints):
+            if not isinstance(waypoint, dict):
+                raise RuntimeError(
+                    f"Waypoint {index} is not a valid dictionary."
+                )
+
+            missing_fields = [
+                field
+                for field in required_fields
+                if field not in waypoint
+            ]
+
+            if missing_fields:
+                raise RuntimeError(
+                    f"Waypoint {index} is missing fields: "
+                    f"{missing_fields}"
+                )
 
         return waypoints
 
@@ -84,6 +187,7 @@ class RouteManagerNode(Node):
                 self.vehicle_frame,
                 rclpy.time.Time()
             )
+
         except TransformException as ex:
             self.get_logger().warn(
                 f"TF not available: {ex}",
@@ -91,26 +195,44 @@ class RouteManagerNode(Node):
             )
             return None
 
-        t = transform.transform.translation
-        return float(t.x), float(t.y)
+        translation = transform.transform.translation
+
+        ego_x = float(translation.x)
+        ego_y = float(translation.y)
+
+        return ego_x, ego_y
 
     def update_current_waypoint(self, ego_x, ego_y):
+        if not self.waypoints:
+            return
+
         if self.current_index >= len(self.waypoints):
             self.current_index = len(self.waypoints) - 1
             return
 
         current_wp = self.waypoints[self.current_index]
-        dist = distance_2d(
+
+        distance = distance_2d(
             ego_x,
             ego_y,
             float(current_wp["x"]),
             float(current_wp["y"])
         )
 
-        if dist < self.reach_distance and self.current_index < len(self.waypoints) - 1:
+        if (
+            distance < self.reach_distance
+            and self.current_index < len(self.waypoints) - 1
+        ):
+            reached_id = int(
+                current_wp.get("id", self.current_index)
+            )
+
             self.current_index += 1
+
             self.get_logger().info(
-                f"Reached waypoint {current_wp['id']}, switching to waypoint {self.current_index}"
+                f"Reached waypoint {reached_id}, "
+                f"switching to waypoint index "
+                f"{self.current_index}"
             )
 
     def get_target_waypoint(self):
@@ -118,59 +240,174 @@ class RouteManagerNode(Node):
             self.current_index + self.lookahead_index,
             len(self.waypoints) - 1
         )
+
         return self.waypoints[target_index], target_index
 
     def publish_target(self, waypoint, target_index):
+        timestamp = self.get_clock().now().to_msg()
+
         pose_msg = PoseStamped()
-        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.stamp = timestamp
         pose_msg.header.frame_id = self.map_frame
 
-        pose_msg.pose.position.x = float(waypoint["x"])
-        pose_msg.pose.position.y = float(waypoint["y"])
-        pose_msg.pose.position.z = float(waypoint.get("z", 0.0))
+        pose_msg.pose.position.x = float(
+            waypoint["x"]
+        )
+        pose_msg.pose.position.y = float(
+            waypoint["y"]
+        )
+        pose_msg.pose.position.z = float(
+            waypoint.get("z", 0.0)
+        )
 
-        yaw_deg = float(waypoint.get("yaw_deg", 0.0))
-        pose_msg.pose.orientation = yaw_deg_to_quaternion(yaw_deg)
+        yaw_deg = float(
+            waypoint.get("yaw_deg", 0.0)
+        )
+
+        pose_msg.pose.orientation = (
+            yaw_deg_to_quaternion(yaw_deg)
+        )
 
         speed_msg = Float32()
-        speed_msg.data = float(waypoint.get("speed_limit", 2.0))
+        speed_msg.data = float(
+            waypoint.get("speed_limit", 2.0)
+        )
 
         id_msg = Int32()
-        id_msg.data = int(waypoint.get("id", target_index))
+        id_msg.data = int(
+            waypoint.get("id", target_index)
+        )
 
         state_msg = String()
-        state_msg.data = str(waypoint.get("type", "normal"))
+        state_msg.data = str(
+            waypoint.get("type", "normal")
+        )
 
         self.target_pose_pub.publish(pose_msg)
         self.speed_limit_pub.publish(speed_msg)
         self.current_wp_pub.publish(id_msg)
         self.route_state_pub.publish(state_msg)
 
+    def publish_local_path(self):
+        if not self.waypoints:
+            self.get_logger().warn(
+                "Cannot publish local path: no waypoints loaded."
+            )
+            return
+
+        if (
+            self.current_index < 0
+            or self.current_index >= len(self.waypoints)
+        ):
+            self.get_logger().warn(
+                f"Invalid current waypoint index: "
+                f"{self.current_index}"
+            )
+            return
+
+        start_index = self.current_index
+
+        end_index = min(
+            start_index + self.local_path_size,
+            len(self.waypoints)
+        )
+
+        local_waypoints = self.waypoints[
+            start_index:end_index
+        ]
+
+        path_msg = NavPath()
+        path_msg.header.stamp = (
+            self.get_clock().now().to_msg()
+        )
+        path_msg.header.frame_id = self.map_frame
+
+        for waypoint in local_waypoints:
+            pose_msg = PoseStamped()
+
+            pose_msg.header.stamp = (
+                path_msg.header.stamp
+            )
+            pose_msg.header.frame_id = self.map_frame
+
+            pose_msg.pose.position.x = float(
+                waypoint["x"]
+            )
+            pose_msg.pose.position.y = float(
+                waypoint["y"]
+            )
+            pose_msg.pose.position.z = float(
+                waypoint.get("z", 0.0)
+            )
+
+            yaw_deg = float(
+                waypoint.get("yaw_deg", 0.0)
+            )
+
+            pose_msg.pose.orientation = (
+                yaw_deg_to_quaternion(yaw_deg)
+            )
+
+            path_msg.poses.append(pose_msg)
+
+        self.local_path_pub.publish(path_msg)
+
     def timer_callback(self):
         ego_pose = self.get_vehicle_pose()
+
         if ego_pose is None:
             return
 
         ego_x, ego_y = ego_pose
 
-        self.update_current_waypoint(ego_x, ego_y)
+        self.update_current_waypoint(
+            ego_x,
+            ego_y
+        )
 
-        target_wp, target_index = self.get_target_waypoint()
-        self.publish_target(target_wp, target_index)
+        target_wp, target_index = (
+            self.get_target_waypoint()
+        )
+
+        self.publish_target(
+            target_wp,
+            target_index
+        )
+
+        self.publish_local_path()
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    node = RouteManagerNode()
+    node = None
 
     try:
+        node = RouteManagerNode()
         rclpy.spin(node)
+
     except KeyboardInterrupt:
-        node.get_logger().info("Route Manager stopped.")
+        if node is not None:
+            node.get_logger().info(
+                "Route Manager stopped."
+            )
+
+    except Exception as ex:
+        if node is not None:
+            node.get_logger().error(
+                f"Route Manager failed: {ex}"
+            )
+        else:
+            print(f"Route Manager failed: {ex}")
+
+        raise
+
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
