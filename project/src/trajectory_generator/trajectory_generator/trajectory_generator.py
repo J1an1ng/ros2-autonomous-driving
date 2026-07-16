@@ -26,6 +26,7 @@ class TrajectoryGeneratorConfig:
     continuity_blend_distance: float = 5.0
     continuity_candidate_weight: float = 0.5
     max_continuity_deviation: float = 2.0
+    use_waypoint_yaw: bool = False
 
     def __post_init__(self):
         values = {
@@ -95,6 +96,7 @@ class TrajectoryGenerator:
             max_yaw_step=self.config.max_yaw_step,
             max_start_distance=self.config.max_start_distance,
             max_spline_deviation=self.config.max_spline_deviation,
+            use_waypoint_yaw=self.config.use_waypoint_yaw,
         )
         path_points = processing_result.path_points
         path_status = ""

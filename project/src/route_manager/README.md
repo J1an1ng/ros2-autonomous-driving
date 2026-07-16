@@ -34,8 +34,9 @@ It performs the following tasks:
 
 Loads the predefined route from route_map.yaml.
 Reads the current vehicle pose from TF.
-Checks the distance between the vehicle and the current waypoint.
-Switches to the next waypoint when the vehicle is close enough.
+Checks the distance and forward progress relative to the current waypoint.
+Switches to the next waypoint when the vehicle reaches it or crosses its
+forward progress plane, so a slightly missed waypoint cannot stall the route.
 Publishes the selected waypoint as the current target pose.
 /route/target_pose
 
@@ -53,14 +54,16 @@ Type:
 nav_msgs/msg/Path
 
 Description:
-A local navigation path containing up to five consecutive waypoints starting from the current route index.
-For example, if the current route index is 10, the local path normally contains:
+A local navigation path containing up to five consecutive waypoints. It starts
+at the previous waypoint when available, allowing the trajectory generator to
+project the ego pose onto the active route segment. For example, if the current
+route index is 10, the local path normally contains:
 
+9
 10
 11
 12
 13
-14
 
 Near the end of the route, fewer than five waypoints may be published.
 
@@ -96,6 +99,14 @@ intersection_approach
 stop_zone
 intersection
 intersection_exit
+route_complete
+
+At `route_complete`, the speed limit is published as zero and the final
+waypoint remains the target.
+
+Runtime parameters include `initial_waypoint_index` (default `0`). This is a
+diagnostic aid for local segment tests with a matching Unity spawn; benchmark
+runs must retain index 0 and spawn 0.
 
 Run Waypoint Recorder
 
@@ -127,7 +138,8 @@ ros2 run route_manager route_manager_node \
   -p map_frame:=world \
   -p vehicle_frame:=OurCar/INS \
   -p waypoint_reach_distance:=3.0 \
-  -p lookahead_index:=0
+  -p lookahead_index:=0 \
+  -p initial_waypoint_index:=0
   
 Check Published Topics
 ros2 topic echo /route/target_pose

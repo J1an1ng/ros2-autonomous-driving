@@ -574,3 +574,56 @@ Add concise entries in chronological order.
 - Stage 2 conclusion: low-speed control and all required fail-safe paths pass. Stage 3 may
   begin at 0.5–1.0 m/s; do not raise the speed limit until route geometry and waypoint
   transitions have been validated with motion disabled.
+
+### Stage 3 checkpoint (testing incomplete)
+
+- Date: 2026-07-17.
+- Branch: `temp_inte`.
+- Scope: route manager, trajectory generator, and production controller with both optional
+  events disabled. Traffic decisions were bypassed by a persistent low-speed test publisher;
+  perception was disabled. Repository defaults remain spawn 0, all configured camera streams
+  enabled, and controller motion disabled until explicitly requested.
+- The motion-disabled route audit passed: `/route/local_path` and `/planning/path` used frame
+  `world`, began within approximately 1 mm of ego at the initial transition, remained forward
+  ordered, and produced no target-pose fallback after the route-window fix.
+- Route progression now retains the previous waypoint in each local window, advances when a
+  waypoint is reached or its forward progress plane is crossed, consumes duplicate/close
+  points in one update, publishes `route_complete` with zero speed at the final point, and
+  accepts an `initial_waypoint_index` diagnostic parameter. The benchmark default is still 0;
+  nonzero indices are only valid with a matching local test spawn.
+- Sparse route geometry now uses waypoint yaw as a bounded Hermite tangent constraint before
+  the existing smoothing and validation pipeline. Sub-metre survey clusters are collapsed,
+  endpoint projection preserves waypoint tangent yaw, and the allowed spline deviation is
+  2.5 m. An offline audit of 119 route-window/ego combinations found no rejection except the
+  natural single-point window at the final waypoint.
+- The original waypoint 33–35 chord crossed a continuous guardrail. Camera inspection and
+  repeatable collisions near `(127.2, 5.7)` isolated this as route geometry rather than a
+  controller lookahead problem. Waypoint 34 now remains on the westbound approach and
+  waypoint 35 enters the opening. The corrected turn passed both a spawn-5 local test and a
+  continuous spawn-0 run using the unchanged Stage 2 controller parameters.
+- Completed real-Unity coverage so far:
+  - segmented low-speed runs covered waypoints 0–25 and 32–51, including all tight turns in
+    that interval;
+  - a continuous spawn-0 run at 0.8 m/s advanced from waypoint 0 to 52 without manual route
+    index changes, travelled 603.088 m in the 1,200-second capture window, reported no invalid
+    paths, no stuck/implausible-speed abort, and no simultaneous throttle and brake;
+  - the duplicate 14/15 pair advanced in one update as intended;
+  - measured maximum speed was 0.8641 m/s. Cross-track summaries from the temporary probe are
+    conservative because its first-point metric includes expected projection distances and
+    occasional stale-state intervals.
+- Unity still intermittently pauses true-state delivery, even with camera output disabled in
+  the temporary `/tmp` runtime copy. The controller responds with the previously verified
+  stale-input full brake and resumes when state returns; these interruptions extended the
+  route duration but did not cause a collision.
+- **Checkpoint status:** Stage 3 is not yet passed. Testing stopped safely at target waypoint
+  52. The next session must resume the unchanged simulation state if available, or repeat an
+  appropriate continuous run, cover waypoints 52–59, observe `route_complete`, verify the
+  final zero-speed publication and physical stop, then rerun build/tests before marking Stage
+  3 complete. No Stage 4 work should start before that gate passes.
+- Checkpoint verification: an out-of-tree build of the complete dependency closure through
+  `system_bringup` finished successfully (7 packages). All 35 route-progress and trajectory
+  functional tests passed, as did all 10 controller-core GTests. Installed route and trajectory
+  configuration files matched the source files byte-for-byte, Python compilation and
+  `git diff --check` passed. The legacy route-manager copyright/flake8/pep257 tests could not
+  be collected on this machine because the corresponding `ament_copyright`, `ament_flake8`,
+  and `ament_pep257` Python modules are not installed; no functional test failed.

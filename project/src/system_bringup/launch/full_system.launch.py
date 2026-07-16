@@ -28,6 +28,9 @@ def generate_launch_description():
     enable_motion = LaunchConfiguration("enable_motion")
     simulation_config = LaunchConfiguration("simulation_config")
     route_file = LaunchConfiguration("route_file")
+    route_initial_waypoint_index = LaunchConfiguration(
+        "route_initial_waypoint_index"
+    )
 
     default_simulation_config = PathJoinSubstitution(
         [
@@ -61,6 +64,9 @@ def generate_launch_description():
                 "simulation_config", default_value=default_simulation_config
             ),
             DeclareLaunchArgument("route_file", default_value=default_route_file),
+            DeclareLaunchArgument(
+                "route_initial_waypoint_index", default_value="0"
+            ),
             IncludeLaunchDescription(
                 package_launch("simulation", "simulation.launch.py"),
                 launch_arguments={
@@ -87,6 +93,9 @@ def generate_launch_description():
                         "waypoint_reach_distance": 3.0,
                         "lookahead_index": 0,
                         "local_path_size": 5,
+                        "initial_waypoint_index": ParameterValue(
+                            route_initial_waypoint_index, value_type=int
+                        ),
                     }
                 ],
                 condition=IfCondition(enable_route),

@@ -240,3 +240,61 @@ def test_default_quality_limits_accept_tight_route_turn():
 
     assert result
     assert max(abs(point.curvature) for point in result) < 2.0
+
+
+def test_waypoint_yaw_interpolation_starts_sparse_turn_before_corner():
+    route_points = [
+        Pose2D(x=0.0, y=0.0, yaw=math.radians(80.0)),
+        Pose2D(x=2.0, y=10.0, yaw=math.radians(50.0)),
+        Pose2D(x=10.0, y=16.0, yaw=math.radians(10.0)),
+    ]
+
+    result = process_local_path(
+        route_points,
+        ego_pose=route_points[0],
+        path_resolution=0.5,
+        use_waypoint_yaw=True,
+    )
+
+    first_half = [point for point in result if point.s < 8.0]
+    assert result
+    assert any(point.curvature < -0.01 for point in first_half)
+    assert max(abs(point.curvature) for point in result) < 2.0
+
+
+def test_submetre_route_cluster_keeps_latest_point_and_tangent():
+    route_points = [
+        Pose2D(x=0.0, y=0.0, yaw=0.0),
+        Pose2D(x=5.0, y=0.0, yaw=0.0),
+        Pose2D(x=5.5, y=0.1, yaw=math.radians(30.0)),
+        Pose2D(x=10.0, y=3.0, yaw=math.radians(30.0)),
+    ]
+
+    result = process_local_path(
+        route_points,
+        ego_pose=route_points[0],
+        path_resolution=0.5,
+        use_waypoint_yaw=True,
+    )
+
+    assert result
+    assert max(abs(point.curvature) for point in result) < 2.0
+
+
+def test_projection_at_waypoint_preserves_outgoing_tangent_yaw():
+    corner = Pose2D(x=5.0, y=0.0, yaw=math.radians(45.0))
+    route_points = [
+        Pose2D(x=0.0, y=0.0, yaw=0.0),
+        corner,
+        Pose2D(x=10.0, y=5.0, yaw=math.radians(45.0)),
+    ]
+
+    result = process_local_path(
+        route_points,
+        ego_pose=corner,
+        path_resolution=0.25,
+        use_waypoint_yaw=True,
+    )
+
+    assert result
+    assert result[0].yaw == pytest.approx(math.radians(45.0), abs=0.05)

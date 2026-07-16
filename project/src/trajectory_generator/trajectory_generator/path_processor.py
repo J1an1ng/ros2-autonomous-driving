@@ -6,6 +6,7 @@ from trajectory_generator.geometry_utils import distance_2d, Pose2D
 
 POINT_MERGE_TOLERANCE = 1e-3
 PROJECTION_DISTANCE_TOLERANCE = 0.5
+ROUTE_POINT_MERGE_DISTANCE = 1.0
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,29 @@ def _deduplicate_points(points):
     return result
 
 
+def _deduplicate_route_points(points):
+    """Collapse sub-metre survey clusters while retaining their latest tangent."""
+    if not points:
+        return []
+    result = [points[0]]
+    for point in points[1:]:
+        previous = result[-1]
+        spacing = distance_2d(previous.x, previous.y, point.x, point.y)
+        if spacing < ROUTE_POINT_MERGE_DISTANCE:
+            if spacing <= POINT_MERGE_TOLERANCE:
+                result[-1] = Pose2D(
+                    previous.x,
+                    previous.y,
+                    previous.z,
+                    point.yaw,
+                )
+            else:
+                result[-1] = point
+        else:
+            result.append(point)
+    return result
+
+
 def _project_ego_onto_polyline(points, ego_pose):
     candidates = []
     for index, (start, end) in enumerate(zip(points, points[1:])):
@@ -99,6 +123,13 @@ def _project_ego_onto_polyline(points, ego_pose):
         z = start.z + ratio * (end.z - start.z)
         distance = distance_2d(ego_pose.x, ego_pose.y, x, y)
         segment_yaw = math.atan2(dy, dx)
+        endpoint_ratio = min(PROJECTION_DISTANCE_TOLERANCE / math.sqrt(length_squared), 0.5)
+        if ratio <= endpoint_ratio:
+            projected_yaw = start.yaw
+        elif ratio >= 1.0 - endpoint_ratio:
+            projected_yaw = end.yaw
+        else:
+            projected_yaw = segment_yaw
         heading_error = abs(
             math.atan2(
                 math.sin(segment_yaw - ego_pose.yaw),
@@ -110,7 +141,7 @@ def _project_ego_onto_polyline(points, ego_pose):
                 distance,
                 heading_error,
                 index,
-                Pose2D(x=x, y=y, z=z, yaw=segment_yaw),
+                Pose2D(x=x, y=y, z=z, yaw=projected_yaw),
             )
         )
 
@@ -207,6 +238,73 @@ def _smooth_polyline(points, path_resolution, smoothing_strength):
 
     smoothed.append(points[-1])
     return _deduplicate_points(smoothed)
+
+
+def _interpolate_waypoint_headings(
+    points,
+    path_resolution,
+    smoothing_strength,
+):
+    """Interpolate sparse route points while respecting their tangent yaw."""
+    if len(points) < 2 or smoothing_strength <= 0.0:
+        return points
+
+    tangent_scale = min(max(float(smoothing_strength) * 4.8, 0.0), 1.5)
+    sample_step = min(max(float(path_resolution) * 0.25, 0.05), 0.25)
+    result = [points[0]]
+    maximum_heading_error = math.radians(70.0)
+
+    for start, end in zip(points, points[1:]):
+        dx = end.x - start.x
+        dy = end.y - start.y
+        length = math.hypot(dx, dy)
+        if length <= POINT_MERGE_TOLERANCE:
+            continue
+        chord_yaw = math.atan2(dy, dx)
+        heading_errors = [
+            abs(math.atan2(math.sin(yaw - chord_yaw), math.cos(yaw - chord_yaw)))
+            for yaw in (start.yaw, end.yaw)
+        ]
+        if length < 2.0 or max(heading_errors) > maximum_heading_error:
+            result.append(end)
+            continue
+
+        tangent_length = tangent_scale * length
+        start_tangent = (
+            tangent_length * math.cos(start.yaw),
+            tangent_length * math.sin(start.yaw),
+        )
+        end_tangent = (
+            tangent_length * math.cos(end.yaw),
+            tangent_length * math.sin(end.yaw),
+        )
+        samples = max(2, int(math.ceil(length / sample_step)))
+        for sample_index in range(1, samples + 1):
+            ratio = sample_index / samples
+            ratio_squared = ratio * ratio
+            ratio_cubed = ratio_squared * ratio
+            h00 = 2.0 * ratio_cubed - 3.0 * ratio_squared + 1.0
+            h10 = ratio_cubed - 2.0 * ratio_squared + ratio
+            h01 = -2.0 * ratio_cubed + 3.0 * ratio_squared
+            h11 = ratio_cubed - ratio_squared
+            result.append(
+                Pose2D(
+                    x=(
+                        h00 * start.x
+                        + h10 * start_tangent[0]
+                        + h01 * end.x
+                        + h11 * end_tangent[0]
+                    ),
+                    y=(
+                        h00 * start.y
+                        + h10 * start_tangent[1]
+                        + h01 * end.y
+                        + h11 * end_tangent[1]
+                    ),
+                    z=start.z + ratio * (end.z - start.z),
+                )
+            )
+    return _deduplicate_points(result)
 
 
 def _resample_polyline(points, path_resolution):
@@ -536,6 +634,7 @@ def process_local_path(
     max_yaw_step=1.1,
     max_start_distance=5.0,
     max_spline_deviation=2.0,
+    use_waypoint_yaw=False,
 ):
     """Create a validated reference path from route points and the ego pose."""
     return process_local_path_result(
@@ -547,6 +646,7 @@ def process_local_path(
         max_yaw_step,
         max_start_distance,
         max_spline_deviation,
+        use_waypoint_yaw,
     ).path_points
 
 
@@ -559,6 +659,7 @@ def process_local_path_result(
     max_yaw_step=1.1,
     max_start_distance=5.0,
     max_spline_deviation=2.0,
+    use_waypoint_yaw=False,
 ):
     """Create a path and retain a diagnostic reason when it is rejected."""
     if len(route_points) < 2:
@@ -569,10 +670,17 @@ def process_local_path_result(
     ):
         return PathProcessingResult([], "local path contains a non-finite value")
 
-    usable_points = _deduplicate_points(route_points)
+    usable_points = _deduplicate_route_points(route_points)
     cropped_points = _crop_from_projection(usable_points, ego_pose)
+    interpolation_points = cropped_points
+    if use_waypoint_yaw:
+        interpolation_points = _interpolate_waypoint_headings(
+            cropped_points,
+            path_resolution,
+            smoothing_strength,
+        )
     smoothed_points = _smooth_polyline(
-        cropped_points,
+        interpolation_points,
         path_resolution,
         smoothing_strength,
     )

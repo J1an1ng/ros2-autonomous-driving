@@ -45,7 +45,8 @@ Configured by `config/trajectory_generator.yaml`.
 | `max_curvature` | `2.0` | Maximum allowed absolute path curvature in `1/m`. |
 | `max_yaw_step` | `1.1` | Maximum allowed wrapped yaw change between adjacent samples in radians. |
 | `max_start_distance` | `5.0` | Maximum distance in meters between ego and the first generated point. |
-| `max_spline_deviation` | `2.0` | Maximum allowed smoothing deviation from the cropped input polyline in meters. |
+| `max_spline_deviation` | `2.5` | Maximum allowed smoothing deviation from the cropped input polyline in meters. |
+| `use_waypoint_yaw` | `true` | Use route-pose yaw as a tangent constraint when interpolating sparse waypoints. |
 | `continuity_blend_distance` | `5.0` | Distance from path start over which the previous and current paths are blended. Set to `0.0` to disable blending. |
 | `continuity_candidate_weight` | `0.5` | Initial weight of the new path in the continuity blend; clamped to `[0, 1]`. |
 | `max_continuity_deviation` | `2.0` | Maximum corresponding-point difference over the blend window. Larger path jumps or branch changes are used without blending. |
@@ -70,15 +71,17 @@ and stop requirement.
 
 The local-route pipeline runs in this order:
 
-1. Convert `/route/local_path` poses to internal 2D route points and remove
-   consecutive duplicates within 1 mm.
+1. Convert `/route/local_path` poses to internal 2D route points. Collapse
+   sub-metre survey clusters while preserving the latest pose and tangent.
 2. Project the ego position onto every route segment. Select the nearest
    0.5-meter candidate corridor first, then use wrapped heading error to
    disambiguate nearby route branches without preferring a distant segment.
 3. Crop by route order at that projection. This keeps only increasing route
    arc length, even when a later portion lies geometrically behind the ego.
-4. Replace sharp corners with bounded quadratic Bézier spline sections, then
-   resample the complete path at `path_resolution` along arc length.
+4. When enabled, interpolate sparse route segments with cubic Hermite curves
+   constrained by waypoint yaw. Replace remaining sharp corners with bounded
+   quadratic Bézier sections, then resample at `path_resolution` along arc
+   length.
 5. Derive yaw from neighboring samples and signed curvature from each
    three-point circumcircle. Every internal point also stores cumulative `s`.
 6. Reject paths containing non-finite values, non-increasing `s`, excessive

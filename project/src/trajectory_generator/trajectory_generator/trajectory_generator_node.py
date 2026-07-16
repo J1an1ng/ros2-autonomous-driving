@@ -32,7 +32,8 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter("max_curvature", 2.0)
         self.declare_parameter("max_yaw_step", 1.1)
         self.declare_parameter("max_start_distance", 5.0)
-        self.declare_parameter("max_spline_deviation", 2.0)
+        self.declare_parameter("max_spline_deviation", 2.5)
+        self.declare_parameter("use_waypoint_yaw", True)
         self.declare_parameter("continuity_blend_distance", 5.0)
         self.declare_parameter("continuity_candidate_weight", 0.5)
         self.declare_parameter("max_continuity_deviation", 2.0)
@@ -58,6 +59,9 @@ class TrajectoryGeneratorNode(Node):
             ),
             max_spline_deviation=float(
                 self.get_parameter("max_spline_deviation").value
+            ),
+            use_waypoint_yaw=bool(
+                self.get_parameter("use_waypoint_yaw").value
             ),
             continuity_blend_distance=float(
                 self.get_parameter("continuity_blend_distance").value
@@ -243,8 +247,12 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Trajectory Generator stopped.")
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except KeyboardInterrupt:
+            pass
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

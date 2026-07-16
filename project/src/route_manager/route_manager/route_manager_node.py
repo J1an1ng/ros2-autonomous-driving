@@ -12,6 +12,8 @@ from geometry_msgs.msg import PoseStamped, Quaternion
 from nav_msgs.msg import Path as NavPath
 from tf2_ros import Buffer, TransformListener, TransformException
 
+from route_manager.route_progress import waypoint_reached_or_passed
+
 
 def yaw_deg_to_quaternion(yaw_deg):
     yaw = math.radians(float(yaw_deg))
@@ -41,6 +43,7 @@ class RouteManagerNode(Node):
         self.declare_parameter("waypoint_reach_distance", 3.0)
         self.declare_parameter("lookahead_index", 1)
         self.declare_parameter("local_path_size", 5)
+        self.declare_parameter("initial_waypoint_index", 0)
 
         self.route_file = self.get_parameter("route_file").value
         self.map_frame = self.get_parameter("map_frame").value
@@ -65,7 +68,14 @@ class RouteManagerNode(Node):
 
         # Load route
         self.waypoints = self.load_route_file(self.route_file)
-        self.current_index = 0
+        self.current_index = int(
+            self.get_parameter("initial_waypoint_index").value
+        )
+        if not 0 <= self.current_index < len(self.waypoints):
+            raise RuntimeError(
+                "Parameter initial_waypoint_index is outside the route."
+            )
+        self.route_completed = False
 
         # TF
         self.tf_buffer = Buffer()
@@ -123,6 +133,9 @@ class RouteManagerNode(Node):
         )
         self.get_logger().info(
             f"local_path_size: {self.local_path_size}"
+        )
+        self.get_logger().info(
+            f"initial_waypoint_index: {self.current_index}"
         )
 
     def load_route_file(self, route_file):
@@ -203,36 +216,37 @@ class RouteManagerNode(Node):
         return ego_x, ego_y
 
     def update_current_waypoint(self, ego_x, ego_y):
-        if not self.waypoints:
+        if not self.waypoints or self.route_completed:
             return
 
         if self.current_index >= len(self.waypoints):
             self.current_index = len(self.waypoints) - 1
             return
 
-        current_wp = self.waypoints[self.current_index]
-
-        distance = distance_2d(
-            ego_x,
-            ego_y,
-            float(current_wp["x"]),
-            float(current_wp["y"])
-        )
-
-        if (
-            distance < self.reach_distance
-            and self.current_index < len(self.waypoints) - 1
-        ):
-            reached_id = int(
-                current_wp.get("id", self.current_index)
+        while not self.route_completed:
+            progress = waypoint_reached_or_passed(
+                self.waypoints,
+                self.current_index,
+                ego_x,
+                ego_y,
+                self.reach_distance,
             )
+            if not progress:
+                break
+
+            waypoint = self.waypoints[self.current_index]
+            waypoint_id = int(waypoint.get("id", self.current_index))
+            if self.current_index == len(self.waypoints) - 1:
+                self.route_completed = True
+                self.get_logger().info(
+                    f"Route completed at waypoint {waypoint_id}"
+                )
+                break
 
             self.current_index += 1
-
             self.get_logger().info(
-                f"Reached waypoint {reached_id}, "
-                f"switching to waypoint index "
-                f"{self.current_index}"
+                f"Waypoint {waypoint_id} {progress}; "
+                f"switching to waypoint index {self.current_index}"
             )
 
     def get_target_waypoint(self):
@@ -269,7 +283,7 @@ class RouteManagerNode(Node):
         )
 
         speed_msg = Float32()
-        speed_msg.data = float(
+        speed_msg.data = 0.0 if self.route_completed else float(
             waypoint.get("speed_limit", 2.0)
         )
 
@@ -279,8 +293,10 @@ class RouteManagerNode(Node):
         )
 
         state_msg = String()
-        state_msg.data = str(
-            waypoint.get("type", "normal")
+        state_msg.data = (
+            "route_complete"
+            if self.route_completed
+            else str(waypoint.get("type", "normal"))
         )
 
         self.target_pose_pub.publish(pose_msg)
@@ -305,7 +321,10 @@ class RouteManagerNode(Node):
             )
             return
 
-        start_index = self.current_index
+        # Retain the previous waypoint so the trajectory generator can project
+        # the ego pose onto the active route segment instead of falling back to
+        # a straight line toward a potentially distant target waypoint.
+        start_index = max(0, self.current_index - 1)
 
         end_index = min(
             start_index + self.local_path_size,
@@ -404,7 +423,10 @@ def main(args=None):
 
     finally:
         if node is not None:
-            node.destroy_node()
+            try:
+                node.destroy_node()
+            except KeyboardInterrupt:
+                pass
 
         if rclpy.ok():
             rclpy.shutdown()
