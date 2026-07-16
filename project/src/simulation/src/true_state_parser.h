@@ -39,12 +39,20 @@ public:
     const float ry = stream_reader.ReadFloat();
     const float rz = stream_reader.ReadFloat();
 
-    if (pose_publishers_.find(header.name) == pose_publishers_.end()) {
-      pose_publishers_[header.name] = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
-          header.name + "/pose", rclcpp::QoS(10));
-      twist_publishers_[header.name] = node_->create_publisher<geometry_msgs::msg::TwistStamped>(
-          header.name + "/twist", rclcpp::QoS(10));
-      RCLCPP_INFO(node_->get_logger(), "Publishing true state '%s'", header.name.c_str());
+    // Unity labels the ego state as its center of mass, while the rest of the
+    // ROS stack and the dynamic TF contract use the INS frame.  Keep the wire
+    // protocol name internal and expose one canonical ROS interface.
+    const std::string topic_name =
+        header.name == "OurCar/CoM" ? "OurCar/INS" : header.name;
+
+    if (pose_publishers_.find(topic_name) == pose_publishers_.end()) {
+      pose_publishers_[topic_name] = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
+          topic_name + "/pose", rclcpp::QoS(10));
+      twist_publishers_[topic_name] = node_->create_publisher<geometry_msgs::msg::TwistStamped>(
+          topic_name + "/twist", rclcpp::QoS(10));
+      RCLCPP_INFO(
+          node_->get_logger(), "Publishing true state '%s' as '%s'",
+          header.name.c_str(), topic_name.c_str());
     }
 
     const double current_stamp = header.timestamp + time_offset;
@@ -73,8 +81,8 @@ public:
     twist_msg.twist.angular.y = -rx;
     twist_msg.twist.angular.z = -ry;
 
-    pose_publishers_[header.name]->publish(pose_msg);
-    twist_publishers_[header.name]->publish(twist_msg);
+    pose_publishers_[topic_name]->publish(pose_msg);
+    twist_publishers_[topic_name]->publish(twist_msg);
 
     geometry_msgs::msg::TransformStamped tf;
     tf.header = pose_msg.header;

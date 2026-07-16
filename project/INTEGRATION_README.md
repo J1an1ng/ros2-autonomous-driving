@@ -14,7 +14,7 @@ one launch file.
 | Stage | Scope | Status | Evidence |
 | --- | --- | --- | --- |
 | 0 | Integration entry point and configuration | Passed | Build, unit tests, safe headless launch; see test log |
-| 1 | Simulation bridge and sensor/TF contract | Not started | — |
+| 1 | Simulation bridge and sensor/TF contract | Passed | Unity bridge, sensor/TF, and low-amplitude command checks; see test log |
 | 2 | Low-speed controller validation | Not started | — |
 | 3 | Route, trajectory, and no-event closed loop | Not started | — |
 | 4 | Perception pipeline and traffic-light sensing | Not started | — |
@@ -479,3 +479,41 @@ Add concise entries in chronological order.
   Python nodes also report a duplicate `rclpy.shutdown()` error during Ctrl-C teardown.
   These do not affect startup or the safe-stop result, but reconnect and clean shutdown
   behavior must be evaluated with the real simulator in Stage 1.
+
+### Stage 1
+
+- Date: 2026-07-16.
+- OctoMap prerequisite verified: all four Debian packages are installed, ROS resolves
+  `octomap_server`, and `octomap_server_node` starts from the full-system launch.
+- Corrected the Unity ego-state interface: Unity's wire name `OurCar/CoM` is now exposed
+  through the canonical `/OurCar/INS/pose` and `/OurCar/INS/twist` ROS topics, matching TF,
+  route, trajectory, decision, and controller consumers.
+- Local Unity runs now bind the sensor TCP receiver to `127.0.0.1` by default. This avoids
+  unrelated connections to the simulation binary stream. For a Unity instance on another
+  machine, explicitly use `sensor_bind_host:=0.0.0.0` and configure networking securely.
+- Measured steady-state topic rates on this machine:
+  - pose/twist: approximately 29–33 Hz;
+  - RGB left: approximately 2.3–2.6 Hz;
+  - semantic image: approximately 1.8–2.1 Hz;
+  - depth image: approximately 2.5 Hz.
+- All four camera streams are 640x480. RGB and semantic images use `rgb8`; depth uses
+  `16UC1` millimetres. One stationary depth frame contained nonzero distances from 1.4 m
+  to 52.936 m with an 8.376 m median, consistent with the visible urban scene.
+- Verified the complete transform chain from `world` through `OurCar/INS`, vehicle center,
+  sensor base, depth camera, both RGB cameras, and semantic camera. At spawn 0 the initial
+  pose was approximately `(-62.800, -12.293, 0.838)` with yaw 90 degrees.
+- A persistent low-amplitude command probe established the Unity command convention:
+  - 8% throttle produces forward motion;
+  - positive brake reduces speed to zero and a 2-second full-brake hold does not reverse;
+  - positive steering decreases ROS yaw and therefore turns right;
+  - `controller.steering_sign` is consequently set to `-1.0` so a positive Pure Pursuit
+    lateral target produces a left turn in Unity.
+- The UDP transmitter repeats its last received command at 100 Hz. Stopping a temporary
+  publisher does **not** clear the last throttle command. Manual tests must use one
+  persistent publisher and explicitly stream a zero or brake command before exiting.
+- The stack was restarted multiple times and Unity reconnected successfully each time.
+  After guarding shutdown against an invalid ROS context, the TCP receiver, transmitter,
+  static TF publishers, and Unity process all exit cleanly on Ctrl-C.
+- `enable_motion:=false` was retained throughout normal integration launches. The only
+  motion was the documented low-amplitude command probe with the production controller
+  disabled; the vehicle was stopped before shutdown.

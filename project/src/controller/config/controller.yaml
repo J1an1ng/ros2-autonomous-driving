@@ -14,7 +14,7 @@ controller_node:
 
     maximum_target_speed: 8.0
     normalize_steering: true
-    steering_sign: 1.0
+    steering_sign: -1.0
     maximum_steering_angle: 0.52
     maximum_steering_rate: 2.0
 

@@ -105,7 +105,9 @@ public:
         RCLCPP_ERROR(get_logger(), "Parser error: %s", e.what());
         break;
       }
-      rclcpp::spin_some(this->get_node_base_interface());
+      if (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
+      }
     }
   }
 
@@ -140,6 +142,8 @@ int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<UnityTCPStreamReceiver>();
   node->Run();
-  rclcpp::shutdown();
+  if (rclcpp::ok()) {
+    rclcpp::shutdown();
+  }
   return 0;
 }

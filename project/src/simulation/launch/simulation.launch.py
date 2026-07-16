@@ -30,6 +30,7 @@ def vehicle_sensor_transforms():
 def generate_launch_description():
     config_file = LaunchConfiguration('config_file')
     start_unity = LaunchConfiguration('start_unity')
+    sensor_bind_host = LaunchConfiguration('sensor_bind_host')
     default_config = PathJoinSubstitution([
         FindPackageShare('simulation'),
         'unity_sim', 'Build_Ubuntu', 'AD_Sim_Data', 'StreamingAssets', 'simulation_config.json'
@@ -38,6 +39,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('config_file', default_value=default_config),
         DeclareLaunchArgument('start_unity', default_value='true'),
+        DeclareLaunchArgument('sensor_bind_host', default_value='127.0.0.1'),
         Node(
             package='simulation',
             executable='JSON_param_reader',
@@ -50,7 +52,7 @@ def generate_launch_description():
             executable='unity_TCP_stream_receiver',
             name='Unity_ROS_message_Rx',
             output='screen',
-            parameters=[{'config_file': config_file, 'bind_host': '0.0.0.0'}],
+            parameters=[{'config_file': config_file, 'bind_host': sensor_bind_host}],
         ),
         Node(
             package='simulation',

@@ -18,6 +18,7 @@ def package_launch(package_name, launch_file):
 
 def generate_launch_description():
     start_unity = LaunchConfiguration("start_unity")
+    sensor_bind_host = LaunchConfiguration("sensor_bind_host")
     enable_perception = LaunchConfiguration("enable_perception")
     enable_octomap = LaunchConfiguration("enable_octomap")
     enable_route = LaunchConfiguration("enable_route")
@@ -48,6 +49,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("start_unity", default_value="true"),
+            DeclareLaunchArgument("sensor_bind_host", default_value="127.0.0.1"),
             DeclareLaunchArgument("enable_perception", default_value="true"),
             DeclareLaunchArgument("enable_octomap", default_value="true"),
             DeclareLaunchArgument("enable_route", default_value="true"),
@@ -64,6 +66,7 @@ def generate_launch_description():
                 launch_arguments={
                     "config_file": simulation_config,
                     "start_unity": start_unity,
+                    "sensor_bind_host": sensor_bind_host,
                 }.items(),
             ),
             IncludeLaunchDescription(

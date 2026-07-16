@@ -87,7 +87,17 @@ ros2 launch simulation simulation.launch.py \
   config_file:=/path/to/simulation_config.json
 ```
 
-The TCP receiver binds to `0.0.0.0` by default and reads the sensor port from `sensorConfig.port` if a config file exists. Unity must connect to the ROS2 machine's IP address and that port.
+The TCP receiver binds to `127.0.0.1` by default and reads the sensor port from
+`sensorConfig.port` if a config file exists. This is the safe default for the bundled local
+Unity process. When Unity runs on another machine, expose the receiver explicitly:
+
+```bash
+ros2 launch simulation simulation.launch.py \
+  start_unity:=false \
+  sensor_bind_host:=0.0.0.0
+```
+
+Unity must then connect to the ROS2 machine's IP address and configured sensor port.
 
 ## Command topic
 
@@ -118,6 +128,10 @@ Example:
 ros2 topic pub /car_command simulation/msg/VehicleControl \
   "{throttle: 0.2, steering: 0.0, brake: 0.0, reserved: 0.0}"
 ```
+
+The transmitter repeats the most recently received command at 100 Hz. A one-shot throttle
+command therefore remains active after its publisher exits. Test tools must continuously
+publish and explicitly send a zero or brake command before stopping.
 
 ## Sensor topics
 
