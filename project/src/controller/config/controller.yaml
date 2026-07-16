@@ -1,0 +1,32 @@
+controller_node:
+  ros__parameters:
+    map_frame: world
+    vehicle_frame: OurCar/INS
+    enable_motion: true
+    control_rate: 20.0
+
+    wheelbase: 2.63
+    lookahead_base: 3.0
+    lookahead_speed_gain: 0.5
+    lookahead_min: 2.0
+    lookahead_max: 7.0
+    minimum_forward_distance: 0.2
+
+    maximum_target_speed: 8.0
+    normalize_steering: true
+    steering_sign: 1.0
+    maximum_steering_angle: 0.52
+    maximum_steering_rate: 2.0
+
+    speed_kp: 0.35
+    speed_ki: 0.05
+    speed_kd: 0.02
+    speed_integral_limit: 2.0
+    speed_error_deadband: 0.05
+    maximum_throttle: 0.35
+    maximum_brake: 1.0
+    safe_stop_brake: 1.0
+
+    path_timeout: 1.0
+    decision_timeout: 0.75
+    twist_timeout: 0.5
