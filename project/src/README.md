@@ -4,7 +4,7 @@
 
 This repository is part of the "Introduction to ROS" course project **Autonomous Driving**. It contains a Unity-based driving simulation package and a dummy controller to demonstrate how to control the vehicle from ROS 2.
 
-The repository contains three ROS 2 packages:
+The repository contains the following ROS 2 packages:
 
 - `simulation/`
   - Unity bridge and simulation integration package.
@@ -20,6 +20,21 @@ The repository contains three ROS 2 packages:
   - Detects traffic lights.
   - Converts depth images into point clouds and filters obstacle points.
   - Starts OctoMap server to publish a 3D OctoMap and a projected occupancy grid.
+
+- `route_manager/`
+  - Loads the predefined route and publishes local route context and speed limits.
+
+- `trajectory_generator/`
+  - Produces the smoothed `/planning/path` and nominal target speed.
+
+- `decision_making/`
+  - Applies traffic-light, merge, and emergency-stop behavior.
+
+- `controller/`
+  - Tracks the path with Pure Pursuit and regulates speed with PID.
+
+- `system_bringup/`
+  - Provides the single staged/full-system launch entry point.
 
 ## System Requirements
 
@@ -70,6 +85,11 @@ your_ros2_workspace/
     ├── simulation/
     ├── dummy_controller/
     ├── perception/
+    ├── route_manager/
+    ├── trajectory_generator/
+    ├── decision_making/
+    ├── controller/
+    ├── system_bringup/
     ├── setup_script.sh
     └── README.md
 ```
@@ -112,9 +132,40 @@ source install/setup.bash
 To build only the project packages:
 
 ```bash
-colcon build --packages-select simulation dummy_controller perception
+colcon build --packages-select \
+  simulation perception route_manager trajectory_generator \
+  decision_making controller system_bringup
 source install/setup.bash
 ```
+
+## Running the complete system
+
+The assignment stack has one integration entry point. By default it starts all modules
+and Unity but keeps controller motion disabled:
+
+```bash
+ros2 launch system_bringup full_system.launch.py
+```
+
+After completing the readiness checklist in `project/INTEGRATION_README.md`, motion can be
+enabled explicitly:
+
+```bash
+ros2 launch system_bringup full_system.launch.py enable_motion:=true
+```
+
+For a headless Stage 0 startup check:
+
+```bash
+ros2 launch system_bringup full_system.launch.py \
+  start_unity:=false \
+  enable_motion:=false
+```
+
+The launch also accepts `enable_perception`, `enable_octomap`, `enable_route`,
+`enable_trajectory`, `enable_decision`, and `enable_controller` boolean arguments for the
+staged tests described in the integration plan. Do not run `dummy_controller` together
+with the real controller.
 
 ## Running the Simulation
 

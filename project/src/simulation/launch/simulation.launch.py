@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -28,6 +29,7 @@ def vehicle_sensor_transforms():
 
 def generate_launch_description():
     config_file = LaunchConfiguration('config_file')
+    start_unity = LaunchConfiguration('start_unity')
     default_config = PathJoinSubstitution([
         FindPackageShare('simulation'),
         'unity_sim', 'Build_Ubuntu', 'AD_Sim_Data', 'StreamingAssets', 'simulation_config.json'
@@ -35,6 +37,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('config_file', default_value=default_config),
+        DeclareLaunchArgument('start_unity', default_value='true'),
         Node(
             package='simulation',
             executable='JSON_param_reader',
@@ -63,5 +66,6 @@ def generate_launch_description():
                 'unity_sim', 'Build_Ubuntu', 'AD_Sim.x86_64'
             ])],
             output='screen',
+            condition=IfCondition(start_unity),
         ),
     ])

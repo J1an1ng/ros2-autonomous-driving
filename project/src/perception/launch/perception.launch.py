@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -10,11 +11,13 @@ def generate_launch_description():
     map_resolution_float = ParameterValue(map_resolution, value_type=float)
     map_frame = LaunchConfiguration('map_frame')
     octomap_executable = LaunchConfiguration('octomap_executable')
+    enable_octomap = LaunchConfiguration('enable_octomap')
 
     return LaunchDescription([
         DeclareLaunchArgument('map_resolution', default_value='0.25'),
         DeclareLaunchArgument('map_frame', default_value='world'),
         DeclareLaunchArgument('octomap_executable', default_value='octomap_server_node'),
+        DeclareLaunchArgument('enable_octomap', default_value='true'),
 
         Node(
             package='perception',
@@ -63,6 +66,7 @@ def generate_launch_description():
                 'filter_ground': False,
                 'latch': False,
             }],
+            condition=IfCondition(enable_octomap),
         ),
 
         Node(
@@ -71,8 +75,8 @@ def generate_launch_description():
             name='traffic_light_detector_node',
             output='screen',
             parameters=[{
-                'image_topic': '/Unity_ROS_message_Rx/OurCar/Sensors/RGBCameraLeft/image_raw',
-                'semantic_topic': '/Unity_ROS_message_Rx/OurCar/Sensors/SemanticCamera/image_raw',
+                'image_topic': '/OurCar/Sensors/RGBCameraLeft/image_raw',
+                'semantic_topic': '/OurCar/Sensors/SemanticCamera/image_raw',
                 'state_topic': '/perception/traffic_light_state',
                 'debug_topic': '/perception/traffic_light_debug',
             }],
