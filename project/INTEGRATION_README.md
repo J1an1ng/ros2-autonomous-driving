@@ -15,7 +15,7 @@ one launch file.
 | --- | --- | --- | --- |
 | 0 | Integration entry point and configuration | Passed | Build, unit tests, safe headless launch; see test log |
 | 1 | Simulation bridge and sensor/TF contract | Passed | Unity bridge, sensor/TF, and low-amplitude command checks; see test log |
-| 2 | Low-speed controller validation | Not started | — |
+| 2 | Low-speed controller validation | Passed | Straight/curve tracking and six safety injections; see test log |
 | 3 | Route, trajectory, and no-event closed loop | Not started | — |
 | 4 | Perception pipeline and traffic-light sensing | Not started | — |
 | 5 | Decision making and individual events | Not started | — |
@@ -488,9 +488,11 @@ Add concise entries in chronological order.
 - Corrected the Unity ego-state interface: Unity's wire name `OurCar/CoM` is now exposed
   through the canonical `/OurCar/INS/pose` and `/OurCar/INS/twist` ROS topics, matching TF,
   route, trajectory, decision, and controller consumers.
-- Local Unity runs now bind the sensor TCP receiver to `127.0.0.1` by default. This avoids
-  unrelated connections to the simulation binary stream. For a Unity instance on another
-  machine, explicitly use `sensor_bind_host:=0.0.0.0` and configure networking securely.
+- Local Unity runs now bind the sensor TCP receiver to `127.0.0.1` by default, reducing
+  exposure of the simulation binary stream. The receiver also rejects a connection whose
+  first magic value is not Unity's `0xDEADC0DE`, closes it, and waits for the real Unity
+  client. For a Unity instance on another machine, explicitly use
+  `sensor_bind_host:=0.0.0.0` and configure networking securely.
 - Measured steady-state topic rates on this machine:
   - pose/twist: approximately 29–33 Hz;
   - RGB left: approximately 2.3–2.6 Hz;
@@ -517,3 +519,58 @@ Add concise entries in chronological order.
 - `enable_motion:=false` was retained throughout normal integration launches. The only
   motion was the documented low-amplitude command probe with the production controller
   disabled; the vehicle was stopped before shutdown.
+
+### Stage 2
+
+- Date: 2026-07-16.
+- Configuration: spawn 0, optional events disabled, route/perception/trajectory/decision
+  nodes disabled, controlled paths published directly in frame `world`, and target speeds
+  limited to 0.5–0.6 m/s.
+- No controller algorithm or gain was replaced. The Stage 1 Pure Pursuit/PID parameters
+  were retained because the measured response was stable. The only controller adjustment
+  was increasing `twist_timeout` from 0.5 s to 1.0 s: Unity serializes all sensor streams
+  over one TCP connection, and camera bursts occasionally delayed twist by slightly more
+  than 0.5 s. A final regression contained no nuisance twist safe stops, while a sustained
+  twist loss still produced full braking after approximately 1.03 s.
+- A local health scanner connected to TCP port 9998 before Unity during one test. The TCP
+  receiver previously remained attached to this invalid client. It now disconnects a
+  non-Unity stream and returns to `accept()`, after which Unity connected and published
+  state normally. This is a bridge robustness fix discovered by Stage 2, not a change to
+  the controller interface.
+- Controlled tracking results:
+
+  | Test | Target | CTE RMS / max | Heading RMS / max | Other result |
+  | --- | ---: | ---: | ---: | --- |
+  | Straight final regression | 0.6 m/s | 0.069 / 0.124 m | 0.018 / 0.041 deg | rise 4.82 s, max 0.563 m/s, steady absolute speed error 0.044 m/s |
+  | Gentle left, radius 25 m | 0.6 m/s | 0.084 / 0.129 m | 1.20 / 2.25 deg | max normalized steering 0.256, no sign oscillation |
+  | Gentle right, radius 25 m | 0.6 m/s | 0.072 / 0.132 m | 0.81 / 1.56 deg | max normalized steering 0.229, no sign oscillation |
+  | Straight, initial path heading +5 deg | 0.5 m/s | 0.070 / 0.125 m | 4.02 / 5.01 deg | correct smooth correction, no sign oscillation |
+  | Straight, initial path heading -5 deg | 0.5 m/s | 0.070 / 0.126 m | 3.99 / 5.00 deg | correct smooth correction, no sign oscillation |
+
+  The right-curve run began from the previous test endpoint and did not reach the requested
+  speed; its lateral metrics remain valid, but longitudinal acceptance uses the independent
+  straight regression. In every moving run, throttle and brake were never positive
+  together. The final straight stop used full braking, reached below 0.05 m/s in 0.96 s,
+  and travelled approximately 0.335 m after the stop request.
+- Isolated fault injection used fresh synthetic path, decision, twist, and dynamic TF
+  inputs, then removed one source at a time. Missing TF was verified in a fresh controller
+  process so no prior transform remained buffered:
+
+  | Injected condition | Full-brake detection latency |
+  | --- | ---: |
+  | stale path | 0.965 s |
+  | stale target speed | 0.711 s |
+  | stale stop state | 0.759 s |
+  | stale twist | 1.029 s |
+  | explicit stop request | 0.056 s |
+  | missing TF | 0.001 s (first observed post-injection command) |
+
+  All six cases output `throttle=0.0`, `steering=0.0`, `brake=1.0`; no sample contained
+  simultaneous throttle and brake.
+- Motion-disabled mock-path check: the vehicle moved less than 0.1 mm, throttle remained
+  zero, and the controller continuously commanded full safe-stop braking.
+- Out-of-tree rebuild of `simulation` and `controller` passed. `colcon test` reported
+  11 tests, 0 errors, 0 failures, and 0 skipped, including all 10 controller-core GTests.
+- Stage 2 conclusion: low-speed control and all required fail-safe paths pass. Stage 3 may
+  begin at 0.5–1.0 m/s; do not raise the speed limit until route geometry and waypoint
+  transitions have been validated with motion disabled.

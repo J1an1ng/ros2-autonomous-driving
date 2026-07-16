@@ -53,61 +53,67 @@ public:
       return;
     }
 
-    RCLCPP_INFO(get_logger(), "Waiting for Unity TCP connection on %s:%d", bind_host.c_str(), port);
-    try {
-      stream_reader->WaitConnect();
-    } catch (const TCPStreamReaderException &e) {
-      RCLCPP_ERROR(get_logger(), "%s", e.what());
-      return;
-    }
-    RCLCPP_INFO(get_logger(), "Got a Unity TCP connection");
-
-    std::vector<std::shared_ptr<UnityStreamParser>> stream_parsers(UnityMessageType::MESSAGE_TYPE_COUNT);
-    stream_parsers[UnityMessageType::UNITY_STATE] = std::make_shared<TrueStateParser>(this);
-    stream_parsers[UnityMessageType::UNITY_IMU] = std::make_shared<IMUParser>(this);
-    stream_parsers[UnityMessageType::UNITY_CAMERA] = std::make_shared<RGBCameraParser>(this);
-    stream_parsers[UnityMessageType::UNITY_DEPTH] = std::make_shared<DepthCameraParser>(this);
-
-    bool first_message_received = false;
-    double time_offset = 0.0;
-
-    while (rclcpp::ok() && stream_reader->Good()) {
+    while (rclcpp::ok()) {
+      RCLCPP_INFO(get_logger(), "Waiting for Unity TCP connection on %s:%d", bind_host.c_str(), port);
       try {
-        const uint32_t magic = stream_reader->ReadUInt();
-        if (magic != 0xDEADC0DE) {
-          RCLCPP_ERROR(get_logger(), "Stream corrupted: magic mismatch 0x%08x", magic);
-          continue;
-        }
-
-        UnityHeader header;
-        header.type = static_cast<UnityMessageType>(stream_reader->ReadUInt());
-        const uint64_t ticks = stream_reader->ReadUInt64();
-        header.name = stream_reader->ReadString();
-        header.timestamp = static_cast<double>(ticks) * 1e-7;
-
-        if (!first_message_received) {
-          time_offset = now_in_unity_tick_seconds(*get_clock()) - header.timestamp;
-          first_message_received = true;
-          RCLCPP_INFO(get_logger(), "Unity-ROS timeSync: time_offset = %.9f s", time_offset);
-        }
-
-        if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT && stream_parsers[header.type]) {
-          stream_parsers[header.type]->ParseMessage(header, *stream_reader, time_offset);
-        } else if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT) {
-          RCLCPP_WARN(get_logger(), "Message type %u is known but not implemented in this bridge", static_cast<unsigned>(header.type));
-        } else {
-          RCLCPP_ERROR(get_logger(), "Received unknown Unity message type %u", static_cast<unsigned>(header.type));
-        }
+        stream_reader->WaitConnect();
       } catch (const TCPStreamReaderException &e) {
-        RCLCPP_ERROR(get_logger(), "TCP stream ended: %s", e.what());
-        break;
-      } catch (const std::exception &e) {
-        RCLCPP_ERROR(get_logger(), "Parser error: %s", e.what());
+        if (rclcpp::ok()) {
+          RCLCPP_ERROR(get_logger(), "%s", e.what());
+        }
         break;
       }
-      if (rclcpp::ok()) {
-        rclcpp::spin_some(this->get_node_base_interface());
+      RCLCPP_INFO(get_logger(), "Got a Unity TCP connection");
+
+      std::vector<std::shared_ptr<UnityStreamParser>> stream_parsers(
+          UnityMessageType::MESSAGE_TYPE_COUNT);
+      stream_parsers[UnityMessageType::UNITY_STATE] = std::make_shared<TrueStateParser>(this);
+      stream_parsers[UnityMessageType::UNITY_IMU] = std::make_shared<IMUParser>(this);
+      stream_parsers[UnityMessageType::UNITY_CAMERA] = std::make_shared<RGBCameraParser>(this);
+      stream_parsers[UnityMessageType::UNITY_DEPTH] = std::make_shared<DepthCameraParser>(this);
+
+      bool first_message_received = false;
+      double time_offset = 0.0;
+
+      while (rclcpp::ok() && stream_reader->Good()) {
+        try {
+          const uint32_t magic = stream_reader->ReadUInt();
+          if (magic != 0xDEADC0DE) {
+            throw TCPStreamReaderException(
+                    "rejected non-Unity TCP stream (magic mismatch)");
+          }
+
+          UnityHeader header;
+          header.type = static_cast<UnityMessageType>(stream_reader->ReadUInt());
+          const uint64_t ticks = stream_reader->ReadUInt64();
+          header.name = stream_reader->ReadString();
+          header.timestamp = static_cast<double>(ticks) * 1e-7;
+
+          if (!first_message_received) {
+            time_offset = now_in_unity_tick_seconds(*get_clock()) - header.timestamp;
+            first_message_received = true;
+            RCLCPP_INFO(get_logger(), "Unity-ROS timeSync: time_offset = %.9f s", time_offset);
+          }
+
+          if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT && stream_parsers[header.type]) {
+            stream_parsers[header.type]->ParseMessage(header, *stream_reader, time_offset);
+          } else if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT) {
+            RCLCPP_WARN(get_logger(), "Message type %u is known but not implemented in this bridge", static_cast<unsigned>(header.type));
+          } else {
+            RCLCPP_ERROR(get_logger(), "Received unknown Unity message type %u", static_cast<unsigned>(header.type));
+          }
+        } catch (const TCPStreamReaderException &e) {
+          RCLCPP_WARN(get_logger(), "TCP stream ended: %s", e.what());
+          break;
+        } catch (const std::exception &e) {
+          RCLCPP_ERROR(get_logger(), "Parser error: %s", e.what());
+          break;
+        }
+        if (rclcpp::ok()) {
+          rclcpp::spin_some(this->get_node_base_interface());
+        }
       }
+      stream_reader->DisconnectClient();
     }
   }
 

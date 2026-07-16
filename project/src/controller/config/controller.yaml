@@ -29,4 +29,6 @@ controller_node:
 
     path_timeout: 1.0
     decision_timeout: 0.75
-    twist_timeout: 0.5
+    # Unity serializes several camera streams on the same TCP connection; allow
+    # their occasional sub-second burst without masking a sustained state loss.
+    twist_timeout: 1.0

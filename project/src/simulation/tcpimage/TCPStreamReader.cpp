@@ -59,6 +59,7 @@ TCPStreamReader::TCPStreamReader(const std::string &host, const std::string &por
 TCPStreamReader::~TCPStreamReader() { Shutdown(); }
 
 void TCPStreamReader::WaitConnect() {
+  DisconnectClient();
   sockaddr_storage peer_addr{};
   socklen_t peer_len = sizeof(peer_addr);
   client_fd_ = ::accept(server_fd_, reinterpret_cast<sockaddr *>(&peer_addr), &peer_len);
@@ -68,11 +69,15 @@ void TCPStreamReader::WaitConnect() {
   good_ = true;
 }
 
+void TCPStreamReader::DisconnectClient() {
+  good_ = false;
+  close_fd(client_fd_);
+}
+
 bool TCPStreamReader::Good() const { return good_; }
 
 void TCPStreamReader::Shutdown() {
-  good_ = false;
-  close_fd(client_fd_);
+  DisconnectClient();
   close_fd(server_fd_);
 }
 

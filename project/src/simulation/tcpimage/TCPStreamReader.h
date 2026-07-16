@@ -17,6 +17,7 @@ public:
   ~TCPStreamReader();
 
   void WaitConnect();
+  void DisconnectClient();
   bool Good() const;
   void Shutdown();
 

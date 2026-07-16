@@ -93,7 +93,7 @@ private:
     declare_parameter<double>("safe_stop_brake", 1.0);
     declare_parameter<double>("path_timeout", 1.0);
     declare_parameter<double>("decision_timeout", 0.75);
-    declare_parameter<double>("twist_timeout", 0.5);
+    declare_parameter<double>("twist_timeout", 1.0);
   }
 
   void load_parameters()
@@ -356,7 +356,7 @@ private:
   double safe_stop_brake_{1.0};
   double path_timeout_{1.0};
   double decision_timeout_{0.75};
-  double twist_timeout_{0.5};
+  double twist_timeout_{1.0};
   PurePursuitConfig pursuit_config_;
   std::unique_ptr<SpeedController> speed_controller_;
 };
