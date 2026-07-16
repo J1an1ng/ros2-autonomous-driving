@@ -1,0 +1,611 @@
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <string>
+
+#include "rclcpp/rclcpp.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/float32.hpp"
+#include "simulation/msg/vehicle_control.hpp"
+
+#include "tf2/LinearMath/Matrix3x3.h"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+
+using namespace std::chrono_literals;
+
+class ControllerNode : public rclcpp::Node
+{
+public:
+  ControllerNode()
+  : Node("controller_node"),
+    tf_buffer_(this->get_clock()),
+    tf_listener_(tf_buffer_)
+  {
+    /*
+     * Subscribe to the planned path.
+     *
+     * Topic:
+     *   /planning/path
+     *
+     * Type:
+     *   nav_msgs/msg/Path
+     */
+    path_subscription_ =
+      create_subscription<nav_msgs::msg::Path>(
+      "/planning/path",
+      10,
+      std::bind(
+        &ControllerNode::path_callback,
+        this,
+        std::placeholders::_1));
+
+    /*
+     * Subscribe to the final target speed from Decision Making.
+     *
+     * The Controller must not use /planning/target_speed as its
+     * final target speed.
+     */
+    target_speed_subscription_ =
+      create_subscription<std_msgs::msg::Float32>(
+      "/decision/target_speed",
+      10,
+      std::bind(
+        &ControllerNode::target_speed_callback,
+        this,
+        std::placeholders::_1));
+
+    /*
+     * Subscribe to the explicit stop request from Decision Making.
+     *
+     * stop_required == true means the vehicle must stop.
+     */
+    stop_required_subscription_ =
+      create_subscription<std_msgs::msg::Bool>(
+      "/decision/stop_required",
+      10,
+      std::bind(
+        &ControllerNode::stop_required_callback,
+        this,
+        std::placeholders::_1));
+
+    /*
+     * The Controller is the only node that should publish
+     * the final vehicle control command.
+     */
+    command_publisher_ =
+      create_publisher<simulation::msg::VehicleControl>(
+      "/car_command",
+      10);
+
+    /*
+     * 100 ms period:
+     *
+     * 100 ms = 0.1 s
+     * frequency = 1 / 0.1 = 10 Hz
+     */
+    control_timer_ =
+      create_wall_timer(
+      100ms,
+      std::bind(
+        &ControllerNode::control_loop,
+        this));
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Controller node started.");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Path input: /planning/path");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Speed input: /decision/target_speed");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Stop input: /decision/stop_required");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "TF input: world -> OurCar/Center");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Command output: /car_command");
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Lookahead distance: %.2f m",
+      lookahead_distance_);
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Wheelbase: %.2f m",
+      wheelbase_);
+  }
+
+private:
+  /*
+   * Called whenever a new /planning/path message arrives.
+   */
+  void path_callback(
+    const nav_msgs::msg::Path::SharedPtr msg)
+  {
+    latest_path_ = *msg;
+
+    /*
+     * has_path_ is true only when the path contains
+     * at least one pose.
+     */
+    has_path_ = !msg->poses.empty();
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Received path with %zu poses, frame: %s",
+      msg->poses.size(),
+      msg->header.frame_id.c_str());
+  }
+
+  /*
+   * Called whenever Decision Making publishes a new target speed.
+   */
+  void target_speed_callback(
+    const std_msgs::msg::Float32::SharedPtr msg)
+  {
+    target_speed_ = msg->data;
+    has_target_speed_ = true;
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Received decision target speed: %.2f m/s",
+      target_speed_);
+  }
+
+  /*
+   * Called whenever Decision Making publishes a stop request.
+   */
+  void stop_required_callback(
+    const std_msgs::msg::Bool::SharedPtr msg)
+  {
+    stop_required_ = msg->data;
+    has_stop_required_ = true;
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Received decision stop request: %s",
+      stop_required_ ? "true" : "false");
+  }
+
+  /*
+   * Read the vehicle pose from TF:
+   *
+   * world -> OurCar/Center
+   *
+   * Output is stored in:
+   *   vehicle_x_
+   *   vehicle_y_
+   *   vehicle_yaw_
+   */
+  bool update_vehicle_pose()
+  {
+    try {
+      const auto transform =
+        tf_buffer_.lookupTransform(
+        "world",
+        "OurCar/Center",
+        tf2::TimePointZero);
+
+      vehicle_x_ =
+        transform.transform.translation.x;
+
+      vehicle_y_ =
+        transform.transform.translation.y;
+
+      tf2::Quaternion quaternion(
+        transform.transform.rotation.x,
+        transform.transform.rotation.y,
+        transform.transform.rotation.z,
+        transform.transform.rotation.w);
+
+      double roll = 0.0;
+      double pitch = 0.0;
+      double yaw = 0.0;
+
+      tf2::Matrix3x3(quaternion).getRPY(
+        roll,
+        pitch,
+        yaw);
+
+      vehicle_yaw_ = yaw;
+      has_tf_ = true;
+
+      RCLCPP_INFO_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        2000,
+        "Vehicle pose: x=%.2f, y=%.2f, yaw=%.2f rad",
+        vehicle_x_,
+        vehicle_y_,
+        vehicle_yaw_);
+
+      return true;
+    }
+    catch (const tf2::TransformException & exception) {
+      has_tf_ = false;
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for TF world -> OurCar/Center: %s",
+        exception.what());
+
+      return false;
+    }
+  }
+
+  /*
+   * Search the entire path and return the index of the point
+   * with the smallest Euclidean distance to the vehicle.
+   */
+  std::size_t find_nearest_path_index() const
+  {
+    std::size_t nearest_index = 0;
+
+    double minimum_squared_distance =
+      std::numeric_limits<double>::max();
+
+    for (
+      std::size_t i = 0;
+      i < latest_path_.poses.size();
+      ++i)
+    {
+      const double path_x =
+        latest_path_.poses[i].pose.position.x;
+
+      const double path_y =
+        latest_path_.poses[i].pose.position.y;
+
+      const double dx =
+        path_x - vehicle_x_;
+
+      const double dy =
+        path_y - vehicle_y_;
+
+      /*
+       * Squared distance:
+       *
+       * d^2 = dx^2 + dy^2
+       *
+       * We do not need sqrt() because comparing d^2 gives
+       * the same nearest point as comparing d.
+       */
+      const double squared_distance =
+        dx * dx + dy * dy;
+
+      if (
+        squared_distance <
+        minimum_squared_distance)
+      {
+        minimum_squared_distance =
+          squared_distance;
+
+        nearest_index = i;
+      }
+    }
+
+    return nearest_index;
+  }
+
+  /*
+   * Starting from the nearest path point, walk forward along
+   * the path until the accumulated path length reaches the
+   * configured lookahead distance.
+   */
+  std::size_t find_lookahead_index(
+    const std::size_t nearest_index) const
+  {
+    if (latest_path_.poses.empty()) {
+      return 0;
+    }
+
+    double accumulated_distance = 0.0;
+
+    for (
+      std::size_t i = nearest_index;
+      i + 1 < latest_path_.poses.size();
+      ++i)
+    {
+      const auto & current =
+        latest_path_.poses[i].pose.position;
+
+      const auto & next =
+        latest_path_.poses[i + 1].pose.position;
+
+      const double dx =
+        next.x - current.x;
+
+      const double dy =
+        next.y - current.y;
+
+      accumulated_distance +=
+        std::hypot(dx, dy);
+
+      if (
+        accumulated_distance >=
+        lookahead_distance_)
+      {
+        return i + 1;
+      }
+    }
+
+    /*
+     * If the remaining path is shorter than the lookahead
+     * distance, use the final path point.
+     */
+    return latest_path_.poses.size() - 1;
+  }
+
+  /*
+   * Publish a fail-safe stopping command.
+   *
+   * The current development stage deliberately uses this
+   * command even after finding the nearest and lookahead points.
+   */
+  void publish_safe_stop()
+  {
+    simulation::msg::VehicleControl command;
+
+    command.throttle = 0.0F;
+    command.steering = 0.0F;
+    command.brake = 1.0F;
+    command.reserved = 0.0F;
+
+    command_publisher_->publish(command);
+  }
+
+  /*
+   * Main control loop, called at 10 Hz.
+   */
+  void control_loop()
+  {
+    const bool tf_available =
+      update_vehicle_pose();
+
+    /*
+     * Safety condition 1:
+     * No valid path.
+     */
+    if (!has_path_) {
+      publish_safe_stop();
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for a non-empty /planning/path.");
+
+      return;
+    }
+
+    /*
+     * Safety condition 2:
+     * No target-speed message has been received.
+     */
+    if (!has_target_speed_) {
+      publish_safe_stop();
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for /decision/target_speed.");
+
+      return;
+    }
+
+    /*
+     * Safety condition 3:
+     * No stop-required message has been received.
+     *
+     * The vehicle must not be allowed to move before the
+     * explicit stop state from Decision Making is known.
+     */
+    if (!has_stop_required_) {
+      publish_safe_stop();
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for /decision/stop_required.");
+
+      return;
+    }
+
+    /*
+     * Safety condition 4:
+     * Vehicle TF is unavailable.
+     */
+    if (!tf_available) {
+      publish_safe_stop();
+      return;
+    }
+
+    /*
+     * Safety condition 5:
+     *
+     * Either condition means the vehicle must stop:
+     *
+     *   stop_required == true
+     *
+     * or
+     *
+     *   target_speed <= 0.0 m/s
+     */
+    if (
+      stop_required_ ||
+      target_speed_ <= 0.0F)
+    {
+      publish_safe_stop();
+
+      RCLCPP_INFO_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        2000,
+        "Stopping: stop_required=%s, target_speed=%.2f m/s",
+        stop_required_ ? "true" : "false",
+        target_speed_);
+
+      return;
+    }
+
+    /*
+     * Find the path point nearest to the current vehicle pose.
+     */
+    const std::size_t nearest_index =
+      find_nearest_path_index();
+
+    /*
+     * Find the lookahead point along the path.
+     */
+    const std::size_t lookahead_index =
+      find_lookahead_index(nearest_index);
+
+    const auto & nearest_point =
+      latest_path_.poses[nearest_index].pose.position;
+
+    const auto & lookahead_point =
+      latest_path_.poses[lookahead_index].pose.position;
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Nearest index: %zu, point=(%.2f, %.2f)",
+      nearest_index,
+      nearest_point.x,
+      nearest_point.y);
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Lookahead index: %zu, point=(%.2f, %.2f)",
+      lookahead_index,
+      lookahead_point.x,
+      lookahead_point.y);
+
+    /*
+     * Current development stage:
+     *
+     * We have not implemented Pure Pursuit or speed control yet.
+     * Therefore, keep the vehicle stopped.
+     */
+    publish_safe_stop();
+  }
+
+  /*
+   * ROS subscriptions.
+   */
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr
+    path_subscription_;
+
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr
+    target_speed_subscription_;
+
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
+    stop_required_subscription_;
+
+  /*
+   * ROS publisher.
+   */
+  rclcpp::Publisher<simulation::msg::VehicleControl>::SharedPtr
+    command_publisher_;
+
+  /*
+   * 10 Hz control timer.
+   */
+  rclcpp::TimerBase::SharedPtr
+    control_timer_;
+
+  /*
+   * TF objects.
+   */
+  tf2_ros::Buffer
+    tf_buffer_;
+
+  tf2_ros::TransformListener
+    tf_listener_;
+
+  /*
+   * Latest received path.
+   */
+  nav_msgs::msg::Path
+    latest_path_;
+
+  /*
+   * Latest target speed from Decision Making.
+   */
+  float target_speed_{0.0F};
+
+  /*
+   * Current vehicle pose in the world frame.
+   */
+  double vehicle_x_{0.0};
+  double vehicle_y_{0.0};
+  double vehicle_yaw_{0.0};
+
+  /*
+   * Path-tracking parameters.
+   */
+  const double lookahead_distance_{5.0};
+  const double wheelbase_{2.63};
+
+  /*
+   * Input availability flags.
+   */
+  bool has_path_{false};
+  bool has_target_speed_{false};
+  bool has_stop_required_{false};
+  bool has_tf_{false};
+
+  /*
+   * Fail-safe default:
+   *
+   * Before the first /decision/stop_required message arrives,
+   * assume that stopping is required.
+   */
+  bool stop_required_{true};
+};
+
+int main(
+  int argc,
+  char * argv[])
+{
+  rclcpp::init(
+    argc,
+    argv);
+
+  auto node =
+    std::make_shared<ControllerNode>();
+
+  rclcpp::spin(node);
+
+  rclcpp::shutdown();
+
+  return 0;
+}

@@ -1,0 +1,322 @@
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <string>
+
+#include "rclcpp/rclcpp.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/float32.hpp"
+#include "simulation/msg/vehicle_control.hpp"
+
+#include "tf2/LinearMath/Matrix3x3.h"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+
+using namespace std::chrono_literals;
+
+class ControllerNode : public rclcpp::Node
+{
+public:
+  ControllerNode()
+  : Node("controller_node"),
+    tf_buffer_(this->get_clock()),
+    tf_listener_(tf_buffer_)
+  {
+    path_subscription_ = create_subscription<nav_msgs::msg::Path>(
+      "/planning/path",
+      10,
+      std::bind(
+        &ControllerNode::path_callback,
+        this,
+        std::placeholders::_1));
+
+    target_speed_subscription_ =
+      create_subscription<std_msgs::msg::Float32>(
+      "/decision/target_speed",
+      10,
+      std::bind(
+        &ControllerNode::target_speed_callback,
+        this,
+        std::placeholders::_1));
+
+    command_publisher_ =
+      create_publisher<simulation::msg::VehicleControl>(
+      "/car_command",
+      10);
+
+    control_timer_ = create_wall_timer(
+      100ms,
+      std::bind(&ControllerNode::control_loop, this));
+
+    RCLCPP_INFO(get_logger(), "Controller node started.");
+    RCLCPP_INFO(get_logger(), "Path input: /planning/path");
+    RCLCPP_INFO(get_logger(), "Speed input: /decision/target_speed");
+    RCLCPP_INFO(get_logger(), "TF input: world -> OurCar/Center");
+    RCLCPP_INFO(get_logger(), "Command output: /car_command");
+    RCLCPP_INFO(
+      get_logger(),
+      "Lookahead distance: %.2f m",
+      lookahead_distance_);
+  }
+
+private:
+  void path_callback(const nav_msgs::msg::Path::SharedPtr msg)
+  {
+    latest_path_ = *msg;
+    has_path_ = !msg->poses.empty();
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Received path with %zu poses, frame: %s",
+      msg->poses.size(),
+      msg->header.frame_id.c_str());
+  }
+
+  void target_speed_callback(
+    const std_msgs::msg::Float32::SharedPtr msg)
+  {
+    target_speed_ = msg->data;
+    has_target_speed_ = true;
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Received decision target speed: %.2f m/s",
+      target_speed_);
+  }
+
+  bool update_vehicle_pose()
+  {
+    try {
+      const auto transform = tf_buffer_.lookupTransform(
+        "world",
+        "OurCar/Center",
+        tf2::TimePointZero);
+
+      vehicle_x_ = transform.transform.translation.x;
+      vehicle_y_ = transform.transform.translation.y;
+
+      tf2::Quaternion quaternion(
+        transform.transform.rotation.x,
+        transform.transform.rotation.y,
+        transform.transform.rotation.z,
+        transform.transform.rotation.w);
+
+      double roll = 0.0;
+      double pitch = 0.0;
+      double yaw = 0.0;
+
+      tf2::Matrix3x3(quaternion).getRPY(roll, pitch, yaw);
+      vehicle_yaw_ = yaw;
+
+      has_tf_ = true;
+
+      RCLCPP_INFO_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        2000,
+        "Vehicle pose: x=%.2f, y=%.2f, yaw=%.2f rad",
+        vehicle_x_,
+        vehicle_y_,
+        vehicle_yaw_);
+
+      return true;
+    }
+    catch (const tf2::TransformException & exception) {
+      has_tf_ = false;
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for TF world -> OurCar/Center: %s",
+        exception.what());
+
+      return false;
+    }
+  }
+
+  std::size_t find_nearest_path_index() const
+  {
+    std::size_t nearest_index = 0;
+    double minimum_squared_distance =
+      std::numeric_limits<double>::max();
+
+    for (std::size_t i = 0; i < latest_path_.poses.size(); ++i) {
+      const double path_x =
+        latest_path_.poses[i].pose.position.x;
+      const double path_y =
+        latest_path_.poses[i].pose.position.y;
+
+      const double dx = path_x - vehicle_x_;
+      const double dy = path_y - vehicle_y_;
+      const double squared_distance = dx * dx + dy * dy;
+
+      if (squared_distance < minimum_squared_distance) {
+        minimum_squared_distance = squared_distance;
+        nearest_index = i;
+      }
+    }
+
+    return nearest_index;
+  }
+
+  std::size_t find_lookahead_index(
+    const std::size_t nearest_index) const
+  {
+    if (latest_path_.poses.empty()) {
+      return 0;
+    }
+
+    double accumulated_distance = 0.0;
+
+    for (
+      std::size_t i = nearest_index;
+      i + 1 < latest_path_.poses.size();
+      ++i)
+    {
+      const auto & current =
+        latest_path_.poses[i].pose.position;
+      const auto & next =
+        latest_path_.poses[i + 1].pose.position;
+
+      const double dx = next.x - current.x;
+      const double dy = next.y - current.y;
+
+      accumulated_distance += std::hypot(dx, dy);
+
+      if (accumulated_distance >= lookahead_distance_) {
+        return i + 1;
+      }
+    }
+
+    // 如果剩余路径不足 lookahead distance，
+    // 则使用路径最后一个点。
+    return latest_path_.poses.size() - 1;
+  }
+
+  void publish_safe_stop()
+  {
+    simulation::msg::VehicleControl command;
+
+    command.throttle = 0.0F;
+    command.steering = 0.0F;
+    command.brake = 1.0F;
+    command.reserved = 0.0F;
+
+    command_publisher_->publish(command);
+  }
+
+  void control_loop()
+  {
+    const bool tf_available = update_vehicle_pose();
+
+    if (!has_path_) {
+      publish_safe_stop();
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for a non-empty /planning/path.");
+
+      return;
+    }
+
+    if (!has_target_speed_) {
+      publish_safe_stop();
+
+      RCLCPP_WARN_THROTTLE(
+        get_logger(),
+        *get_clock(),
+        3000,
+        "Waiting for /decision/target_speed.");
+
+      return;
+    }
+
+    if (!tf_available) {
+      publish_safe_stop();
+      return;
+    }
+
+    const std::size_t nearest_index =
+      find_nearest_path_index();
+
+    const std::size_t lookahead_index =
+      find_lookahead_index(nearest_index);
+
+    const auto & nearest_point =
+      latest_path_.poses[nearest_index].pose.position;
+
+    const auto & lookahead_point =
+      latest_path_.poses[lookahead_index].pose.position;
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Nearest index: %zu, point=(%.2f, %.2f)",
+      nearest_index,
+      nearest_point.x,
+      nearest_point.y);
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(),
+      *get_clock(),
+      2000,
+      "Lookahead index: %zu, point=(%.2f, %.2f)",
+      lookahead_index,
+      lookahead_point.x,
+      lookahead_point.y);
+
+    // 目前只验证目标点选择，车辆继续保持停止。
+    publish_safe_stop();
+  }
+
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr
+    path_subscription_;
+
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr
+    target_speed_subscription_;
+
+  rclcpp::Publisher<simulation::msg::VehicleControl>::SharedPtr
+    command_publisher_;
+
+  rclcpp::TimerBase::SharedPtr control_timer_;
+
+  tf2_ros::Buffer tf_buffer_;
+  tf2_ros::TransformListener tf_listener_;
+
+  nav_msgs::msg::Path latest_path_;
+
+  float target_speed_{0.0F};
+
+  double vehicle_x_{0.0};
+  double vehicle_y_{0.0};
+  double vehicle_yaw_{0.0};
+
+  const double lookahead_distance_{5.0};
+
+  bool has_path_{false};
+  bool has_target_speed_{false};
+  bool has_tf_{false};
+};
+
+int main(int argc, char * argv[])
+{
+  rclcpp::init(argc, argv);
+
+  auto node = std::make_shared<ControllerNode>();
+  rclcpp::spin(node);
+
+  rclcpp::shutdown();
+  return 0;
+}
