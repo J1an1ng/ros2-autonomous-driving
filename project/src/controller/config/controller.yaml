@@ -29,6 +29,7 @@ controller_node:
 
     path_timeout: 1.0
     decision_timeout: 0.75
-    # Unity serializes several camera streams on the same TCP connection; allow
-    # their occasional sub-second burst without masking a sustained state loss.
-    twist_timeout: 1.0
+    # Unity serializes state and sensor streams on the same TCP connection. In
+    # the waypoint-52 area, measured state gaps can slightly exceed one second;
+    # retain a bounded margin without masking a sustained state loss.
+    twist_timeout: 1.5

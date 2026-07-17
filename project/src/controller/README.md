@@ -214,7 +214,7 @@ Defaults are stored in `config/controller.yaml`.
 | `safe_stop_brake` | `1.0` | Brake used for missing data and stop requests. |
 | `path_timeout` | `1.0` | Maximum path age in seconds. |
 | `decision_timeout` | `0.75` | Maximum speed/stop-decision age in seconds. |
-| `twist_timeout` | `0.5` | Maximum measured-speed age in seconds. |
+| `twist_timeout` | `1.5` | Maximum measured-speed age in seconds; includes margin for Unity TCP jitter. |
 
 Tune in this order and at low speed:
 

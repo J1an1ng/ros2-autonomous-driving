@@ -575,7 +575,7 @@ Add concise entries in chronological order.
   begin at 0.5–1.0 m/s; do not raise the speed limit until route geometry and waypoint
   transitions have been validated with motion disabled.
 
-### Stage 3 checkpoint (testing incomplete)
+### Stage 3 completion
 
 - Date: 2026-07-17.
 - Branch: `temp_inte`.
@@ -583,6 +583,9 @@ Add concise entries in chronological order.
   events disabled. Traffic decisions were bypassed by a persistent low-speed test publisher;
   perception was disabled. Repository defaults remain spawn 0, all configured camera streams
   enabled, and controller motion disabled until explicitly requested.
+- The route was checked against assignment Figure 1 before the final regression. Waypoints
+  45–59 follow the required upper-road westbound leg, the southbound turn, and the lower-road
+  westbound leg to the marked goal; no alternate or diagnostic route was substituted.
 - The motion-disabled route audit passed: `/route/local_path` and `/planning/path` used frame
   `world`, began within approximately 1 mm of ego at the initial transition, remained forward
   ordered, and produced no target-pose fallback after the route-window fix.
@@ -601,8 +604,8 @@ Add concise entries in chronological order.
   controller lookahead problem. Waypoint 34 now remains on the westbound approach and
   waypoint 35 enters the opening. The corrected turn passed both a spawn-5 local test and a
   continuous spawn-0 run using the unchanged Stage 2 controller parameters.
-- Completed real-Unity coverage so far:
-  - segmented low-speed runs covered waypoints 0–25 and 32–51, including all tight turns in
+- Completed real-Unity coverage:
+  - segmented low-speed runs covered waypoints 0–25 and 32–59, including all tight turns in
     that interval;
   - a continuous spawn-0 run at 0.8 m/s advanced from waypoint 0 to 52 without manual route
     index changes, travelled 603.088 m in the 1,200-second capture window, reported no invalid
@@ -611,15 +614,26 @@ Add concise entries in chronological order.
   - measured maximum speed was 0.8641 m/s. Cross-track summaries from the temporary probe are
     conservative because its first-point metric includes expected projection distances and
     occasional stale-state intervals.
-- Unity still intermittently pauses true-state delivery, even with camera output disabled in
-  the temporary `/tmp` runtime copy. The controller responds with the previously verified
-  stale-input full brake and resumes when state returns; these interruptions extended the
-  route duration but did not cause a collision.
-- **Checkpoint status:** Stage 3 is not yet passed. Testing stopped safely at target waypoint
-  52. The next session must resume the unchanged simulation state if available, or repeat an
-  appropriate continuous run, cover waypoints 52–59, observe `route_complete`, verify the
-  final zero-speed publication and physical stop, then rerun build/tests before marking Stage
-  3 complete. No Stage 4 work should start before that gate passes.
+- A focused spawn-5 run naturally entered waypoint 45 from waypoint 32 and reproduced the
+  apparent waypoint-52 blockage at `(45.567, 38.812)`, within 0.6 m of the earlier spawn-0
+  failure. The vehicle remained centred and aligned south; the controller commanded
+  throttle 0.35, brake 0, and steering approximately -0.083. The actual cause was Unity
+  true-state jitter: `/OurCar/INS/twist` had a measured maximum inter-message interval of
+  1.072 s, just over the previous 1.0 s timeout, so repeated full safe-stop braking prevented
+  the vehicle from restarting. There is no waypoint-52 obstacle and no route change was made.
+- Raising only the runtime twist timeout allowed the vehicle to leave the identical stopped
+  pose immediately. The source default is now 1.5 s, providing approximately 0.43 s margin
+  over the observed gap while retaining bounded fail-safe behaviour for sustained state loss.
+- A final regression used the source value of 1.5 s, spawn 5, initial waypoint 32, and one
+  continuous Unity/route-manager session. It progressed through every waypoint 32–59,
+  crossed the former failure position at 0.95–0.97 m/s, travelled 275.463 m, and reported a
+  maximum speed of 0.9897 m/s. The probe's fixed 500-second window expired 5.211 m before
+  completion, so a second capture continued without resetting Unity or route state.
+  `route_complete` was then observed at waypoint 59, the published route speed was 0, and the
+  vehicle stopped in 0.931 s at `(-47.236, 2.618)`. There were no invalid paths and no
+  simultaneous throttle/brake commands.
+- **Stage 3 status:** the required no-event route and terminal stop have passed. Stage 4 may
+  begin.
 - Checkpoint verification: an out-of-tree build of the complete dependency closure through
   `system_bringup` finished successfully (7 packages). All 35 route-progress and trajectory
   functional tests passed, as did all 10 controller-core GTests. Installed route and trajectory
@@ -627,3 +641,6 @@ Add concise entries in chronological order.
   `git diff --check` passed. The legacy route-manager copyright/flake8/pep257 tests could not
   be collected on this machine because the corresponding `ament_copyright`, `ament_flake8`,
   and `ament_pep257` Python modules are not installed; no functional test failed.
+- Post-fix verification rebuilt `simulation` and `controller` out of tree, confirmed the
+  installed controller configuration matches the source byte-for-byte, and passed all 10
+  controller-core GTests. `git diff --check` also passed.
