@@ -12,7 +12,7 @@ from geometry_msgs.msg import PoseStamped, Quaternion
 from nav_msgs.msg import Path as NavPath
 from tf2_ros import Buffer, TransformListener, TransformException
 
-from route_manager.route_progress import waypoint_reached_or_passed
+from route_manager.route_progress import distance_2d, waypoint_reached_or_passed
 
 
 def yaw_deg_to_quaternion(yaw_deg):
@@ -25,10 +25,6 @@ def yaw_deg_to_quaternion(yaw_deg):
     q.w = math.cos(yaw / 2.0)
 
     return q
-
-
-def distance_2d(x1, y1, x2, y2):
-    return math.hypot(x1 - x2, y1 - y2)
 
 
 class RouteManagerNode(Node):
@@ -100,6 +96,12 @@ class RouteManagerNode(Node):
         self.current_wp_pub = self.create_publisher(
             Int32,
             "/route/current_waypoint_id",
+            10
+        )
+
+        self.waypoint_distance_pub = self.create_publisher(
+            Float32,
+            "/route/current_waypoint_distance",
             10
         )
 
@@ -257,7 +259,7 @@ class RouteManagerNode(Node):
 
         return self.waypoints[target_index], target_index
 
-    def publish_target(self, waypoint, target_index):
+    def publish_target(self, waypoint, target_index, ego_x, ego_y):
         timestamp = self.get_clock().now().to_msg()
 
         pose_msg = PoseStamped()
@@ -299,9 +301,18 @@ class RouteManagerNode(Node):
             else str(waypoint.get("type", "normal"))
         )
 
+        distance_msg = Float32()
+        distance_msg.data = distance_2d(
+            ego_x,
+            ego_y,
+            float(waypoint["x"]),
+            float(waypoint["y"]),
+        )
+
         self.target_pose_pub.publish(pose_msg)
         self.speed_limit_pub.publish(speed_msg)
         self.current_wp_pub.publish(id_msg)
+        self.waypoint_distance_pub.publish(distance_msg)
         self.route_state_pub.publish(state_msg)
 
     def publish_local_path(self):
@@ -390,7 +401,9 @@ class RouteManagerNode(Node):
 
         self.publish_target(
             target_wp,
-            target_index
+            target_index,
+            ego_x,
+            ego_y,
         )
 
         self.publish_local_path()

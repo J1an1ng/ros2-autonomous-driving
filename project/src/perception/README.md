@@ -30,8 +30,12 @@ the corresponding full-system launch arguments. OctoMap can be disabled with
 | `/perception/traffic_light_debug` | Raw/stable state, scores, selected semantic component, ROI, and timestamp delta. |
 
 The traffic detector uses the left RGB image for bulb colour and the semantic image only to
-select traffic-light components. `strict_center` selects the component nearest the image
-centre. Four consecutive raw classifications are required before the stable state changes.
+select traffic-light components. `strict_center` selects the component nearest the expected
+forward-signal position: the horizontal image centre and `strict_center_y_ratio=0.62` of the
+traffic-light detection ROI height. Using both axes prevents an unlit overhead/back-facing
+signal from replacing the lower forward-facing signal as the car moves closer to an
+intersection. Four consecutive raw classifications are required before the stable state
+changes.
 If no valid component exists, or the RGB/semantic timestamp difference exceeds
 `max_semantic_stamp_delta_s=1.0`, the published state is UNKNOWN. This prevents a frozen
 semantic frame from continuously supporting stale green evidence.
@@ -42,5 +46,11 @@ required and must not be removed during tuning.
 
 The principal detector thresholds remain parameters declared in
 `traffic_light_detector_node.cpp`. Inspect `/perception/traffic_light_debug` before changing
-them. Stage-4 runs detected stable red, yellow, and green at all four controlled approaches
-with the defaults, so threshold changes are not currently required.
+them. The deterministic simulator profile deliberately gives red and green broad hue,
+saturation, and value gates, while yellow uses the narrower 42--58 degree hue interval and
+higher saturation/value requirements. `yellow_over_green_ratio=1.25` additionally requires
+yellow evidence to clearly exceed concurrent green evidence before yellow can override it.
+A true yellow with no green evidence remains yellow. In the simulator, a lit green bulb may
+coexist with red housing reflections, so `green_over_red_ratio=0.80` lets green override them
+once its evidence reaches 80% of red; a pure red frame has no green evidence and remains red.
+A state still needs four consecutive raw classifications before publication.

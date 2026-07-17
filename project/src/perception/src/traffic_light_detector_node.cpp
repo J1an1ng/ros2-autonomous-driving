@@ -134,25 +134,26 @@ public:
     semantic_merge_gap_px_ = declare_parameter<int>("semantic_merge_gap_px", 12);
     target_light_ = declare_parameter<std::string>("target_light", "strict_center");
     center_distance_penalty_ = declare_parameter<double>("center_distance_penalty", 0.8);
+    strict_center_y_ratio_ = declare_parameter<double>("strict_center_y_ratio", 0.62);
 
     roi_x_min_ = declare_parameter<double>("roi_x_min", 0.0);
     roi_y_min_ = declare_parameter<double>("roi_y_min", 0.0);
     roi_x_max_ = declare_parameter<double>("roi_x_max", 1.0);
     roi_y_max_ = declare_parameter<double>("roi_y_max", 0.55);
 
-    min_saturation_ = declare_parameter<int>("min_saturation", 80);
-    red_min_saturation_ = declare_parameter<int>("red_min_saturation", 70);
-    red_min_value_ = declare_parameter<int>("red_min_value", 100);
-    yellow_min_saturation_ = declare_parameter<int>("yellow_min_saturation", 110);
-    yellow_min_value_ = declare_parameter<int>("yellow_min_value", 175);
-    green_min_saturation_ = declare_parameter<int>("green_min_saturation", 45);
-    green_min_value_ = declare_parameter<int>("green_min_value", 70);
-    red_h_high_ = declare_parameter<double>("red_h_high", 25.0);
-    red_h_low_ = declare_parameter<double>("red_h_low", 330.0);
-    yellow_h_min_ = declare_parameter<double>("yellow_h_min", 35.0);
-    yellow_h_max_ = declare_parameter<double>("yellow_h_max", 65.0);
-    green_h_min_ = declare_parameter<double>("green_h_min", 60.0);
-    green_h_max_ = declare_parameter<double>("green_h_max", 190.0);
+    min_saturation_ = declare_parameter<int>("min_saturation", 35);
+    red_min_saturation_ = declare_parameter<int>("red_min_saturation", 60);
+    red_min_value_ = declare_parameter<int>("red_min_value", 80);
+    yellow_min_saturation_ = declare_parameter<int>("yellow_min_saturation", 125);
+    yellow_min_value_ = declare_parameter<int>("yellow_min_value", 185);
+    green_min_saturation_ = declare_parameter<int>("green_min_saturation", 35);
+    green_min_value_ = declare_parameter<int>("green_min_value", 60);
+    red_h_high_ = declare_parameter<double>("red_h_high", 30.0);
+    red_h_low_ = declare_parameter<double>("red_h_low", 320.0);
+    yellow_h_min_ = declare_parameter<double>("yellow_h_min", 42.0);
+    yellow_h_max_ = declare_parameter<double>("yellow_h_max", 58.0);
+    green_h_min_ = declare_parameter<double>("green_h_min", 55.0);
+    green_h_max_ = declare_parameter<double>("green_h_max", 200.0);
     min_blob_pixels_ = declare_parameter<int>("min_blob_pixels", 3);
     max_blob_pixels_ = declare_parameter<int>("max_blob_pixels", 900);
     max_red_blob_pixels_ = declare_parameter<int>("max_red_blob_pixels", 180);
@@ -161,12 +162,12 @@ public:
     min_score_pixels_ = declare_parameter<int>("min_score_pixels", 6);
     min_red_score_ = declare_parameter<int>("min_red_score", 6);
     min_red_pixels_ = declare_parameter<int>("min_red_pixels", 6);
-    min_yellow_score_ = declare_parameter<int>("min_yellow_score", 16);
-    min_yellow_pixels_ = declare_parameter<int>("min_yellow_pixels", 8);
+    min_yellow_score_ = declare_parameter<int>("min_yellow_score", 20);
+    min_yellow_pixels_ = declare_parameter<int>("min_yellow_pixels", 10);
     min_green_score_ = declare_parameter<int>("min_green_score", 3);
     yellow_required_ratio_ = declare_parameter<double>("yellow_required_ratio", 1.8);
-    yellow_over_green_ratio_ = declare_parameter<double>("yellow_over_green_ratio", 0.75);
-    green_over_red_ratio_ = declare_parameter<double>("green_over_red_ratio", 4.0);
+    yellow_over_green_ratio_ = declare_parameter<double>("yellow_over_green_ratio", 1.25);
+    green_over_red_ratio_ = declare_parameter<double>("green_over_red_ratio", 0.80);
     consecutive_frames_ = declare_parameter<int>("consecutive_frames", 4);
 
     state_pub_ = create_publisher<std_msgs::msg::UInt8>(state_topic_, 10);
@@ -423,7 +424,7 @@ private:
     }
     MergeSemanticComponents(components);
 
-    const int selected_component = SelectSemanticComponent(components, width);
+    const int selected_component = SelectSemanticComponent(components, width, height);
     if (selected_component >= 0) {
       AddSemanticComponentToGate(components[static_cast<size_t>(selected_component)],
                                  width, height, gate);
@@ -515,7 +516,9 @@ private:
     return close_boxes && aligned;
   }
 
-  int SelectSemanticComponent(const std::vector<SemanticComponent> &components, int width) const {
+  int SelectSemanticComponent(const std::vector<SemanticComponent> &components,
+                              int width,
+                              int height) const {
     if (components.empty() || target_light_ == "all") {
       return -1;
     }
@@ -549,7 +552,17 @@ private:
                                          components[static_cast<size_t>(a)].max_x);
           const double center_b = 0.5 * (components[static_cast<size_t>(b)].min_x +
                                          components[static_cast<size_t>(b)].max_x);
-          return std::abs(center_a - image_center) < std::abs(center_b - image_center);
+          const double center_y_a = 0.5 * (components[static_cast<size_t>(a)].min_y +
+                                           components[static_cast<size_t>(a)].max_y);
+          const double center_y_b = 0.5 * (components[static_cast<size_t>(b)].min_y +
+                                           components[static_cast<size_t>(b)].max_y);
+          const double target_y =
+              std::clamp(strict_center_y_ratio_, 0.0, 1.0) * static_cast<double>(height);
+          const double distance_a =
+              std::hypot(center_a - image_center, center_y_a - target_y);
+          const double distance_b =
+              std::hypot(center_b - image_center, center_y_b - target_y);
+          return distance_a < distance_b;
         });
       }
 
@@ -932,25 +945,26 @@ private:
   int semantic_merge_gap_px_{12};
   std::string target_light_{"strict_center"};
   double center_distance_penalty_{0.8};
+  double strict_center_y_ratio_{0.62};
 
   double roi_x_min_{0.0};
   double roi_y_min_{0.0};
   double roi_x_max_{1.0};
   double roi_y_max_{0.55};
 
-  int min_saturation_{80};
-  int red_min_saturation_{70};
-  int red_min_value_{100};
-  int yellow_min_saturation_{110};
-  int yellow_min_value_{175};
-  int green_min_saturation_{45};
-  int green_min_value_{70};
-  double red_h_high_{25.0};
-  double red_h_low_{330.0};
-  double yellow_h_min_{35.0};
-  double yellow_h_max_{65.0};
-  double green_h_min_{60.0};
-  double green_h_max_{190.0};
+  int min_saturation_{35};
+  int red_min_saturation_{60};
+  int red_min_value_{80};
+  int yellow_min_saturation_{125};
+  int yellow_min_value_{185};
+  int green_min_saturation_{35};
+  int green_min_value_{60};
+  double red_h_high_{30.0};
+  double red_h_low_{320.0};
+  double yellow_h_min_{42.0};
+  double yellow_h_max_{58.0};
+  double green_h_min_{55.0};
+  double green_h_max_{200.0};
   int min_blob_pixels_{3};
   int max_blob_pixels_{900};
   int max_red_blob_pixels_{180};
@@ -959,12 +973,12 @@ private:
   int min_score_pixels_{6};
   int min_red_score_{6};
   int min_red_pixels_{6};
-  int min_yellow_score_{16};
-  int min_yellow_pixels_{8};
+  int min_yellow_score_{20};
+  int min_yellow_pixels_{10};
   int min_green_score_{3};
   double yellow_required_ratio_{1.8};
-  double yellow_over_green_ratio_{0.75};
-  double green_over_red_ratio_{4.0};
+  double yellow_over_green_ratio_{1.25};
+  double green_over_red_ratio_{0.80};
   int consecutive_frames_{4};
 
   uint8_t candidate_state_{UNKNOWN};

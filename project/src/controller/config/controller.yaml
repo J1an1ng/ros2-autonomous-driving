@@ -12,7 +12,7 @@ controller_node:
     lookahead_max: 7.0
     minimum_forward_distance: 0.2
 
-    maximum_target_speed: 8.0
+    maximum_target_speed: 10.0
     normalize_steering: true
     steering_sign: -1.0
     maximum_steering_angle: 0.52

@@ -9,7 +9,7 @@ def select_target_speed(
     effective_speed_limit = default_speed if speed_limit is None else speed_limit
     normalized_state = (route_state or "").lower()
 
-    if "stop" in normalized_state:
+    if normalized_state == "route_complete":
         return float(stop_speed)
 
     if "intersection" in normalized_state:

@@ -83,6 +83,11 @@ Description: The id of the currently selected target waypoint.
 
 Note: This id represents the current target waypoint, not necessarily the last reached waypoint.
 
+`/route/current_waypoint_distance` (`std_msgs/msg/Float32`) publishes the
+planar ego-to-target distance in metres. The decision layer uses this existing
+route geometry to approach an unclassified traffic light slowly while retaining
+a hard stop boundary.
+
 /route/route_state
 
 Type: std_msgs/msg/String
@@ -103,6 +108,25 @@ route_complete
 
 At `route_complete`, the speed limit is published as zero and the final
 waypoint remains the target.
+
+The initial stop waypoint (ID 0) has a zero route speed. The four dynamic
+traffic-light stop zones (IDs 25, 32, 52, and 59) use a conservative 3 m/s
+approach speed instead: the decision node owns the red/yellow stop. Keeping a
+non-zero planning speed at those waypoints lets the vehicle leave the stop
+zone after a stable green release and prevents a route-progress deadlock.
+The waypoint32 T-junction uses a rounded waypoint33--35 transition and retains
+the 3 m/s limit through the turn. Waypoint34 delays the northward transition
+until the reference reaches the middle of the available corner: this avoids
+both the original late-turn guardrail overrun and the earlier inner-kerb cut,
+without changing the global pure-pursuit tuning used by other bends.
+
+The event intersection at waypoints39--42 uses a 2 m/s limit through the turn.
+Its turn-defining waypoints are more than the 3 m waypoint-reach radius apart,
+so route progress cannot skip the bend constraints in one update. The first
+transition starts the westbound turn before the opposite kerb. The road-end
+turn at waypoints47--50 retains a 3 m/s limit and removes the former northward
+spline bulge toward the concrete barrier that could deadlock path-relative
+emergency detection before waypoint52.
 
 Runtime parameters include `initial_waypoint_index` (default `0`). This is a
 diagnostic aid for local segment tests with a matching Unity spawn; benchmark

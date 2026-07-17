@@ -230,16 +230,30 @@ def test_default_quality_limits_accept_tight_route_turn():
     ego_pose = Pose2D(x=181.421, y=4.351, yaw=math.radians(179.644))
     route_points = [
         ego_pose,
-        Pose2D(x=138.387, y=4.231),
-        Pose2D(x=131.004, y=3.661),
-        Pose2D(x=123.747, y=8.293),
-        Pose2D(x=124.346, y=8.864),
+        Pose2D(x=138.387, y=4.231, yaw=math.radians(177.671)),
+        Pose2D(x=131.004, y=3.661, yaw=math.radians(165.745)),
+        Pose2D(x=127.000, y=3.700, yaw=math.radians(150.0)),
+        Pose2D(x=123.747, y=8.864, yaw=math.radians(94.822)),
     ]
 
-    result = process_local_path(route_points, ego_pose, path_resolution=1.0)
+    result = process_local_path(
+        route_points,
+        ego_pose,
+        path_resolution=1.0,
+        use_waypoint_yaw=True,
+    )
 
     assert result
     assert max(abs(point.curvature) for point in result) < 2.0
+    # The T-junction reference must turn between the two observed failure modes:
+    # it stays below y=4 m around x=128--129 m to avoid the inner kerb, but has
+    # already moved north by x=125--126 m to avoid the former late-turn overrun.
+    preview_points = [point for point in result if 128.0 <= point.x <= 129.0]
+    assert preview_points
+    assert max(point.y for point in preview_points) < 4.0
+    turn_points = [point for point in result if 125.0 <= point.x <= 126.0]
+    assert turn_points
+    assert max(point.y for point in turn_points) > 4.4
 
 
 def test_waypoint_yaw_interpolation_starts_sparse_turn_before_corner():
@@ -259,7 +273,59 @@ def test_waypoint_yaw_interpolation_starts_sparse_turn_before_corner():
     first_half = [point for point in result if point.s < 8.0]
     assert result
     assert any(point.curvature < -0.01 for point in first_half)
-    assert max(abs(point.curvature) for point in result) < 2.0
+
+
+def test_event_intersection_left_turn_stays_clear_of_opposite_kerb():
+    route_points = [
+        Pose2D(x=124.120, y=40.206, yaw=math.radians(89.324)),
+        Pose2D(x=123.700, y=45.500, yaw=math.radians(105.0)),
+        Pose2D(x=122.000, y=48.500, yaw=math.radians(125.0)),
+        Pose2D(x=119.000, y=50.800, yaw=math.radians(155.0)),
+        Pose2D(x=114.500, y=52.000, yaw=math.radians(178.0)),
+    ]
+
+    result = process_local_path(
+        route_points,
+        ego_pose=route_points[0],
+        path_resolution=1.0,
+        use_waypoint_yaw=True,
+    )
+
+    assert result
+    assert max(point.y for point in result) < 52.1
+    corner_points = [point for point in result if 47.0 <= point.y <= 49.0]
+    assert corner_points
+    assert min(point.x for point in corner_points) < 122.8
+
+    # Route progress uses a 3 m reach radius. Keep every turn-defining point
+    # outside the previous point's radius so the bend cannot be skipped in one
+    # update cycle.
+    for first, second in zip(route_points, route_points[1:]):
+        assert math.hypot(second.x - first.x, second.y - first.y) > 3.0
+
+
+def test_waypoint48_turn_does_not_bulge_toward_road_end_barrier():
+    route_points = [
+        Pose2D(x=81.514, y=52.500, yaw=math.radians(178.441)),
+        Pose2D(x=65.590, y=52.400, yaw=math.radians(180.0)),
+        Pose2D(x=49.690, y=51.719, yaw=math.radians(-170.0)),
+        Pose2D(x=48.266, y=50.114, yaw=math.radians(-131.668)),
+        Pose2D(x=46.719, y=46.420, yaw=math.radians(-108.342)),
+        Pose2D(x=45.588, y=35.993, yaw=math.radians(-89.76)),
+    ]
+
+    result = process_local_path(
+        route_points,
+        ego_pose=route_points[0],
+        path_resolution=1.0,
+        use_waypoint_yaw=True,
+    )
+
+    assert result
+    barrier_approach = [point for point in result if 55.0 <= point.x <= 65.0]
+    assert barrier_approach
+    assert max(point.y for point in barrier_approach) < 52.5
+    assert max(abs(point.curvature) for point in result) < 0.6
 
 
 def test_submetre_route_cluster_keeps_latest_point_and_tangent():

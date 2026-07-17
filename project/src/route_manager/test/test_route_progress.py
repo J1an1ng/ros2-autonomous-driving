@@ -1,4 +1,6 @@
-from route_manager.route_progress import waypoint_reached_or_passed
+import pytest
+
+from route_manager.route_progress import distance_2d, waypoint_reached_or_passed
 
 
 WAYPOINTS = [
@@ -27,3 +29,7 @@ def test_first_waypoint_cannot_be_skipped_without_reaching_it():
 def test_zero_length_segment_requires_reach_radius():
     waypoints = [WAYPOINTS[0], {"id": 1, "x": 0.0, "y": 0.0}]
     assert waypoint_reached_or_passed(waypoints, 1, 4.0, 0.0, 3.0) == ""
+
+
+def test_waypoint_distance_uses_planar_metric():
+    assert distance_2d(1.0, 2.0, 4.0, 6.0) == pytest.approx(5.0)

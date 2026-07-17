@@ -206,7 +206,7 @@ waypoints:
   y: 15.711
   z: 0.822
   yaw_deg: -91.195
-  speed_limit: 0.0
+  speed_limit: 3
   segment_id: 0
   type: stop_zone
 - id: 26
@@ -262,7 +262,7 @@ waypoints:
   y: 4.231
   z: 0.823
   yaw_deg: 177.671
-  speed_limit: 0.0
+  speed_limit: 3
   segment_id: 0
   type: stop_zone
 - id: 33
@@ -270,15 +270,15 @@ waypoints:
   y: 3.661
   z: 0.822
   yaw_deg: 165.745
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_approach
 - id: 34
-  x: 123.747
+  x: 127.000
   y: 3.700
   z: 0.825
-  yaw_deg: 177.000
-  speed_limit: 8
+  yaw_deg: 150.000
+  speed_limit: 3
   segment_id: 0
   type: curve_mid
 - id: 35
@@ -286,7 +286,7 @@ waypoints:
   y: 8.864
   z: 0.825
   yaw_deg: 94.822
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_exit
 - id: 36
@@ -314,35 +314,35 @@ waypoints:
   segment_id: 0
   type: intersection_approach
 - id: 39
-  x: 124.192
-  y: 47.259
+  x: 123.700
+  y: 45.500
   z: 0.822
-  yaw_deg: 89.559
-  speed_limit: 3
+  yaw_deg: 105.000
+  speed_limit: 2
   segment_id: 0
   type: intersection
 - id: 40
-  x: 118.965
-  y: 52.874
+  x: 122.000
+  y: 48.500
   z: 0.823
-  yaw_deg: 137.028
-  speed_limit: 8
+  yaw_deg: 125.000
+  speed_limit: 2
   segment_id: 0
   type: curve_mid
 - id: 41
-  x: 118.238
-  y: 52.652
+  x: 119.000
+  y: 50.800
   z: 0.822
-  yaw_deg: 163.92
-  speed_limit: 8
+  yaw_deg: 155.000
+  speed_limit: 2
   segment_id: 0
   type: curve_mid
 - id: 42
-  x: 114.305
-  y: 52.684
+  x: 114.500
+  y: 52.000
   z: 0.827
-  yaw_deg: 179.954
-  speed_limit: 14
+  yaw_deg: 178.000
+  speed_limit: 2
   segment_id: 0
   type: curve_exit
 - id: 43
@@ -371,7 +371,7 @@ waypoints:
   type: normal
 - id: 46
   x: 81.514
-  y: 52.658
+  y: 52.500
   z: 0.827
   yaw_deg: 178.441
   speed_limit: 14
@@ -379,18 +379,18 @@ waypoints:
   type: normal
 - id: 47
   x: 65.59
-  y: 53.24
+  y: 52.400
   z: 0.822
-  yaw_deg: 178.417
-  speed_limit: 8
+  yaw_deg: 180.000
+  speed_limit: 3
   segment_id: 0
   type: curve_approach
 - id: 48
-  x: 49.69
+  x: 49.690
   y: 51.719
   z: 0.822
-  yaw_deg: -152.579
-  speed_limit: 8
+  yaw_deg: -170.000
+  speed_limit: 3
   segment_id: 0
   type: curve_mid
 - id: 49
@@ -398,7 +398,7 @@ waypoints:
   y: 50.114
   z: 0.822
   yaw_deg: -131.668
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_mid
 - id: 50
@@ -406,7 +406,7 @@ waypoints:
   y: 46.42
   z: 0.828
   yaw_deg: -108.342
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_exit
 - id: 51
@@ -422,7 +422,7 @@ waypoints:
   y: 15.284
   z: 0.822
   yaw_deg: -90.926
-  speed_limit: 0.0
+  speed_limit: 3
   segment_id: 0
   type: stop_zone
 - id: 53
@@ -478,6 +478,6 @@ waypoints:
   y: 2.623
   z: 0.824
   yaw_deg: -177.646
-  speed_limit: 0.0
+  speed_limit: 3
   segment_id: 0
   type: stop_zone

@@ -60,6 +60,7 @@ Node name:
 | `/planning/target_speed` | `std_msgs/msg/Float32` | `trajectory_generator_node` | Target speed selected by planning, in m/s. |
 | `/route/route_state` | `std_msgs/msg/String` | `route_manager_node` | Semantic route state used to enable traffic-light decisions near an intersection. |
 | `/route/current_waypoint_id` | `std_msgs/msg/Int32` | `route_manager_node` | Current target waypoint ID, used for optional waypoint filtering and diagnostics. |
+| `/route/current_waypoint_distance` | `std_msgs/msg/Float32` | `route_manager_node` | Planar distance to the current target; bounds UNKNOWN-light creeping before the stop line. |
 | `/OurCar/INS/twist` | `geometry_msgs/msg/TwistStamped` | simulation bridge | Vehicle velocity used to confirm a complete stop. |
 | `/decision/front_obstacle_distance` | `std_msgs/msg/Float32` | `obstacle_monitor_node` | Nearest point in the ego-lane ROI, in metres. `inf` means no point. |
 | `/decision/merge_obstacle_distance` | `std_msgs/msg/Float32` | `obstacle_monitor_node` | Nearest point in the right-front merge ROI, in metres. `inf` means no point. |
@@ -86,10 +87,10 @@ and brake remains the controller's responsibility.
 | State | Behavior | Transition |
 | --- | --- | --- |
 | `CRUISE` | Pass through the fresh planning speed. | Enter `APPROACHING_INTERSECTION` in a configured route state/waypoint. |
-| `APPROACHING_INTERSECTION` | Pass through planning speed while observing the light. | Red, or yellow by default, enters `STOPPING_FOR_LIGHT`; leaving the controlled zone returns to `CRUISE`. |
+| `APPROACHING_INTERSECTION` | Unknown/stale data and a remembered red/yellow are limited to `unknown_light_approach_speed` while a fresh waypoint distance remains outside the applicable stop boundary. | At/before the boundary, unknown/stale data or a remembered red/yellow enters `STOPPING_FOR_LIGHT`; continuously fresh green with no pending red/yellow grants one passage and enters `RELEASED`. |
 | `STOPPING_FOR_LIGHT` | Publish zero target speed and latch the stop even if route manager advances. | A fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
 | `WAITING_FOR_GREEN` | Continue publishing zero. Unknown, red, yellow or stale light data cannot release the stop. | A continuously fresh green signal for `green_release_delay` enters `RELEASED`. |
-| `RELEASED` | Resume the planning speed. | Leaving the controlled zone returns to `CRUISE`; a new red/yellow in the same zone stops again. |
+| `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
 | `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. | Release after the obstacle exceeds the trigger distance plus its hysteresis margin. |
 | `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Release only after a fresh front distance exceeds the speed-dependent stopping distance plus its hysteresis margin. |
 
@@ -107,13 +108,31 @@ The stop latch is necessary because the current route manager advances to the ne
 waypoint based only on distance. Without the latch, `/planning/target_speed` can become
 non-zero again while the light is still red.
 
+After a stopped vehicle has observed continuously fresh green and entered `RELEASED`, the
+authorization remains latched until it leaves the controlled zone. This is intentional:
+the signal leaves the camera field of view before the vehicle reaches the route waypoint,
+and braking again at that point would stop the vehicle inside the intersection.
+The same continuous-green requirement can grant the authorization while the vehicle is
+still approaching, so a signal that legitimately leaves the camera field of view before
+the hard boundary does not turn back into UNKNOWN braking.
+
+An associated red/yellow is remembered at first recognition. Instead of stopping at the
+camera-recognition distance, the vehicle continues at the bounded 1 m/s approach speed and
+brakes at `traffic_light_stop_distance`. That explicit stop remains latched until the
+vehicle has completely stopped, even if the signal turns green during the final approach.
+A boundary stop caused only by UNKNOWN may be cancelled before standstill by a stable
+green, or by a fresh distance proving that the hard stop boundary is still ahead.
+
 ## Safety and timeout behavior
 
 - A missing or stale planning speed produces `/decision/target_speed = 0.0`.
 - A missing or stale vehicle speed cannot falsely confirm that the car has stopped.
-- A missing, unknown or stale traffic-light state cannot release `WAITING_FOR_GREEN`.
-- Traffic-light loss during normal driving does not stop the vehicle by itself. This is
-  necessary because the detector reports `UNKNOWN` when no relevant light is visible.
+- At an allowlisted controlled intersection, missing, unknown or stale traffic-light data
+  permits only bounded low-speed approach. It requests a stop at
+  `unknown_light_stop_distance` and cannot release `WAITING_FOR_GREEN`.
+- A missing or stale waypoint distance cannot authorize UNKNOWN-light creeping.
+- Traffic-light loss outside an allowlisted controlled intersection does not stop the
+  vehicle. This is necessary because the detector reports `UNKNOWN` during normal driving.
 - Non-finite planning and speed values are ignored.
 - Yellow is treated as red by default and can be configured otherwise.
 - Emergency braking remains latched if obstacle data becomes stale after a hazard was seen.
@@ -138,21 +157,31 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `vehicle_speed_timeout` | `0.5` | Maximum accepted age of a vehicle-speed message, in seconds. |
 | `green_release_delay` | `0.3` | Time for which green must remain continuously fresh before release, in seconds. |
 | `treat_yellow_as_red` | `true` | Whether yellow triggers the same stop latch as red. |
-| `obstacle_timeout` | `0.5` | Maximum accepted age of obstacle distances, in seconds. |
+| `require_green_in_controlled_zone` | `true` | Require a fresh green for unrestricted passage at allowlisted intersections. |
+| `waypoint_distance_timeout` | `0.5` | Maximum accepted age of the route waypoint distance, in seconds. |
+| `unknown_light_stop_distance` | `4.0` | Hard stop boundary for an unknown/stale light, measured to the controlled waypoint in metres. This stays outside the 3 m waypoint-advance radius. |
+| `unknown_light_approach_speed` | `1.0` | Maximum approach speed outside that boundary while the light is unknown/stale, in m/s. |
+| `traffic_light_stop_distance` | `4.0` | Stop boundary for an associated red/yellow. The colour is latched when first seen, but the car creeps toward this boundary before braking. |
+| `traffic_light_activation_distance` | `20.0` | Maximum distance at which a detected colour is associated with the current controlled waypoint; farther colours are treated as unrelated. |
+| `obstacle_timeout` | `1.0` | Maximum accepted age of obstacle distances. The margin covers the approximately 2.5 Hz Unity depth pipeline without merge-latch oscillation. |
 | `emergency_min_distance` | `4.0` | Minimum front-obstacle emergency distance, in metres. |
 | `emergency_reaction_time` | `0.5` | Reaction-time term in the dynamic stopping distance, in seconds. |
 | `emergency_deceleration` | `5.0` | Assumed available deceleration in the stopping-distance model, in m/s². |
 | `emergency_release_margin` | `2.0` | Additional clearance required to release emergency braking, in metres. |
-| `merge_trigger_distance` | `10.0` | Right-front obstacle distance that activates merge slowdown, in metres. |
+| `merge_trigger_distance` | `8.0` | Right-front obstacle distance that activates merge slowdown, in metres. Event1 tuning delays intervention until the NPC is nearer the conflict area. |
 | `merge_release_margin` | `2.0` | Additional clearance required to release merge slowdown, in metres. |
-| `merge_target_speed` | `2.0` | Maximum target speed while yielding to a merging vehicle, in m/s. |
+| `merge_target_speed` | `2.5` | Maximum target speed while yielding to a merging vehicle, in m/s. |
 | `update_rate` | `20.0` | Decision output rate, in Hz. |
 
-Obstacle-monitor ROI parameters are in the `OurCar/INS` vehicle frame, following REP-103:
-`+x` forward and `+y` left. The default emergency corridor is `x=0.5..30 m` and
-`|y|<=1.2 m`. The merge ROI is `x=0.5..15 m`, `y=-2.5..-0.8 m`; negative y is the right
-side of the car. Height defaults to `z=-0.5..2.0 m`; the lower bound rejects curb and road-
-shoulder returns observed near `z=-0.57..-0.67 m` while retaining vehicle-body points.
+The obstacle monitor transforms `/planning/path` into `OurCar/INS` and projects each cloud
+point onto that polyline. The default emergency corridor covers arc length `0.5..30 m` and
+points within 1.2 m of the future path. The merge band covers arc length `0.5..15 m` and
+signed path-relative offset `-2.5..-0.8 m`; negative offset is right of the local path
+tangent. This prevents a road-end barrier outside a turn from being interpreted as an
+in-lane obstacle. If the path is missing, stale for more than 0.75 s, or cannot be
+transformed, the same numerical bounds are applied as conservative rectangular
+vehicle-frame ROIs. Height defaults to `z=-0.5..2.0 m`; the lower bound rejects curb and
+road-shoulder returns near `z=-0.57..-0.67 m` while retaining vehicle-body points.
 `use_latest_tf=true` matches the
 upstream occupancy node's transform policy and avoids millisecond-scale future
 extrapolation caused by the serialized Unity sensor stream. These values require tuning in
@@ -200,6 +229,8 @@ The tests cover:
 - rejection of unknown and stale light data while waiting;
 - conservative yellow-light handling;
 - optional waypoint allowlisting;
+- fail-safe green confirmation only at allowlisted intersections;
+- distance-bounded UNKNOWN-light approach and stale-distance rejection;
 - fail-safe behavior after planning-speed timeout.
 - merge-speed limiting and release hysteresis;
 - speed-dependent emergency braking;
@@ -246,7 +277,7 @@ becomes `RELEASED`.
 Obstacle behavior can be tested without a point cloud by publishing the monitor outputs:
 
 ```bash
-# Vehicle merging from the right: expect SLOWING_FOR_MERGE and at most 2 m/s.
+# Vehicle merging from the right: expect SLOWING_FOR_MERGE and at most 2.5 m/s.
 ros2 topic pub -r 10 /decision/merge_obstacle_distance std_msgs/msg/Float32 \
   "{data: 6.0}"
 

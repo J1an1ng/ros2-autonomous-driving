@@ -13,20 +13,40 @@ traffic_light_state_machine_node:
     vehicle_speed_timeout: 0.5
     green_release_delay: 0.3
     treat_yellow_as_red: true
-    obstacle_timeout: 0.5
+    # Fail safe only at the four allowlisted intersections. UNKNOWN/stale
+    # perception may creep toward the stop boundary, but cannot cross it.
+    require_green_in_controlled_zone: true
+    waypoint_distance_timeout: 0.5
+    # Waypoints advance within 3 m. A 4 m boundary is the closest safe stop
+    # that still leaves margin for braking at the 1 m/s approach speed.
+    unknown_light_stop_distance: 4.0
+    unknown_light_approach_speed: 1.0
+    # Remember a detected red/yellow, creep toward its waypoint, then stop at
+    # this boundary instead of braking immediately at first recognition.
+    traffic_light_stop_distance: 4.0
+    # Ignore adjacent/departing lights while the controlled target is still far.
+    traffic_light_activation_distance: 20.0
+    # The Unity depth pipeline runs at roughly 2.5 Hz. Leave enough margin so
+    # one normal frame interval cannot clear and re-latch merge behavior.
+    obstacle_timeout: 1.0
     emergency_min_distance: 4.0
     emergency_reaction_time: 0.5
     emergency_deceleration: 5.0
     emergency_release_margin: 2.0
-    merge_trigger_distance: 10.0
+    # Event1 validation showed a 3.13 m minimum clearance with the former
+    # 10 m trigger. Intervene closer to the actual merge conflict instead of
+    # slowing as soon as the distant NPC becomes visible.
+    merge_trigger_distance: 8.0
     merge_release_margin: 2.0
-    merge_target_speed: 2.0
+    merge_target_speed: 2.5
     update_rate: 20.0
 
 obstacle_monitor_node:
   ros__parameters:
     pointcloud_topic: /perception/pcl/points_preprocessed
     vehicle_frame: OurCar/INS
+    planning_path_topic: /planning/path
+    planning_path_timeout: 0.75
     # The upstream occupancy node transforms depth with the latest available TF.
     # Use the same policy instead of requesting a slightly future image stamp.
     use_latest_tf: true

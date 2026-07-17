@@ -18,7 +18,7 @@ one launch file.
 | 2 | Low-speed controller validation | Passed | Straight/curve tracking and six safety injections; see test log |
 | 3 | Route, trajectory, and no-event closed loop | Passed | Full route and waypoint-52 regression; see test log |
 | 4 | Perception pipeline and traffic-light sensing | Passed | Maps, ROI regression, four traffic lights, stale-frame guard; see test log |
-| 5 | Decision making and individual events | Not started | — |
+| 5 | Decision making and individual events | Passed | Accepted with documented limitation: Event2 triggers, but its NPC does not perform the planned emergency-brake maneuver |
 | 6 | Full benchmark and repeatability | Not started | — |
 
 Status values are `Not started`, `In progress`, `Blocked`, and `Passed`. A later stage must
@@ -711,3 +711,279 @@ Add concise entries in chronological order.
   cannot identify object class or intent. Emergency/merge activation therefore requires
   event/route-context validation before the full benchmark; do not weaken emergency distance
   merely to hide those geometrically valid returns.
+
+### Stage 5 partial validation and waypoint48 blocker
+
+- Date: 2026-07-17.
+- The traffic-light decision now associates colours only within 20 m, remembers an
+  associated red/yellow, approaches at at most 1 m/s, and brakes at a 4 m route boundary.
+  The boundary remains outside the route manager's 3 m waypoint-advance radius.
+- A no-event run from waypoint27 stopped at waypoint32, completed the required stop, released
+  on stable green, and reached waypoint38. The final stop was approximately 3.6 m from the
+  controlled waypoint instead of the earlier approximately 15.9 m recognition distance.
+- The first waypoint32 T-junction correction rounded the reference and limited waypoints
+  33--35 to 3 m/s. It removed the original late-turn guardrail overrun and reached waypoint38
+  without `EMERGENCY_BRAKING`, but later visual inspection showed that its northward motion
+  began too early and cut the inner kerb. That geometry is retained as a known failure bound,
+  not as the accepted result.
+- The related Python suite passed all 66 functional tests, the three affected ROS packages
+  built successfully out of tree, and `git diff --check` passed.
+- The first longer no-event continuation was intentionally stopped at waypoint48. With both
+  Unity NPC events disabled, fixed turn geometry entered both rectangular vehicle-frame ROIs:
+  merge distance fell from 3.21 m to 2.99 m and repeatedly selected
+  `SLOWING_FOR_MERGE`; front distance then fell from 4.54 m to 3.97 m and latched
+  `EMERGENCY_BRAKING`. The stationary vehicle remained approximately at `(66.21, 53.23)`
+  with waypoint48 still about 17.1 m away.
+- This reproduced the Stage 4 warning: a straight vehicle-frame proximity rectangle cannot
+  distinguish the guardrail/road-end structure of a turn from an NPC occupying the planned
+  lane. The obstacle monitor now projects cloud points onto `/planning/path` and reports
+  along-path distance only inside path-relative front and right-side corridors. A stale or
+  unavailable path retains the old rectangular filter as a conservative fallback. The
+  obstacle timeout is 1.0 s, covering the measured approximately 2.5 Hz depth rate.
+- The same waypoint27 run with the path-relative filter passed the old waypoint48 deadlock,
+  reached waypoint50, continued through waypoint52 and waypoint59, and entered
+  `route_complete` at approximately `(-48.76, 2.62)`. One short edge-point emergency near
+  waypoint48 released automatically as the planned path curved away; it no longer stranded
+  the vehicle. There were no simultaneous throttle/brake commands.
+- Waypoint52 and waypoint59 both received stable green approach authorization in this run;
+  explicit-red stop cases at those two lights still need isolated phase-aligned tests.
+- Spawn survey results for local event tests are now documented by measurement: spawn1 is
+  approximately `(-49.0, 52.4)`, spawn2 `(70.31, 52.73)`, spawn3 `(141.6, 52.9)`, spawn4
+  `(229.1, 15.1)`, and spawn5 `(141.37, 3.29)`. Event 1 enabled from spawn2 produced no NPC
+  obstacle through waypoints13--28, so that interval is not its trigger region.
+- The path-corridor and existing route/decision/trajectory suites pass 70 functional tests,
+  the affected decision package builds successfully out of tree, and `git diff --check`
+  passes. Stage 5 remains in progress for event-location gating and the two isolated-red
+  signal cases; the emergency distance was not weakened.
+
+### Stage 5 waypoint32 intermediate-turn regression
+
+- Date: 2026-07-17.
+- The original route kept travelling west until approximately `x=124 m` before turning and
+  caused a late-turn guardrail risk. The first correction was already at approximately
+  `(129.37, 4.41)` while turning and was observed to cut the inner kerb. These two measured
+  trajectories define the local failure bounds.
+- Waypoint34 is now `(127.000, 3.700)` with a 150 degree tangent, and waypoint35 returns to
+  the northbound centre reference at `(123.747, 8.864)`. Speeds remain 3 m/s; global
+  pure-pursuit parameters are unchanged.
+- A spawn5, no-event run from waypoint32 stopped for the signal, released on stable green,
+  reached waypoint38, and never entered `EMERGENCY_BRAKING`. There were no simultaneous
+  throttle/brake commands; minimum reported front clearance was 20.16 m.
+- The measured intermediate trajectory passed `(128.59, 4.04)`, `(127.51, 4.44)`, and
+  `(124.11, 7.45)` before settling near `x=124.2 m` in the northbound lane. It therefore
+  delays the turn relative to the inner-kerb failure while retaining substantially more
+  steering preview than the original guardrail failure.
+- All 70 route, trajectory, and decision functional tests pass, the affected route and
+  trajectory packages build in an isolated overlay, and `git diff --check` passes. The
+  temporary Unity configuration was restored to spawn3 with both NPC events disabled after
+  this focused regression.
+
+### Stage 5 event-intersection and waypoint52 approach regression
+
+- Date: 2026-07-17.
+- The first event-intersection failure was a route-progress and geometry issue rather than an
+  NPC stop. Waypoints40 and 41 had been closer than the 3 m waypoint-reach radius, so both
+  turn constraints could be advanced in one timer cycle. Waypoints39--42 now start the left
+  turn earlier, remain more than 3 m apart, and use a 2 m/s limit through the corner.
+- A spawn5 no-event closed-loop run followed `(123.78,43.87)`, `(122.77,46.86)`,
+  `(120.43,49.78)`, and `(116.37,51.83)`, then settled in the westbound lane near
+  `y=52.54` and reached waypoint44 without emergency braking or simultaneous throttle and
+  brake.
+- The repeatable stop near `(65.4,53.3)` before waypoint52 was caused by fixed road-end
+  geometry entering the obstacle corridor; it was not evidence that the distant visible NPC
+  had braked. Waypoints46--48 now keep the generated reference south of the former spline
+  bulge while retaining the later, wider corner entry needed to avoid the inner kerb.
+- The first overly early road-end correction was rejected after it physically stuck at
+  `(48.73,49.10)` with `CRUISE`, 0.35 throttle, zero brake, and an 8.57 m front clearance.
+  The accepted correction passed that point, reached waypoint51 near `(45.44,45.24)`, was
+  released through waypoint52, and reached waypoint54. The completion probe reported no
+  emergency braking, no simultaneous throttle/brake, and a minimum 11.86 m front clearance.
+- Both optional NPC events were disabled for these fault-isolation runs. The five affected
+  functional test files pass 72 tests, the route and trajectory packages build in the
+  isolated overlay, and `git diff --check` passes. NPC Event2 validation can now resume from
+  this no-event baseline.
+
+### Stage 5 NPC Event1 validation
+
+- Date: 2026-07-17.
+- Configuration was verified before the accepted run: benchmark spawn0, Event1 enabled,
+  Event2 disabled, route initial index 0. A discarded setup attempt used a stale temporary
+  spawn6 configuration and produced no Event1 evidence; it is not part of the result.
+- The RGB contact sequence visibly records the red NPC entering and merging after the first
+  intersection. Unity independently logged `OurCar hit the collider Trigger Collider Event
+  1` and `Triggered event collider Trigger Collider Event 1`, confirming that the rendered
+  vehicle and the enabled event were active rather than static scenery.
+- From waypoints11--13, the measured right-front merge distance decreased from 15.18 m to a
+  minimum 3.13 m. The decision layer selected `SLOWING_FOR_MERGE`, limited commanded speed to
+  2 m/s, yielded while the NPC occupied the lane, and returned to `CRUISE` after clearance.
+- The ego vehicle did not enter `EMERGENCY_BRAKING`, retained a minimum 15.14 m reported
+  front-path clearance, produced no simultaneous throttle/brake command, and resumed through
+  waypoint17. This passes the Event1 generation, rendering, trigger, yielding, clearance and
+  release checks.
+- A separate short `SLOWING_FOR_MERGE` activation occurred at waypoints5--7 before the Event1
+  trigger and released by itself. It is consistent with the documented lack of route-segment
+  gating for the merge ROI and should be treated as a nuisance false slowdown, not Event1
+  evidence; it did not prevent completion of the focused run.
+- Unity was stopped after the focused run. The temporary simulator configuration was restored
+  to spawn0 with both optional events disabled. Event2 was not enabled or tested.
+
+### Stage 5 NPC Event1 less-conservative tuning
+
+- Date: 2026-07-17.
+- The Event1 merge trigger was reduced from 10 m to 8 m, and the merge target speed was
+  increased from 2.0 m/s to 2.5 m/s. Normal trajectory and controller speed ceilings were
+  increased from 8 m/s to 10 m/s (36 km/h); all lower route, intersection, curve, signal and
+  emergency limits retain priority.
+- A repeated spawn0 run with Event1 enabled and Event2 disabled first entered
+  `SLOWING_FOR_MERGE` at a measured 7.63 m instead of the former approximately 9.85 m. It
+  reached a minimum 2.42 m right-front merge distance, did not enter
+  `EMERGENCY_BRAKING`, produced no simultaneous throttle/brake command, cleared the NPC and
+  reached waypoint17.
+- Normal-route output visibly used the new 10 m/s command ceiling. Actual speed on this short
+  section remained near 3.1 m/s because of available acceleration, the 2 m/s first-intersection
+  limit and serialized simulator safe-stop interruptions; the ceiling itself was no longer the
+  constraint.
+- Static geometry at waypoints5--8 still caused a short self-releasing merge slowdown. A
+  waypoint allowlist was considered but not retained because the environment could not provide
+  the required final closed-loop rerun. Route-gating remains a documented follow-up rather than
+  unvalidated production behavior.
+- The five affected functional suites pass 72 tests, all three modified packages build in an
+  isolated overlay, and `git diff --check` passes. The simulator configuration was restored to
+  spawn0 with both events disabled; Event2 was not tested.
+
+### Stage 5 NPC Event2 focused validation
+
+- Date: 2026-07-17.
+- The focused setup used benchmark spawn5, route initial index32, Event1 disabled, and Event2
+  enabled. Unity logged `OurCar hit the collider Trigger Collider Event 2` and `Triggered
+  event collider Trigger Collider Event 2`, so the event trigger itself was active.
+- The accepted probe began at waypoint45 and reached waypoint54, after which the vehicle
+  continued through waypoint56. Around waypoints47--48 the right-front distance decreased
+  from 7.59 m to a minimum 2.39 m. The decision layer selected `SLOWING_FOR_MERGE`, limited
+  the target to 2.5 m/s, returned to `CRUISE` after the return cleared, and produced no
+  simultaneous throttle/brake command.
+- No finite front-path obstacle distance and no `EMERGENCY_BRAKING` state were recorded. The
+  79-frame forward RGB sequence also did not resolve an NPC in the ego lane. Therefore this
+  run confirms event activation and a transient right-side return, but it does **not** pass
+  the Stage 5 emergency-event criteria of front-hazard detection, full stop, positive NPC
+  clearance, and post-hazard release.
+- The old waypoint48 static-barrier deadlock did not recur. The only complete stop occurred
+  at waypoint52 for a red traffic light, approximately 3.83 m from the waypoint. A stable
+  green released the stop, proving that the former waypoint52 stop was not caused by Event2.
+- Before modifying production thresholds, the next diagnostic must localize the Event2 actor
+  in synchronized RGB/semantic/depth frames and compare its points with the path-relative
+  front and merge corridors. Likely branches are event timing/trajectory mismatch, the actor
+  remaining outside the 1.2 m front corridor on the bend, or merge behavior yielding early
+  enough that the actor clears before becoming a front hazard. A controlled comparison with
+  merge slowdown disabled only for diagnosis can distinguish the last case; it must not be
+  retained as the final fix.
+- Testing was paused at this functional blocker without changing controller, decision, route,
+  trajectory, or perception code. The temporary simulator configuration was restored to
+  spawn0 with both events disabled.
+
+### Stage 5 waypoint52 green-release regression
+
+- Date: 2026-07-17.
+- The full-route run stopped correctly for red at waypoint52 but did not release when the
+  signal appeared green in Unity. Decision logs proved that the stop latch behaved correctly:
+  it continued receiving only `RED`, `YELLOW`, or stale `UNKNOWN`, never stable `GREEN`.
+- The selected semantic component was the same centre component used by an earlier successful
+  waypoint52 run. The difference was colour competition inside that component. During the
+  failed green phase the weighted green score was 40--44 while small yellow
+  housing/reflection contributions scored 32--39. The former
+  `yellow_over_green_ratio=0.75` therefore classified the visible green as yellow.
+- `yellow_over_green_ratio` is now 0.90. This is a local perception-threshold correction: it
+  does not change semantic component selection, red priority, the four-frame stability guard,
+  or the decision-layer stop and release conditions. A true yellow phase with no green bulb
+  evidence remains yellow.
+- A spawn5, no-event closed-loop rerun from waypoint32 reached waypoint52 on red, entered
+  `STOPPING_FOR_LIGHT` at approximately 3.77 m, fully stopped in `WAITING_FOR_GREEN`, and
+  stayed latched. When the signal changed, four fresh frames with green score 44 and yellow
+  noise score 38--39 produced stable `GREEN`; the decision entered `RELEASED`, crossed
+  waypoint52, and continued through waypoint54 without simultaneous throttle and brake.
+- The perception package builds successfully in an isolated overlay. The separate decision
+  probe could not create its ROS log file under the restricted test shell, so the result is
+  based on the complete node transition and controller command logs from the launch session.
+  The temporary Unity configuration was restored to spawn0 with both events disabled.
+
+### Stage 5 waypoint25 green-release regression
+
+- Date: 2026-07-17.
+- In the subsequent full-route run, the first controlled intersection stopped correctly for
+  red but remained stopped after the signal visibly turned green. This is not the waypoint52
+  colour-threshold regression: at waypoint25 the detector changed from the lower forward-facing
+  signal to a large unlit overhead/back-facing semantic component as the vehicle moved close to
+  the stop line. The resulting raw and stable state was `UNKNOWN`, so the decision latch
+  correctly refused to release.
+- The `strict_center` component selector now measures two-dimensional distance to the expected
+  forward-signal position: horizontal image centre and `strict_center_y_ratio=0.62` of the
+  traffic-light ROI height. Previously it compared horizontal position only. This keeps the
+  lower forward-facing component selected without changing colour thresholds, stop distance,
+  decision-state transitions, or controller behavior.
+- Focused spawn3 runs from waypoint20 consistently selected the forward component down to the
+  closest useful views (component centre approximately y=176--190), produced stable `GREEN`,
+  entered `RELEASED`, and crossed waypoint25. The exact red-stop-to-green transition is retained
+  as a checkpoint in the next full-route run because the focused simulator launches reached
+  the intersection during its deterministic green phase.
+- The all-event full-route rerun also reached waypoint25 during green. It retained component 2
+  through the close approach, entered `RELEASED` at approximately 9.83 m, and crossed waypoint25.
+  No `UNKNOWN` latch or unintended stop recurred. The run subsequently passed the red-stop/green-
+  release cycle and right turn at waypoint32, then both NPC areas.
+- The same run was paused at waypoint52. It stopped correctly for red at approximately 3.97 m,
+  but the next visually green phase scored green 44 and yellow reflection 45 for the correct
+  semantic component. The current `yellow_over_green_ratio=0.90` therefore still emitted stable
+  `YELLOW`. This is a recurrence of the waypoint52 colour-competition issue, not the waypoint25
+  component-selection issue. A minimal follow-up is to require yellow to exceed concurrent green
+  evidence (for example ratio 1.05); true-yellow frames observed in this run later had green score
+  zero and would remain unaffected. Full-route testing stopped at this blocker.
+- Follow-up tuning intentionally targets the deterministic simulator rather than variable real-
+  world illumination. Red and green now use broader hue/saturation/value gates; yellow is limited
+  to hue 42--58 degrees, higher saturation/value, at least 10 accepted pixels and score 20.
+  Yellow must score at least 1.25 times concurrent green to override it. A focused waypoint52 run
+  confirmed that the former green phase no longer generated yellow evidence, but its broadened red
+  gate retained housing reflections (red score 44 versus green 40). Therefore green now overrides
+  concurrent red reflection once it reaches 0.80 of the red score. Pure red frames in the same run
+  had green score zero, preserving the stop. The perception package rebuilt successfully; the next
+  all-event full-route run is the closed-loop validation checkpoint.
+
+### Stage 5 aggressive traffic-colour full-route validation
+
+- Date: 2026-07-17.
+- The accepted run used benchmark spawn0, route index0, both optional NPC events enabled, and
+  the deterministic-simulator colour profile described above. The vehicle traversed all 60
+  waypoints and the route manager entered `route_complete` at waypoint59.
+- Waypoint25 retained the intended forward-facing semantic component, classified green, entered
+  `RELEASED` at approximately 11.37 m, and crossed the first controlled intersection without an
+  UNKNOWN-state latch.
+- Waypoint32 approached at 1 m/s, latched the red stop at approximately 3.70 m, entered
+  `WAITING_FOR_GREEN`, and changed to `RELEASED` approximately 1.15 s later when stable green
+  arrived. The vehicle then completed the validated intermediate right-turn geometry and reached
+  waypoint38 without emergency braking.
+- Event1 and Event2 were both present in the full run. Each produced finite right-front merge
+  evidence and `SLOWING_FOR_MERGE`, then released back to cruise. Event2 still did not produce the
+  task-required NPC emergency-brake/front-hazard sequence; this remains the previously documented
+  scenario-definition blocker and is not counted as a newly passed emergency-event test.
+- Waypoint52 stopped for red at approximately 3.96 m and remained in `WAITING_FOR_GREEN`. On the
+  green phase, the narrow yellow gate produced no competing yellow evidence; green evidence was
+  allowed to dominate the residual red housing reflection. The state machine entered `RELEASED`
+  with approximately 3.86 m remaining, crossed waypoint52, and continued normally.
+- Waypoint59 independently repeated the same safety cycle: red stop at approximately 3.77 m,
+  stable-green release, and final `route_complete` with approximately 2.79 m remaining. This
+  confirms that the aggressive green/red competition rule did not remove genuine red stops.
+- No `EMERGENCY_BRAKING` transition and no simultaneous non-zero throttle/brake command appeared
+  anywhere in the accepted full-route logs.
+- The perception package built successfully in `/tmp/team20_aggressive_tl_install`. The complete
+  launch was stopped only after `route_complete`; the Python decision node's known double-shutdown
+  `RCLError` occurred after Ctrl-C and is teardown-only, not a runtime test failure. The temporary
+  simulator configuration was restored to spawn0 with both optional events disabled.
+
+### Stage 5 acceptance decision
+
+- Date: 2026-07-17.
+- Stage 5 is accepted as complete for integration. The project owner explicitly waived the
+  remaining focused Event2 and final-profile waypoint25 red-phase tests after reviewing the
+  successful all-event full-route run.
+- Event2 generation, rendering, trigger, merge slowdown, clearance, and route continuation are
+  verified. Its Unity NPC does not execute the planned brake-in-lane maneuver, so no corresponding
+  ego `EMERGENCY_BRAKING` transition can be claimed. This remains a documented scenario limitation
+  and must be reported in Stage 6 evidence rather than represented as a passed emergency-brake test.

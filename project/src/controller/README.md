@@ -205,6 +205,7 @@ Defaults are stored in `config/controller.yaml`.
 | `lookahead_base` | `3.0` | Base Pure Pursuit lookahead in metres. |
 | `lookahead_speed_gain` | `0.5` | Additional lookahead per m/s. |
 | `lookahead_min`, `lookahead_max` | `2.0`, `7.0` | Lookahead bounds in metres. |
+| `maximum_target_speed` | `10.0` | Straight-line command ceiling in m/s; lower route, decision and event limits still take priority. |
 | `steering_sign` | `-1.0` | Measured convention: positive Unity steering turns right, so Pure Pursuit is inverted. |
 | `maximum_steering_angle` | `0.52` | Model steering-angle limit in radians. |
 | `maximum_steering_rate` | `2.0` | Normalized steering change per second. |

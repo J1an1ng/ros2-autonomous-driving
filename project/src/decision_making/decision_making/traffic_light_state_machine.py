@@ -49,6 +49,12 @@ class TrafficLightStateMachine:
         vehicle_speed_timeout: float = 0.5,
         green_release_delay: float = 0.3,
         treat_yellow_as_red: bool = True,
+        require_green_in_controlled_zone: bool = True,
+        waypoint_distance_timeout: float = 0.5,
+        unknown_light_stop_distance: float = 6.0,
+        unknown_light_approach_speed: float = 1.0,
+        traffic_light_stop_distance: float = 4.0,
+        traffic_light_activation_distance: float = 20.0,
         obstacle_timeout: float = 0.5,
         emergency_min_distance: float = 4.0,
         emergency_reaction_time: float = 0.5,
@@ -70,6 +76,24 @@ class TrafficLightStateMachine:
         self.vehicle_speed_timeout = max(0.0, float(vehicle_speed_timeout))
         self.green_release_delay = max(0.0, float(green_release_delay))
         self.treat_yellow_as_red = bool(treat_yellow_as_red)
+        self.require_green_in_controlled_zone = bool(
+            require_green_in_controlled_zone
+        )
+        self.waypoint_distance_timeout = max(0.0, float(waypoint_distance_timeout))
+        self.unknown_light_stop_distance = max(
+            0.0, float(unknown_light_stop_distance)
+        )
+        self.unknown_light_approach_speed = max(
+            0.0, float(unknown_light_approach_speed)
+        )
+        self.traffic_light_stop_distance = max(
+            0.0, float(traffic_light_stop_distance)
+        )
+        self.traffic_light_activation_distance = max(
+            self.unknown_light_stop_distance,
+            self.traffic_light_stop_distance,
+            float(traffic_light_activation_distance),
+        )
         self.obstacle_timeout = max(0.0, float(obstacle_timeout))
         self.emergency_min_distance = max(0.0, float(emergency_min_distance))
         self.emergency_reaction_time = max(0.0, float(emergency_reaction_time))
@@ -82,6 +106,8 @@ class TrafficLightStateMachine:
         self.state = DecisionState.CRUISE
         self.route_state = ""
         self.waypoint_id: Optional[int] = None
+        self.waypoint_distance: Optional[float] = None
+        self.waypoint_distance_time: Optional[float] = None
         self.planning_speed: Optional[float] = None
         self.planning_speed_time: Optional[float] = None
         self.vehicle_speed: Optional[float] = None
@@ -90,6 +116,8 @@ class TrafficLightStateMachine:
         self.traffic_light_time: Optional[float] = None
         self.green_since: Optional[float] = None
         self.latched_waypoint_id: Optional[int] = None
+        self.signal_stop_latched = False
+        self.signal_stop_pending = False
         self.front_obstacle_distance = math.inf
         self.merge_obstacle_distance = math.inf
         self.obstacle_time: Optional[float] = None
@@ -104,6 +132,11 @@ class TrafficLightStateMachine:
         if math.isfinite(speed):
             self.planning_speed = max(0.0, float(speed))
             self.planning_speed_time = float(now)
+
+    def update_waypoint_distance(self, distance: float, now: float) -> None:
+        if math.isfinite(distance) and distance >= 0.0:
+            self.waypoint_distance = float(distance)
+            self.waypoint_distance_time = float(now)
 
     def update_vehicle_speed(self, speed: float, now: float) -> None:
         if math.isfinite(speed):
@@ -137,30 +170,104 @@ class TrafficLightStateMachine:
             self.vehicle_speed_time, now, self.vehicle_speed_timeout
         )
         controlled_zone = self._is_controlled_zone()
+        waypoint_distance_fresh = self._is_fresh(
+            self.waypoint_distance_time, now, self.waypoint_distance_timeout
+        )
         obstacle_fresh = self._is_fresh(
             self.obstacle_time, now, self.obstacle_timeout
         )
 
-        stop_signal = light_fresh and (
+        raw_stop_signal = light_fresh and (
             self.traffic_light == TrafficLight.RED
             or (self.treat_yellow_as_red and self.traffic_light == TrafficLight.YELLOW)
         )
-        green_signal = light_fresh and self.traffic_light == TrafficLight.GREEN
+        raw_green_signal = light_fresh and self.traffic_light == TrafficLight.GREEN
+        light_action_allowed = (
+            not waypoint_distance_fresh
+            or self.waypoint_distance <= self.traffic_light_activation_distance
+        )
+        stop_signal = raw_stop_signal and light_action_allowed
+        green_signal = raw_green_signal and light_action_allowed
+        if (
+            controlled_zone
+            and self.state != DecisionState.RELEASED
+            and stop_signal
+        ):
+            # Remember an associated red/yellow even if it disappears from the
+            # camera before the vehicle reaches the stop boundary.
+            self.signal_stop_pending = True
+            self.latched_waypoint_id = self.waypoint_id
+        signal_light_approach = (
+            controlled_zone
+            and self.signal_stop_pending
+            and waypoint_distance_fresh
+            and self.waypoint_distance > self.traffic_light_stop_distance
+        )
+        unknown_light_approach = (
+            controlled_zone
+            and self.require_green_in_controlled_zone
+            and not self.signal_stop_pending
+            and not stop_signal
+            and not green_signal
+            and waypoint_distance_fresh
+            and self.waypoint_distance > self.unknown_light_stop_distance
+        )
+        # Unknown/stale light data may only creep toward a controlled waypoint
+        # while a fresh distance proves that the hard stop boundary is ahead.
+        # Missing/stale distance therefore fails safe to a stop.
+        light_requires_stop = (
+            self.signal_stop_pending and not signal_light_approach
+        ) or (
+            controlled_zone
+            and self.require_green_in_controlled_zone
+            and not self.signal_stop_pending
+            and not green_signal
+            and not unknown_light_approach
+        )
 
         if self.state == DecisionState.CRUISE:
             if controlled_zone:
                 self.state = DecisionState.APPROACHING_INTERSECTION
 
         if self.state == DecisionState.APPROACHING_INTERSECTION:
-            if stop_signal:
+            if green_signal and not self.signal_stop_pending:
+                if self.green_since is None:
+                    self.green_since = now
+                if now - self.green_since >= self.green_release_delay:
+                    self.state = DecisionState.RELEASED
+                    self.latched_waypoint_id = None
+                    self.signal_stop_latched = False
+            elif light_requires_stop:
                 self.state = DecisionState.STOPPING_FOR_LIGHT
                 self.latched_waypoint_id = self.waypoint_id
+                self.signal_stop_latched = self.signal_stop_pending
                 self.green_since = None
             elif not controlled_zone:
                 self.state = DecisionState.CRUISE
+                self.green_since = None
+            else:
+                self.green_since = None
 
         elif self.state == DecisionState.STOPPING_FOR_LIGHT:
-            if speed_fresh and self.vehicle_speed <= self.stopped_speed_threshold:
+            if stop_signal:
+                # Once an explicit red/yellow has requested a stop, retain the
+                # assignment-required complete stop even if the phase changes
+                # while the vehicle is braking.
+                self.signal_stop_latched = True
+            if not self.signal_stop_latched and green_signal:
+                # An UNKNOWN-only boundary stop can be cancelled by a stable
+                # green before standstill; forcing a second green cycle would
+                # create an artificial deadlock after a brief missed frame.
+                self.state = DecisionState.RELEASED
+                self.latched_waypoint_id = None
+                self.green_since = None
+            elif not self.signal_stop_latched and unknown_light_approach:
+                # Route topics are independent ROS messages. If a fresh
+                # distance shows the boundary is still ahead, cancel a
+                # transient UNKNOWN stop caused by an old/missing sample.
+                self.state = DecisionState.APPROACHING_INTERSECTION
+                self.latched_waypoint_id = None
+            elif speed_fresh and self.vehicle_speed <= self.stopped_speed_threshold:
                 self.state = DecisionState.WAITING_FOR_GREEN
 
         elif self.state == DecisionState.WAITING_FOR_GREEN:
@@ -170,16 +277,20 @@ class TrafficLightStateMachine:
                 if now - self.green_since >= self.green_release_delay:
                     self.state = DecisionState.RELEASED
                     self.latched_waypoint_id = None
+                    self.signal_stop_latched = False
+                    self.signal_stop_pending = False
             else:
                 self.green_since = None
 
         elif self.state == DecisionState.RELEASED:
-            if stop_signal and controlled_zone:
-                self.state = DecisionState.STOPPING_FOR_LIGHT
-                self.latched_waypoint_id = self.waypoint_id
-                self.green_since = None
-            elif not controlled_zone:
+            # A confirmed green grants one passage through the current
+            # intersection. The light normally leaves the camera field of view
+            # before route_manager reaches the controlled waypoint; re-latching
+            # on UNKNOWN here would stop the car inside the intersection.
+            if not controlled_zone:
                 self.state = DecisionState.CRUISE
+                self.signal_stop_latched = False
+                self.signal_stop_pending = False
 
         current_speed = self.vehicle_speed if speed_fresh else 0.0
         emergency_distance = max(
@@ -210,6 +321,11 @@ class TrafficLightStateMachine:
             DecisionState.STOPPING_FOR_LIGHT,
             DecisionState.WAITING_FOR_GREEN,
         )
+        permitted_speed = float(requested_speed)
+        if (unknown_light_approach or signal_light_approach) and planning_fresh:
+            permitted_speed = min(
+                permitted_speed, self.unknown_light_approach_speed
+            )
         if self.emergency_latched:
             target_speed = 0.0
             output_state = DecisionState.EMERGENCY_BRAKING
@@ -221,7 +337,7 @@ class TrafficLightStateMachine:
             stop_required = True
             reason = "traffic_light_stop_latched"
         elif self.merge_latched and planning_fresh:
-            target_speed = min(float(requested_speed), self.merge_target_speed)
+            target_speed = min(permitted_speed, self.merge_target_speed)
             output_state = DecisionState.SLOWING_FOR_MERGE
             stop_required = False
             reason = "merge_vehicle_slowdown"
@@ -231,10 +347,16 @@ class TrafficLightStateMachine:
             stop_required = False
             reason = "planning_speed_timeout"
         else:
-            target_speed = float(requested_speed)
+            target_speed = permitted_speed
             output_state = self.state
             stop_required = False
-            reason = "planning_speed"
+            reason = (
+                "traffic_light_controlled_approach"
+                if signal_light_approach
+                else "unknown_light_controlled_approach"
+                if unknown_light_approach
+                else "planning_speed"
+            )
 
         return DecisionOutput(target_speed, output_state, stop_required, reason)
 

@@ -5,6 +5,7 @@ from trajectory_generator.trajectory_generator import (
     TrajectoryGenerator,
     TrajectoryGeneratorConfig,
 )
+from trajectory_generator.velocity_profile import select_target_speed
 
 
 def make_generator():
@@ -18,6 +19,28 @@ def make_generator():
             stop_speed=0.0,
         )
     )
+
+
+def test_stop_zone_preserves_nonzero_route_speed_for_decision_layer():
+    assert select_target_speed(
+        route_state="stop_zone",
+        speed_limit=3.0,
+        default_speed=2.0,
+        max_speed=8.0,
+        slow_speed=2.0,
+        stop_speed=0.0,
+    ) == pytest.approx(3.0)
+
+
+def test_route_complete_remains_stopped():
+    assert select_target_speed(
+        route_state="route_complete",
+        speed_limit=3.0,
+        default_speed=2.0,
+        max_speed=8.0,
+        slow_speed=2.0,
+        stop_speed=0.0,
+    ) == pytest.approx(0.0)
 
 
 def test_prefers_valid_local_path_over_target_pose():

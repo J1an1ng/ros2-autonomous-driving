@@ -28,6 +28,12 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("vehicle_speed_timeout", 0.5)
         self.declare_parameter("green_release_delay", 0.3)
         self.declare_parameter("treat_yellow_as_red", True)
+        self.declare_parameter("require_green_in_controlled_zone", True)
+        self.declare_parameter("waypoint_distance_timeout", 0.5)
+        self.declare_parameter("unknown_light_stop_distance", 6.0)
+        self.declare_parameter("unknown_light_approach_speed", 1.0)
+        self.declare_parameter("traffic_light_stop_distance", 4.0)
+        self.declare_parameter("traffic_light_activation_distance", 20.0)
         self.declare_parameter("obstacle_timeout", 0.5)
         self.declare_parameter("emergency_min_distance", 4.0)
         self.declare_parameter("emergency_reaction_time", 0.5)
@@ -54,6 +60,24 @@ class TrafficLightStateMachineNode(Node):
             vehicle_speed_timeout=self.get_parameter("vehicle_speed_timeout").value,
             green_release_delay=self.get_parameter("green_release_delay").value,
             treat_yellow_as_red=self.get_parameter("treat_yellow_as_red").value,
+            require_green_in_controlled_zone=self.get_parameter(
+                "require_green_in_controlled_zone"
+            ).value,
+            waypoint_distance_timeout=self.get_parameter(
+                "waypoint_distance_timeout"
+            ).value,
+            unknown_light_stop_distance=self.get_parameter(
+                "unknown_light_stop_distance"
+            ).value,
+            unknown_light_approach_speed=self.get_parameter(
+                "unknown_light_approach_speed"
+            ).value,
+            traffic_light_stop_distance=self.get_parameter(
+                "traffic_light_stop_distance"
+            ).value,
+            traffic_light_activation_distance=self.get_parameter(
+                "traffic_light_activation_distance"
+            ).value,
             obstacle_timeout=self.get_parameter("obstacle_timeout").value,
             emergency_min_distance=self.get_parameter("emergency_min_distance").value,
             emergency_reaction_time=self.get_parameter("emergency_reaction_time").value,
@@ -91,6 +115,12 @@ class TrafficLightStateMachineNode(Node):
             Int32,
             "/route/current_waypoint_id",
             self.waypoint_id_callback,
+            10,
+        )
+        self.create_subscription(
+            Float32,
+            "/route/current_waypoint_distance",
+            self.waypoint_distance_callback,
             10,
         )
         self.create_subscription(
@@ -143,6 +173,9 @@ class TrafficLightStateMachineNode(Node):
         self.waypoint_id = msg.data
         self.machine.update_route(self.route_state, self.waypoint_id)
 
+    def waypoint_distance_callback(self, msg: Float32) -> None:
+        self.machine.update_waypoint_distance(msg.data, self.now_seconds())
+
     def twist_callback(self, msg: TwistStamped) -> None:
         velocity = msg.twist.linear
         speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
@@ -183,6 +216,7 @@ class TrafficLightStateMachineNode(Node):
         debug_msg.data = (
             f"state={output.state.name} reason={output.reason} "
             f"route_state={self.machine.route_state} waypoint_id={self.machine.waypoint_id} "
+            f"waypoint_distance={self.machine.waypoint_distance} "
             f"light={self.machine.traffic_light.name} "
             f"front_distance={self.machine.front_obstacle_distance:.3f} "
             f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
