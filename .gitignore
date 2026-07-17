@@ -3,6 +3,7 @@
 project/build/
 project/install/
 project/log/
+/log/
 
 # Python runtime and test caches
 __pycache__/

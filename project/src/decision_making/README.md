@@ -131,7 +131,7 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `controlled_route_states` | `intersection_approach`, `stop_zone`, `intersection` | Route states in which a light may trigger a stop. Matching is case-insensitive. |
-| `traffic_light_waypoint_ids` | `[]` | Optional waypoint allowlist. Empty means all waypoints with a controlled route state. |
+| `traffic_light_waypoint_ids` | `25, 32, 52, 59` | Stage-4-verified controlled intersections. Waypoint 0 is the initial stop zone and is excluded. |
 | `stopped_speed_threshold` | `0.15` | Maximum absolute 3D speed considered stopped, in m/s. |
 | `traffic_light_timeout` | `0.75` | Maximum accepted age of a light message, in seconds. |
 | `planning_speed_timeout` | `0.5` | Maximum accepted age of a planning-speed message, in seconds. |
@@ -150,13 +150,18 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 
 Obstacle-monitor ROI parameters are in the `OurCar/INS` vehicle frame, following REP-103:
 `+x` forward and `+y` left. The default emergency corridor is `x=0.5..30 m` and
-`|y|<=1.2 m`. The merge ROI is `x=0.5..15 m`, `y=-4.0..-0.8 m`; negative y is the right
-side of the car. Height defaults to `z=-1.0..2.0 m`. These values require tuning in Unity.
+`|y|<=1.2 m`. The merge ROI is `x=0.5..15 m`, `y=-2.5..-0.8 m`; negative y is the right
+side of the car. Height defaults to `z=-0.5..2.0 m`; the lower bound rejects curb and road-
+shoulder returns observed near `z=-0.57..-0.67 m` while retaining vehicle-body points.
+`use_latest_tf=true` matches the
+upstream occupancy node's transform policy and avoids millisecond-scale future
+extrapolation caused by the serialized Unity sensor stream. These values require tuning in
+Unity.
 
-The route currently contains five `stop_zone` waypoints although the assignment describes
-four traffic lights. Before the final track test, the team must verify the four relevant
-waypoint IDs and populate `traffic_light_waypoint_ids`. Until then, the default relies only
-on semantic route states.
+The route contains five `stop_zone` waypoints. Stage 4 confirmed that waypoint 0 is the
+initial spawn and that the four controlled intersections are 25, 32, 52, and 59. The
+waypoint allowlist prevents lights visible on adjacent or departing roads from affecting
+the current maneuver.
 
 ## Build and run
 
@@ -252,7 +257,7 @@ ros2 topic pub -r 10 /decision/front_obstacle_distance std_msgs/msg/Float32 \
 
 ## Current limitations and future work
 
-- The four actual traffic-light waypoint IDs still require track validation.
+- The four traffic-light waypoint IDs were validated under motion in Stage 4.
 - The perception output contains only a color, without confidence, traffic-light ID or
   source timestamp. Route context is therefore used to reduce false triggers.
 - The state machine commands a target speed of zero; stopping distance and brake strength

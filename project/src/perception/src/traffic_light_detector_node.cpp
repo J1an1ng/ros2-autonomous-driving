@@ -127,6 +127,8 @@ public:
     semantic_min_saturation_ = declare_parameter<int>("semantic_min_saturation", 60);
     semantic_min_value_ = declare_parameter<int>("semantic_min_value", 80);
     semantic_debug_colors_ = declare_parameter<bool>("semantic_debug_colors", false);
+    max_semantic_stamp_delta_s_ =
+        declare_parameter<double>("max_semantic_stamp_delta_s", 1.0);
     min_semantic_blob_pixels_ = declare_parameter<int>("min_semantic_blob_pixels", 20);
     max_semantic_blob_pixels_ = declare_parameter<int>("max_semantic_blob_pixels", 2500);
     semantic_merge_gap_px_ = declare_parameter<int>("semantic_merge_gap_px", 12);
@@ -313,6 +315,22 @@ private:
     }
 
     const auto &semantic = *latest_semantic_;
+    const double rgb_stamp =
+        static_cast<double>(rgb_msg.header.stamp.sec) +
+        static_cast<double>(rgb_msg.header.stamp.nanosec) * 1e-9;
+    const double semantic_stamp =
+        static_cast<double>(semantic.header.stamp.sec) +
+        static_cast<double>(semantic.header.stamp.nanosec) * 1e-9;
+    const double stamp_delta = std::abs(rgb_stamp - semantic_stamp);
+    if (max_semantic_stamp_delta_s_ > 0.0 &&
+        stamp_delta > max_semantic_stamp_delta_s_) {
+      std::ostringstream out;
+      out << "semantic_gate=stale"
+          << " semantic_stamp_delta_s=" << stamp_delta
+          << " max_semantic_stamp_delta_s=" << max_semantic_stamp_delta_s_;
+      gate_debug = out.str();
+      return false;
+    }
     const double semantic_scale_x =
         static_cast<double>(semantic.width) / static_cast<double>(rgb_msg.width);
     const double semantic_scale_y =
@@ -418,6 +436,7 @@ private:
     std::ostringstream out;
     out << "semantic_gate=enabled"
         << " semantic_size=" << semantic.width << "x" << semantic.height
+        << " semantic_stamp_delta_s=" << stamp_delta
         << " semantic_scale=" << semantic_scale_x << "x" << semantic_scale_y
         << " semantic_raw_pixels=" << raw_semantic_pixels
         << " semantic_components=" << accepted_components
@@ -907,6 +926,7 @@ private:
   int semantic_min_saturation_{60};
   int semantic_min_value_{80};
   bool semantic_debug_colors_{false};
+  double max_semantic_stamp_delta_s_{1.0};
   int min_semantic_blob_pixels_{20};
   int max_semantic_blob_pixels_{2500};
   int semantic_merge_gap_px_{12};

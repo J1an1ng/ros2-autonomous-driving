@@ -79,6 +79,7 @@ def generate_launch_description():
                 'semantic_topic': '/OurCar/Sensors/SemanticCamera/image_raw',
                 'state_topic': '/perception/traffic_light_state',
                 'debug_topic': '/perception/traffic_light_debug',
+                'max_semantic_stamp_delta_s': 1.0,
             }],
         ),
     ])

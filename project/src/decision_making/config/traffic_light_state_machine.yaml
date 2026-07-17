@@ -4,9 +4,9 @@ traffic_light_state_machine_node:
       - intersection_approach
       - stop_zone
       - intersection
-    # Empty means that route-state gating applies to every waypoint. Replace
-    # this with the four verified traffic-light waypoint IDs after track tests.
-    traffic_light_waypoint_ids: []
+    # Four controlled intersections verified under motion in Stage 4. Waypoint
+    # 0 is the initial stop zone and is intentionally not controlled.
+    traffic_light_waypoint_ids: [25, 32, 52, 59]
     stopped_speed_threshold: 0.15
     traffic_light_timeout: 0.75
     planning_speed_timeout: 0.5
@@ -27,13 +27,19 @@ obstacle_monitor_node:
   ros__parameters:
     pointcloud_topic: /perception/pcl/points_preprocessed
     vehicle_frame: OurCar/INS
+    # The upstream occupancy node transforms depth with the latest available TF.
+    # Use the same policy instead of requesting a slightly future image stamp.
+    use_latest_tf: true
     front_min_x: 0.5
     front_max_x: 30.0
     front_half_width: 1.2
     merge_min_x: 0.5
     merge_max_x: 15.0
     # REP-103 vehicle coordinates: +x forward, +y left, therefore right is -y.
-    merge_right_min_y: -4.0
+    # Ignore fixed curbside structures around y=-2.8..-3.2 m. A merging vehicle
+    # is acted on once it enters the nearer right-front corridor.
+    merge_right_min_y: -2.5
     merge_right_max_y: -0.8
-    min_z: -1.0
+    # Reject the curb/road-shoulder returns observed around z=-0.57..-0.67 m.
+    min_z: -0.5
     max_z: 2.0

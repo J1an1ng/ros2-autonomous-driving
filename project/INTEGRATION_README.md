@@ -16,8 +16,8 @@ one launch file.
 | 0 | Integration entry point and configuration | Passed | Build, unit tests, safe headless launch; see test log |
 | 1 | Simulation bridge and sensor/TF contract | Passed | Unity bridge, sensor/TF, and low-amplitude command checks; see test log |
 | 2 | Low-speed controller validation | Passed | Straight/curve tracking and six safety injections; see test log |
-| 3 | Route, trajectory, and no-event closed loop | Not started | — |
-| 4 | Perception pipeline and traffic-light sensing | Not started | — |
+| 3 | Route, trajectory, and no-event closed loop | Passed | Full route and waypoint-52 regression; see test log |
+| 4 | Perception pipeline and traffic-light sensing | Passed | Maps, ROI regression, four traffic lights, stale-frame guard; see test log |
 | 5 | Decision making and individual events | Not started | — |
 | 6 | Full benchmark and repeatability | Not started | — |
 
@@ -644,3 +644,70 @@ Add concise entries in chronological order.
 - Post-fix verification rebuilt `simulation` and `controller` out of tree, confirmed the
   installed controller configuration matches the source byte-for-byte, and passed all 10
   controller-core GTests. `git diff --check` also passed.
+
+### Stage 4 completion
+
+- Date: 2026-07-17.
+- A fresh out-of-tree build of all eight workspace packages passed. The required Jazzy OctoMap
+  packages and `octomap_server_node` were present.
+- At stationary spawn 0, all camera streams were 640x480; RGB/semantic used `rgb8`, depth
+  used `16UC1`, and all intrinsics reported `fx=fy=240`, `cx=320`, `cy=240`. Approximate
+  measured rates were 2.4--2.5 Hz for depth/cloud/maps, 1.9 Hz for left RGB, 1.7 Hz for
+  semantic, and 33--35 Hz for pose. Nearest RGB/semantic timestamp difference had a zero
+  median and a 0.803 s worst sampled edge/missed-frame case.
+- Raw depth cloud used the depth-camera frame; the ground-filtered cloud, 2D grids, and
+  OctoMap used `world`. At spawn 0 the filtered cloud contained about 1,225 points. The
+  depth projected map contained 418 occupied cells, its inflated map 3,755, and OctoMap's
+  projected map 11; binary and full `OcTree` messages were continuous at 0.25 m resolution.
+- The obstacle monitor originally requested the cloud image timestamp exactly, although the
+  occupancy node transforms with the latest TF and retains the image timestamp. Serialized
+  Unity sensors made that request several milliseconds newer than TF, so neither distance
+  topic was published. `use_latest_tf=true` now makes both nodes use the same transform
+  policy. A six-point synthetic cloud then reproduced front and right-front distances to
+  better than `1e-4 m` (8.01561 m and 6.32456 m respectively), while points behind, above,
+  or outside the ROIs were rejected.
+- Dynamic captures covered waypoints 1--59 and `route_complete`. The preprocessed cloud
+  stayed in `world`; individual runs contained 25--746 continuous cloud/map samples and
+  demonstrated that the local map origin followed the moving vehicle. The vehicle completed
+  the final approach at approximately `(-46.55, 2.61)` without a perception-node or TF exit.
+- Initial ROI runs found two classes of fixed roadside return: curb points near
+  `z=-0.57..-0.67 m` and vertical structures near `y=-2.8..-3.2 m`. The default height was
+  tightened from -1.0 to -0.5 m and the right-front corridor from `y=-4.0..-0.8 m` to
+  `y=-2.5..-0.8 m`. The known-obstacle regression still reproduced 8.01561 m front and
+  6.32456 m merge distances to better than `1e-4 m`. On the straight waypoint-32 approach,
+  the nearest merge return was then 10.33 m, above the 10 m trigger; the waypoint-52 light
+  crossing produced only infinite front/merge distances.
+- RGB and semantic images were saved in pairs every four seconds along the route. Inspection
+  proved that route labels `intersection` at 9/16/38 do not identify the assignment's four
+  controlled lights; those locations contain ordinary road or a T turn and correctly produce
+  UNKNOWN. The five `stop_zone` entries are the initial spawn plus four controlled lights, so
+  the verified allowlist is `25, 32, 52, 59`.
+- Stable traffic-light evidence under motion:
+
+  | Waypoint | Representative stable evidence before/at the light | Result |
+  | --- | --- | --- |
+  | 25 | GREEN near `(226.1,28.5)`; RED near `(226.8,16.0)`; stationary YELLOW score 60 | RED/YELLOW/GREEN passed |
+  | 32 | GREEN near `(155.5,4.3)`; YELLOW near `(146.8,4.2)`; RED near `(141.6,4.2)` | RED/YELLOW/GREEN passed |
+  | 52 | RED near `(46.3,24.7)`; GREEN near `(46.4,22.4)`; YELLOW near `(46.6,15.2)` | RED/YELLOW/GREEN passed |
+  | 59 | GREEN near `x=-31.4`; RED near `x=-40.4`; YELLOW at the final approach | RED/YELLOW/GREEN passed |
+
+- Lights on adjacent/departing roads were also seen near non-controlled waypoints and then
+  returned to UNKNOWN after leaving view. Configuring the four-ID decision allowlist prevents
+  that unrelated evidence from affecting control. RGB/semantic nearest-stamp medians were
+  usually zero; critical light runs had sampled maxima of 0.414--0.933 s, while missed frames
+  outside critical approaches occasionally exceeded one second. The detector now rejects a
+  semantic image whose timestamp differs from RGB by more than 1.0 s and publishes UNKNOWN.
+  A synthetic runtime regression observed both `semantic_gate=stale` for a 2.0 s difference
+  and `semantic_gate=enabled` for aligned frames; all 34 emitted states were UNKNOWN as
+  required.
+- The final out-of-tree build installed all eight workspace packages successfully. The final
+  ROS test summary reported 24 tests with zero errors, failures, or skips; this included all
+  13 decision-state-machine cases and all 10 controller-core GTests. The semantic freshness
+  runtime probe, decision Python compilation, and `git diff --check` also passed, and the final
+  allowlist is installed from the decision YAML.
+- **Stage 4 status:** perception, four traffic-light IDs, and stale-frame safety have passed.
+  Stage 5 must still validate behavior with decisions enabled. In particular, the straight
+  vehicle-frame front ROI sees real fixed geometry at some T turns, and point-cloud proximity
+  cannot identify object class or intent. Emergency/merge activation therefore requires
+  event/route-context validation before the full benchmark; do not weaken emergency distance
+  merely to hide those geometrically valid returns.

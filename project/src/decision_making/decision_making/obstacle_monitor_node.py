@@ -19,17 +19,19 @@ class ObstacleMonitorNode(Node):
             "pointcloud_topic", "/perception/pcl/points_preprocessed"
         )
         self.declare_parameter("vehicle_frame", "OurCar/INS")
+        self.declare_parameter("use_latest_tf", True)
         self.declare_parameter("front_min_x", 0.5)
         self.declare_parameter("front_max_x", 30.0)
         self.declare_parameter("front_half_width", 1.2)
         self.declare_parameter("merge_min_x", 0.5)
         self.declare_parameter("merge_max_x", 15.0)
-        self.declare_parameter("merge_right_min_y", -4.0)
+        self.declare_parameter("merge_right_min_y", -2.5)
         self.declare_parameter("merge_right_max_y", -0.8)
-        self.declare_parameter("min_z", -1.0)
+        self.declare_parameter("min_z", -0.5)
         self.declare_parameter("max_z", 2.0)
 
         self.vehicle_frame = self.get_parameter("vehicle_frame").value
+        self.use_latest_tf = bool(self.get_parameter("use_latest_tf").value)
         self.front_min_x = float(self.get_parameter("front_min_x").value)
         self.front_max_x = float(self.get_parameter("front_max_x").value)
         self.front_half_width = float(self.get_parameter("front_half_width").value)
@@ -64,10 +66,15 @@ class ObstacleMonitorNode(Node):
 
     def pointcloud_callback(self, msg: PointCloud2) -> None:
         try:
+            lookup_time = (
+                rclpy.time.Time()
+                if self.use_latest_tf
+                else rclpy.time.Time.from_msg(msg.header.stamp)
+            )
             transform = self.tf_buffer.lookup_transform(
                 self.vehicle_frame,
                 msg.header.frame_id,
-                rclpy.time.Time.from_msg(msg.header.stamp),
+                lookup_time,
             )
         except TransformException as ex:
             self.get_logger().warn(
@@ -153,4 +160,5 @@ def main(args=None) -> None:
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
