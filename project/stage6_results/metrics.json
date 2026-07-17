@@ -1,0 +1,150 @@
+[
+  {
+    "route_complete": true,
+    "mission_duration_s": 648.845,
+    "max_waypoint": 59,
+    "max_speed_mps": 3.155,
+    "mean_speed_mps": 1.697,
+    "tracking_rmse_m": 0.7563,
+    "tracking_p95_m": 2.0004,
+    "tracking_max_m": 5.0383,
+    "max_twist_gap_s": 12.1075,
+    "max_planning_path_gap_s": 0.2222,
+    "max_decision_speed_gap_s": 0.0965,
+    "event1_min_merge_m": 2.437,
+    "event2_min_merge_m": 2.444,
+    "event2_min_front_m": null,
+    "emergency_entries": 0,
+    "merge_slowdown_entries": 20,
+    "simultaneous_throttle_brake": 0,
+    "throttle_saturation_samples": 4950,
+    "brake_saturation_samples": 2929,
+    "path_rejection_or_fallback_count": 0,
+    "process_died_log_count": 4,
+    "runtime_process_died_count": 0,
+    "teardown_process_died_count": 4,
+    "safe_stop_reasons": {
+      "path missing or stale": 4,
+      "vehicle velocity missing or stale": 11,
+      "decision target speed missing or stale": 20,
+      "stop requested by decision layer": 46
+    },
+    "stop_events": [
+      {
+        "waypoint": 32,
+        "distance": 3.6905429363250732,
+        "time_s": 328.576172052
+      },
+      {
+        "waypoint": 52,
+        "distance": 3.9171085357666016,
+        "time_s": 503.481721431
+      },
+      {
+        "waypoint": 52,
+        "distance": 3.818432331085205,
+        "time_s": 520.874093237
+      },
+      {
+        "waypoint": 59,
+        "distance": 3.828533411026001,
+        "time_s": 639.373899668
+      }
+    ]
+  },
+  {
+    "route_complete": true,
+    "mission_duration_s": 651.614,
+    "max_waypoint": 59,
+    "max_speed_mps": 3.162,
+    "mean_speed_mps": 1.752,
+    "tracking_rmse_m": 0.7775,
+    "tracking_p95_m": 2.1516,
+    "tracking_max_m": 3.6652,
+    "max_twist_gap_s": 14.2025,
+    "max_planning_path_gap_s": 0.2036,
+    "max_decision_speed_gap_s": 0.0763,
+    "event1_min_merge_m": 2.377,
+    "event2_min_merge_m": 2.443,
+    "event2_min_front_m": null,
+    "emergency_entries": 0,
+    "merge_slowdown_entries": 16,
+    "simultaneous_throttle_brake": 0,
+    "throttle_saturation_samples": 4805,
+    "brake_saturation_samples": 2097,
+    "path_rejection_or_fallback_count": 0,
+    "process_died_log_count": 4,
+    "runtime_process_died_count": 0,
+    "teardown_process_died_count": 4,
+    "safe_stop_reasons": {
+      "path missing or stale": 10,
+      "vehicle velocity missing or stale": 3,
+      "decision target speed missing or stale": 6,
+      "stop requested by decision layer": 43
+    },
+    "stop_events": [
+      {
+        "waypoint": 32,
+        "distance": 3.9710917472839355,
+        "time_s": 330.953574988
+      },
+      {
+        "waypoint": 52,
+        "distance": 3.8601887226104736,
+        "time_s": 503.352421888
+      },
+      {
+        "waypoint": 59,
+        "distance": 3.6955819129943848,
+        "time_s": 641.250287577
+      }
+    ]
+  },
+  {
+    "route_complete": true,
+    "mission_duration_s": 651.287,
+    "max_waypoint": 59,
+    "max_speed_mps": 3.153,
+    "mean_speed_mps": 1.625,
+    "tracking_rmse_m": 0.744,
+    "tracking_p95_m": 2.0827,
+    "tracking_max_m": 3.7088,
+    "max_twist_gap_s": 13.1448,
+    "max_planning_path_gap_s": 0.2251,
+    "max_decision_speed_gap_s": 0.0715,
+    "event1_min_merge_m": 2.438,
+    "event2_min_merge_m": 2.394,
+    "event2_min_front_m": null,
+    "emergency_entries": 0,
+    "merge_slowdown_entries": 15,
+    "simultaneous_throttle_brake": 0,
+    "throttle_saturation_samples": 5075,
+    "brake_saturation_samples": 2417,
+    "path_rejection_or_fallback_count": 0,
+    "process_died_log_count": 4,
+    "runtime_process_died_count": 0,
+    "teardown_process_died_count": 4,
+    "safe_stop_reasons": {
+      "path missing or stale": 2,
+      "vehicle velocity missing or stale": 13,
+      "stop requested by decision layer": 55
+    },
+    "stop_events": [
+      {
+        "waypoint": 32,
+        "distance": 3.920161247253418,
+        "time_s": 328.918417964
+      },
+      {
+        "waypoint": 52,
+        "distance": 3.7394940853118896,
+        "time_s": 527.323141161
+      },
+      {
+        "waypoint": 59,
+        "distance": 3.7981040477752686,
+        "time_s": 648.217841075
+      }
+    ]
+  }
+]

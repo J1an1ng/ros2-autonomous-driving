@@ -5,6 +5,7 @@ from pathlib import Path as FilePath
 
 import yaml
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from std_msgs.msg import Int32, Float32, String
@@ -424,7 +425,15 @@ def main(args=None):
                 "Route Manager stopped."
             )
 
+    except ExternalShutdownException:
+        pass
+
     except Exception as ex:
+        # During launch shutdown a timer callback can race with context
+        # invalidation.  Suppress that teardown-only failure, but retain normal
+        # exception reporting while ROS is active.
+        if not rclpy.ok():
+            return
         if node is not None:
             node.get_logger().error(
                 f"Route Manager failed: {ex}"
@@ -441,8 +450,7 @@ def main(args=None):
             except KeyboardInterrupt:
                 pass
 
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":

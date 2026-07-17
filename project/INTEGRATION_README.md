@@ -19,7 +19,7 @@ one launch file.
 | 3 | Route, trajectory, and no-event closed loop | Passed | Full route and waypoint-52 regression; see test log |
 | 4 | Perception pipeline and traffic-light sensing | Passed | Maps, ROI regression, four traffic lights, stale-frame guard; see test log |
 | 5 | Decision making and individual events | Passed | Accepted with documented limitation: Event2 triggers, but its NPC does not perform the planned emergency-brake maneuver |
-| 6 | Full benchmark and repeatability | Not started | — |
+| 6 | Full benchmark and repeatability | Passed | Three consecutive all-event missions, bags, metrics and plots; see Stage 6 completion |
 
 Status values are `Not started`, `In progress`, `Blocked`, and `Passed`. A later stage must
 not be marked `Passed` while an earlier required stage is blocked.
@@ -987,3 +987,68 @@ Add concise entries in chronological order.
   verified. Its Unity NPC does not execute the planned brake-in-lane maneuver, so no corresponding
   ego `EMERGENCY_BRAKING` transition can be claimed. This remains a documented scenario limitation
   and must be reported in Stage 6 evidence rather than represented as a passed emergency-brake test.
+
+### Stage 6 completion
+
+- Date: 2026-07-17.
+- Branch: `temp_inte`; benchmark baseline commit: `bfc5c00` (`Complete Stage 5
+  integration validation`). The three benchmark runs used that identical functional
+  configuration: spawn0, route index0, both Unity NPC events enabled, all production nodes,
+  and `enable_motion=true`.
+- A fresh out-of-tree build installed all seven functional packages successfully in
+  `/tmp/team20_stage6_bfc5c00`. All 72 decision/route/trajectory Python functional tests and
+  all 10 controller-core GTests passed. The only clean-workspace test failure was the
+  pre-existing route-manager flake8
+  test, which reports 260 formatting/import-order findings in existing Python files; no
+  functional test failed and Stage 6 did not mass-reformat unrelated code.
+- The pre-motion readiness gate passed with exactly one `/car_command` publisher, valid
+  `world -> OurCar/INS` TF, a non-empty `world` planning path, fresh twist and decision
+  inputs, and full braking while motion was disabled. Approximate healthy rates were
+  24--25 Hz twist, 9.9 Hz planning path, and 19.6 Hz decision output.
+- Three consecutive full missions were recorded without manual intervention. Each traversed
+  waypoints 0--59 and entered `route_complete`; no collision or road departure was observed,
+  no runtime node died, no path rejection/fallback occurred, and no command contained
+  simultaneous non-zero throttle and brake.
+
+  | Run | Mission time | Max / mean speed | Tracking RMSE / p95 | Event1 min merge | Event2 min merge | Result |
+  | --- | ---: | ---: | ---: | ---: | ---: | --- |
+  | 1 | 648.845 s | 3.155 / 1.697 m/s | 0.7563 / 2.0004 m | 2.437 m | 2.444 m | Complete |
+  | 2 | 651.614 s | 3.162 / 1.752 m/s | 0.7775 / 2.1516 m | 2.377 m | 2.443 m | Complete |
+  | 3 | 651.287 s | 3.153 / 1.625 m/s | 0.7440 / 2.0827 m | 2.438 m | 2.394 m | Complete |
+
+- All phase-aligned red signals produced a complete stop and stable green released the
+  vehicle. Recorded stop distances were 3.69--3.97 m at waypoint32, 3.74--3.92 m at
+  waypoint52, and 3.70--3.83 m at waypoint59. Waypoint25 was green on these deterministic
+  runs and released on approach. No permanent traffic-light latch recurred.
+- Both NPC regions produced finite right-front evidence, selected `SLOWING_FOR_MERGE`, and
+  released so the route could continue. Short nuisance merge slowdowns from static roadside
+  geometry also occurred (15--20 state entries per run) but all self-released.
+- Event2 retains the Stage 5 scenario limitation: all three bags have no finite front-path
+  obstacle at waypoints45--49 and no `EMERGENCY_BRAKING` entry. The Unity actor therefore did
+  not execute the assignment's intended brake-in-lane maneuver. Stage 6 verifies collision-
+  free handling of the event behavior actually generated, but does not claim a passed NPC
+  emergency-brake test.
+- Serialized Unity input occasionally produced long twist gaps (12.11--14.20 s maxima,
+  principally startup or sensor-stream pauses). The controller entered its documented safe
+  stop and recovered automatically when data resumed. Run2 also had an approximately 17 s
+  startup TF delay and recovered without intervention; planning-path and decision-output
+  maximum gaps during the recorded missions remained below 0.226 s and 0.097 s.
+- The raw evidence remains outside Git because the three MCAP bags total approximately
+  119 MiB: `/tmp/team20_stage6_evidence/run{1,2,3}/bag`, with matching ROS logs in each run
+  directory. Reproducible summary data and six SVG plots are committed under
+  `project/stage6_results/`; `project/tools/analyze_stage6_bags.py` regenerates them.
+- The three recorded runs exposed four Python `process has died` messages only after
+  `route_complete` during teardown. The affected entry points now tolerate Jazzy external
+  shutdown/context invalidation and use `rclpy.try_shutdown()`. A fresh full-stack restart
+  confirmed all four remain alive, receive simulation data, and later report
+  `process has finished cleanly`, with no traceback or `process has died`. The complete stack
+  still takes longer than launch's five-second SIGINT grace period and is then terminated
+  cleanly by SIGTERM; this shutdown latency affects Unity, TF and C++ nodes too and remains a
+  non-functional cleanup limitation.
+- This stage used an extracted official Jazzy rosbag2 overlay in `/tmp/rosbag_overlay`
+  because rosbag2 was absent from the system installation and sudo was unavailable. For a
+  normal machine setup, install `ros-jazzy-rosbag2` before reproducing the recordings.
+- **Stage 6 status:** passed with the explicit Event2 scenario and shutdown-latency
+  limitations above. The assignment route, traffic-light behavior, collision-free
+  repeatability, single-launch startup, controller safety, and evidence-generation goals
+  are demonstrated in three consecutive end-to-end missions.

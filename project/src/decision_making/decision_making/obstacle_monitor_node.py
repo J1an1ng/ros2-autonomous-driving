@@ -5,6 +5,7 @@ import struct
 
 import rclpy
 from nav_msgs.msg import Path
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Float32
@@ -234,7 +235,14 @@ def main(args=None) -> None:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    finally:
-        node.destroy_node()
+    except ExternalShutdownException:
+        pass
+    except Exception:
         if rclpy.ok():
-            rclpy.shutdown()
+            raise
+    finally:
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        rclpy.try_shutdown()

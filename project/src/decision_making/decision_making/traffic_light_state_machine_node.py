@@ -4,6 +4,7 @@ import math
 
 import rclpy
 from geometry_msgs.msg import TwistStamped
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import Bool, Float32, Int32, String, UInt8
@@ -236,6 +237,14 @@ def main(args=None) -> None:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except ExternalShutdownException:
+        pass
+    except Exception:
+        if rclpy.ok():
+            raise
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        rclpy.try_shutdown()

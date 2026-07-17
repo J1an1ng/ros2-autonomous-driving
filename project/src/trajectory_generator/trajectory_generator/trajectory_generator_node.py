@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from geometry_msgs.msg import PoseStamped, Quaternion
@@ -246,13 +247,17 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         node.get_logger().info("Trajectory Generator stopped.")
+    except ExternalShutdownException:
+        pass
+    except Exception:
+        if rclpy.ok():
+            raise
     finally:
         try:
             node.destroy_node()
         except KeyboardInterrupt:
             pass
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
