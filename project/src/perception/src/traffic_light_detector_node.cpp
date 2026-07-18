@@ -132,9 +132,13 @@ public:
     min_semantic_blob_pixels_ = declare_parameter<int>("min_semantic_blob_pixels", 20);
     max_semantic_blob_pixels_ = declare_parameter<int>("max_semantic_blob_pixels", 2500);
     semantic_merge_gap_px_ = declare_parameter<int>("semantic_merge_gap_px", 12);
-    target_light_ = declare_parameter<std::string>("target_light", "strict_center");
+    target_light_ = declare_parameter<std::string>("target_light", "signal_group");
     center_distance_penalty_ = declare_parameter<double>("center_distance_penalty", 0.8);
     strict_center_y_ratio_ = declare_parameter<double>("strict_center_y_ratio", 0.62);
+    signal_group_max_dx_ratio_ =
+        declare_parameter<double>("signal_group_max_dx_ratio", 0.16);
+    signal_group_min_size_ratio_ =
+        declare_parameter<double>("signal_group_min_size_ratio", 0.45);
 
     roi_x_min_ = declare_parameter<double>("roi_x_min", 0.0);
     roi_y_min_ = declare_parameter<double>("roi_y_min", 0.0);
@@ -229,26 +233,42 @@ private:
       return;
     }
 
-    std::vector<uint8_t> semantic_gate;
+    std::vector<std::vector<uint8_t>> semantic_gates;
     std::string gate_debug;
-    if (!BuildSemanticGate(*msg, roi, semantic_gate, gate_debug)) {
+    if (!BuildSemanticGates(*msg, roi, semantic_gates, gate_debug)) {
       PublishStateAndDebug(*msg, roi, UNKNOWN, UNKNOWN, Score{}, Score{}, Score{}, gate_debug);
       return;
     }
 
-    std::vector<uint8_t> red_mask;
-    std::vector<uint8_t> yellow_mask;
-    std::vector<uint8_t> green_mask;
-    BuildMasks(*msg, roi, semantic_gate, red_mask, yellow_mask, green_mask);
-
     const int roi_width = roi.x_max - roi.x_min;
     const int roi_height = roi.y_max - roi.y_min;
-    const Score red = ScoreMask(red_mask, roi_width, roi_height, max_red_blob_pixels_);
-    const Score yellow = ScoreMask(yellow_mask, roi_width, roi_height, max_yellow_blob_pixels_);
-    const Score green = ScoreMask(green_mask, roi_width, roi_height, max_green_blob_pixels_);
+    Score red;
+    Score yellow;
+    Score green;
+    std::vector<uint8_t> component_states;
+    for (const auto &semantic_gate : semantic_gates) {
+      std::vector<uint8_t> red_mask;
+      std::vector<uint8_t> yellow_mask;
+      std::vector<uint8_t> green_mask;
+      BuildMasks(*msg, roi, semantic_gate, red_mask, yellow_mask, green_mask);
 
-    const uint8_t raw_state = ChooseState(red, yellow, green);
+      const Score component_red =
+          ScoreMask(red_mask, roi_width, roi_height, max_red_blob_pixels_);
+      const Score component_yellow =
+          ScoreMask(yellow_mask, roi_width, roi_height, max_yellow_blob_pixels_);
+      const Score component_green =
+          ScoreMask(green_mask, roi_width, roi_height, max_green_blob_pixels_);
+      component_states.push_back(
+          ChooseState(component_red, component_yellow, component_green));
+      AccumulateScore(component_red, red);
+      AccumulateScore(component_yellow, yellow);
+      AccumulateScore(component_green, green);
+    }
+
+    const uint8_t raw_state = CombineSignalGroupStates(component_states);
     const uint8_t stable_state = UpdateStableState(raw_state);
+
+    gate_debug += " component_states=" + BuildComponentStatesDebug(component_states);
 
     PublishStateAndDebug(*msg, roi, raw_state, stable_state, red, yellow, green, gate_debug);
   }
@@ -297,15 +317,16 @@ private:
     return roi;
   }
 
-  bool BuildSemanticGate(const sensor_msgs::msg::Image &rgb_msg,
-                         const Roi &roi,
-                         std::vector<uint8_t> &gate,
-                         std::string &gate_debug) const {
+  bool BuildSemanticGates(const sensor_msgs::msg::Image &rgb_msg,
+                          const Roi &roi,
+                          std::vector<std::vector<uint8_t>> &gates,
+                          std::string &gate_debug) const {
     const int width = roi.x_max - roi.x_min;
     const int height = roi.y_max - roi.y_min;
-    gate.assign(static_cast<size_t>(width * height), use_semantic_gate_ ? 0 : 1);
+    gates.clear();
 
     if (!use_semantic_gate_) {
+      gates.emplace_back(static_cast<size_t>(width * height), 1);
       gate_debug = "semantic_gate=disabled";
       return true;
     }
@@ -424,14 +445,12 @@ private:
     }
     MergeSemanticComponents(components);
 
-    const int selected_component = SelectSemanticComponent(components, width, height);
-    if (selected_component >= 0) {
-      AddSemanticComponentToGate(components[static_cast<size_t>(selected_component)],
-                                 width, height, gate);
-    } else if (target_light_ == "all") {
-      for (const auto &component : components) {
-        AddSemanticComponentToGate(component, width, height, gate);
-      }
+    const std::vector<int> selected_components =
+        SelectSemanticComponents(components, width, height);
+    for (const int selected_component : selected_components) {
+      gates.emplace_back(static_cast<size_t>(width * height), 0);
+      AddSemanticComponentToGate(
+          components[static_cast<size_t>(selected_component)], width, height, gates.back());
     }
 
     std::ostringstream out;
@@ -444,7 +463,7 @@ private:
         << " semantic_pixels=" << accepted_pixels
         << " semantic_components_after_merge=" << components.size()
         << " target_light=" << target_light_
-        << " selected_component=" << selected_component
+        << " selected_components=" << BuildSelectedComponentsDebug(selected_components)
         << " " << BuildSemanticComponentsDebug(components);
     if (semantic_debug_colors_) {
       out << " " << BuildSemanticColorDebug(color_histogram);
@@ -455,7 +474,7 @@ private:
           << " no_valid_candidate";
     }
     gate_debug = out.str();
-    return accepted_components > 0;
+    return !gates.empty();
   }
 
   void AddSemanticComponentToGate(const SemanticComponent &component,
@@ -529,7 +548,8 @@ private:
     }
 
     if (target_light_ == "left" || target_light_ == "center" ||
-        target_light_ == "strict_center" || target_light_ == "right") {
+        target_light_ == "strict_center" || target_light_ == "signal_group" ||
+        target_light_ == "right") {
       std::sort(indices.begin(), indices.end(), [&components](int a, int b) {
         const double center_a = 0.5 * (components[static_cast<size_t>(a)].min_x +
                                        components[static_cast<size_t>(a)].max_x);
@@ -546,7 +566,7 @@ private:
       }
 
       const double image_center = 0.5 * static_cast<double>(width);
-      if (target_light_ == "strict_center") {
+      if (target_light_ == "strict_center" || target_light_ == "signal_group") {
         return *std::min_element(indices.begin(), indices.end(), [&](int a, int b) {
           const double center_a = 0.5 * (components[static_cast<size_t>(a)].min_x +
                                          components[static_cast<size_t>(a)].max_x);
@@ -588,6 +608,83 @@ private:
                                        [](const auto &a, const auto &b) {
                                          return a.pixels < b.pixels;
                                        })));
+  }
+
+  std::vector<int> SelectSemanticComponents(
+      const std::vector<SemanticComponent> &components,
+      int width,
+      int height) const {
+    if (components.empty()) {
+      return {};
+    }
+    if (target_light_ == "all") {
+      std::vector<int> all;
+      all.reserve(components.size());
+      for (size_t i = 0; i < components.size(); ++i) {
+        all.push_back(static_cast<int>(i));
+      }
+      return all;
+    }
+
+    const int primary = SelectSemanticComponent(components, width, height);
+    if (primary < 0 || target_light_ != "signal_group") {
+      return primary < 0 ? std::vector<int>{} : std::vector<int>{primary};
+    }
+
+    const auto center_x = [&components](int index) {
+      const auto &component = components[static_cast<size_t>(index)];
+      return 0.5 * static_cast<double>(component.min_x + component.max_x);
+    };
+    const double primary_x = center_x(primary);
+    const double max_dx =
+        std::clamp(signal_group_max_dx_ratio_, 0.0, 1.0) * static_cast<double>(width);
+    std::vector<int> group;
+    for (size_t i = 0; i < components.size(); ++i) {
+      if (std::abs(center_x(static_cast<int>(i)) - primary_x) <= max_dx) {
+        group.push_back(static_cast<int>(i));
+      }
+    }
+    const auto largest = std::max_element(
+        group.begin(), group.end(), [&components](int a, int b) {
+          return components[static_cast<size_t>(a)].pixels <
+                 components[static_cast<size_t>(b)].pixels;
+        });
+    const int largest_pixels = largest == group.end()
+        ? 0 : components[static_cast<size_t>(*largest)].pixels;
+    const double min_pixels =
+        std::clamp(signal_group_min_size_ratio_, 0.0, 1.0) * largest_pixels;
+    group.erase(
+        std::remove_if(group.begin(), group.end(), [&](int index) {
+          return components[static_cast<size_t>(index)].pixels < min_pixels;
+        }),
+        group.end());
+    return group;
+  }
+
+  std::string BuildSelectedComponentsDebug(const std::vector<int> &indices) const {
+    std::ostringstream out;
+    out << "[";
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (i > 0) {
+        out << ",";
+      }
+      out << indices[i];
+    }
+    out << "]";
+    return out.str();
+  }
+
+  std::string BuildComponentStatesDebug(const std::vector<uint8_t> &states) const {
+    std::ostringstream out;
+    out << "[";
+    for (size_t i = 0; i < states.size(); ++i) {
+      if (i > 0) {
+        out << ",";
+      }
+      out << StateName(states[i]);
+    }
+    out << "]";
+    return out.str();
   }
 
   std::string BuildSemanticComponentsDebug(const std::vector<SemanticComponent> &components) const {
@@ -812,6 +909,35 @@ private:
     stack.push_back(idx);
   }
 
+  void AccumulateScore(const Score &source, Score &destination) const {
+    destination.accepted_pixels += source.accepted_pixels;
+    destination.accepted_blobs += source.accepted_blobs;
+    destination.max_blob_pixels =
+        std::max(destination.max_blob_pixels, source.max_blob_pixels);
+  }
+
+  uint8_t CombineSignalGroupStates(const std::vector<uint8_t> &states) const {
+    // A signal group may contain a high and a low lamp. Classify each housing
+    // independently first so red-colored reflections in a green housing keep
+    // using ChooseState's competition rules. Across distinct housings, a real
+    // red indication must dominate until every visible member releases it.
+    if (std::find(states.begin(), states.end(), RED) != states.end()) {
+      return RED;
+    }
+    if (std::find(states.begin(), states.end(), YELLOW) != states.end()) {
+      return YELLOW;
+    }
+    const bool all_green =
+        !states.empty() &&
+        std::all_of(states.begin(), states.end(), [](uint8_t state) {
+          return state == GREEN;
+        });
+    if (all_green) {
+      return GREEN;
+    }
+    return UNKNOWN;
+  }
+
   uint8_t ChooseState(const Score &red, const Score &yellow, const Score &green) const {
     const int red_score = WeightedScore(red);
     const int yellow_score = WeightedScore(yellow);
@@ -943,9 +1069,11 @@ private:
   int min_semantic_blob_pixels_{20};
   int max_semantic_blob_pixels_{2500};
   int semantic_merge_gap_px_{12};
-  std::string target_light_{"strict_center"};
+  std::string target_light_{"signal_group"};
   double center_distance_penalty_{0.8};
   double strict_center_y_ratio_{0.62};
+  double signal_group_max_dx_ratio_{0.16};
+  double signal_group_min_size_ratio_{0.45};
 
   double roi_x_min_{0.0};
   double roi_y_min_{0.0};

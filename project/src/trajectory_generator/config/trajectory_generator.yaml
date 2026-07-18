@@ -15,6 +15,9 @@ trajectory_generator_node:
     continuity_candidate_weight: 0.5
     max_continuity_deviation: 2.0
     default_speed: 2.0
-    max_speed: 10.0
-    slow_speed: 2.0
+    # Straight-route waypoints are capped at 14 m/s (50.4 km/h).
+    max_speed: 14.0
+    # Raise the generic intersection cap while the tighter 2 m/s turn limits
+    # in route_map.yaml continue to take precedence.
+    slow_speed: 3.0
     stop_speed: 0.0

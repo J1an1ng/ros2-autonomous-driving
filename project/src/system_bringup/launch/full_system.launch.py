@@ -25,6 +25,7 @@ def generate_launch_description():
     enable_trajectory = LaunchConfiguration("enable_trajectory")
     enable_decision = LaunchConfiguration("enable_decision")
     enable_controller = LaunchConfiguration("enable_controller")
+    enable_visualization = LaunchConfiguration("enable_visualization")
     enable_motion = LaunchConfiguration("enable_motion")
     simulation_config = LaunchConfiguration("simulation_config")
     route_file = LaunchConfiguration("route_file")
@@ -59,6 +60,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_trajectory", default_value="true"),
             DeclareLaunchArgument("enable_decision", default_value="true"),
             DeclareLaunchArgument("enable_controller", default_value="true"),
+            DeclareLaunchArgument("enable_visualization", default_value="true"),
             DeclareLaunchArgument("enable_motion", default_value="false"),
             DeclareLaunchArgument(
                 "simulation_config", default_value=default_simulation_config
@@ -124,6 +126,39 @@ def generate_launch_description():
                     },
                 ],
                 condition=IfCondition(enable_controller),
+            ),
+            Node(
+                package="system_bringup",
+                executable="live_visualization",
+                name="live_visualization",
+                output="screen",
+                condition=IfCondition(enable_visualization),
+            ),
+            Node(
+                package="rviz2",
+                executable="rviz2",
+                name="driving_overview",
+                arguments=[
+                    "-d",
+                    PathJoinSubstitution(
+                        [FindPackageShare("system_bringup"), "rviz", "driving_overview.rviz"]
+                    ),
+                ],
+                output="screen",
+                condition=IfCondition(enable_visualization),
+            ),
+            Node(
+                package="rviz2",
+                executable="rviz2",
+                name="telemetry_charts",
+                arguments=[
+                    "-d",
+                    PathJoinSubstitution(
+                        [FindPackageShare("system_bringup"), "rviz", "telemetry_charts.rviz"]
+                    ),
+                ],
+                output="screen",
+                condition=IfCondition(enable_visualization),
             ),
         ]
     )

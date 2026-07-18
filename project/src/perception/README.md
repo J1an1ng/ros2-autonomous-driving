@@ -30,12 +30,17 @@ the corresponding full-system launch arguments. OctoMap can be disabled with
 | `/perception/traffic_light_debug` | Raw/stable state, scores, selected semantic component, ROI, and timestamp delta. |
 
 The traffic detector uses the left RGB image for bulb colour and the semantic image only to
-select traffic-light components. `strict_center` selects the component nearest the expected
-forward-signal position: the horizontal image centre and `strict_center_y_ratio=0.62` of the
-traffic-light detection ROI height. Using both axes prevents an unlit overhead/back-facing
-signal from replacing the lower forward-facing signal as the car moves closer to an
-intersection. Four consecutive raw classifications are required before the stable state
-changes.
+select traffic-light components. `signal_group` first selects the component nearest the
+expected forward-signal position, then groups vertically separated high/low lamps whose
+horizontal centers are within `signal_group_max_dx_ratio=0.16` of the image width and whose
+semantic areas are at least `signal_group_min_size_ratio=0.45` of the largest group member.
+The relative-size guard rejects a smaller adjacent signal between the two main lamps. Each lamp
+is classified independently before group aggregation: red has safety priority across lamp
+instances, while green is accepted only when every currently selected lamp is confirmed
+green. An unclassified member therefore cannot be masked by another member's green. This lets a
+lower lamp take over when its high-mounted partner leaves the camera view without confusing
+same-housing red reflections with a real red lamp. Four consecutive group classifications
+are required before the stable state changes.
 If no valid component exists, or the RGB/semantic timestamp difference exceeds
 `max_semantic_stamp_delta_s=1.0`, the published state is UNKNOWN. This prevents a frozen
 semantic frame from continuously supporting stale green evidence.

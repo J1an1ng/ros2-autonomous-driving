@@ -3,6 +3,10 @@ project(system_bringup)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch rviz DESTINATION share/${PROJECT_NAME})
+install(PROGRAMS scripts/live_visualization.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME live_visualization
+)
 
 ament_package()

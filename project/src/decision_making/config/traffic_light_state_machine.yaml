@@ -17,10 +17,12 @@ traffic_light_state_machine_node:
     # perception may creep toward the stop boundary, but cannot cross it.
     require_green_in_controlled_zone: true
     waypoint_distance_timeout: 0.5
-    # Waypoints advance within 3 m. A 4 m boundary is the closest safe stop
-    # that still leaves margin for braking at the 1 m/s approach speed.
+    # Waypoints advance within 3 m. Keep the validated 4 m hard-stop boundary
+    # while permitting a faster approach to a still-unclassified signal.
     unknown_light_stop_distance: 4.0
-    unknown_light_approach_speed: 1.0
+    # The vehicle may approach the controlled boundary at up to 3 m/s; the
+    # state machine still commands a full stop at the boundary unless green.
+    unknown_light_approach_speed: 3.0
     # Remember a detected red/yellow, creep toward its waypoint, then stop at
     # this boundary instead of braking immediately at first recognition.
     traffic_light_stop_distance: 4.0

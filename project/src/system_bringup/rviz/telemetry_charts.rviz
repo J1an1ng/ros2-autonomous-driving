@@ -1,0 +1,54 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.2
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 70; 70; 75
+      Enabled: true
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+      Name: Chart grid
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: telemetry
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Live telemetry charts
+      Namespaces:
+        charts: true
+        labels: true
+      Queue Size: 100
+      Topic: /visualization/telemetry_charts
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 18; 20; 25
+    Default Light: true
+    Fixed Frame: telemetry
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Angle: 0
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Telemetry charts
+      Scale: 1
+      Target Frame: telemetry
+      X: 10
+      Y: 0
+Window Geometry:
+  Height: 760
+  Width: 1100
+  X: 1140
+  Y: 20

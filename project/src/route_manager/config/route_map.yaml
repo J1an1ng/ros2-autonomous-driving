@@ -78,9 +78,10 @@ waypoints:
   y: 51.44
   z: 0.822
   yaw_deg: 0.898
-  speed_limit: 8
+  # Keep full straight-line speed until the actual intersection waypoint 10.
+  speed_limit: 14
   segment_id: 0
-  type: intersection_approach
+  type: normal
 - id: 10
   x: 42.068
   y: 51.558

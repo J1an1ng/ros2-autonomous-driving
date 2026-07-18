@@ -3,8 +3,8 @@
         "spawnIndex": 0
     },
     "eventEnable": [
-        false,
-        false
+        true,
+        true
     ],
     "controlConfig": {
         "address": "127.0.0.1",

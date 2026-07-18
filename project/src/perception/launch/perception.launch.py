@@ -80,6 +80,11 @@ def generate_launch_description():
                 'state_topic': '/perception/traffic_light_state',
                 'debug_topic': '/perception/traffic_light_debug',
                 'max_semantic_stamp_delta_s': 1.0,
+                # Treat vertically separated high/low lamps for the same
+                # approach as one group while excluding other road approaches.
+                'target_light': 'signal_group',
+                'signal_group_max_dx_ratio': 0.16,
+                'signal_group_min_size_ratio': 0.45,
             }],
         ),
     ])

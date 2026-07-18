@@ -12,7 +12,8 @@ controller_node:
     lookahead_max: 7.0
     minimum_forward_distance: 0.2
 
-    maximum_target_speed: 10.0
+    # Match the 14 m/s straight-route and trajectory ceilings.
+    maximum_target_speed: 14.0
     normalize_steering: true
     steering_sign: -1.0
     maximum_steering_angle: 0.52
