@@ -155,7 +155,11 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `traffic_light_timeout` | `0.75` | Maximum accepted age of a light message, in seconds. |
 | `planning_speed_timeout` | `0.5` | Maximum accepted age of a planning-speed message, in seconds. |
 | `vehicle_speed_timeout` | `0.5` | Maximum accepted age of a vehicle-speed message, in seconds. |
-| `green_release_delay` | `0.3` | Time for which green must remain continuously fresh before release, in seconds. |
+| `green_release_delay` | `0.3` | Time for which an accepted green must remain continuously fresh before release. |
+| `strict_green_waypoint_ids` | `[25]` | Controlled lights where green evidence must clearly exceed red evidence before release. |
+| `traffic_light_score_timeout` | `0.75` | Maximum age of the paired red/green evidence scores. |
+| `strict_green_over_red_ratio` | `1.05` | Required green-to-red score ratio at strict waypoints. |
+| `strict_green_max_red_score` | `4` | Maximum residual red score allowed when accepting green at a strict waypoint. |
 | `treat_yellow_as_red` | `true` | Whether yellow triggers the same stop latch as red. |
 | `require_green_in_controlled_zone` | `true` | Require a fresh green for unrestricted passage at allowlisted intersections. |
 | `waypoint_distance_timeout` | `0.5` | Maximum accepted age of the route waypoint distance, in seconds. |

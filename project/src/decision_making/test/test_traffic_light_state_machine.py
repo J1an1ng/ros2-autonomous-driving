@@ -88,6 +88,86 @@ def test_waiting_releases_only_after_continuous_fresh_green():
     assert not released.stop_required
 
 
+def test_ambiguous_green_does_not_release_strict_waypoint_red_stop():
+    machine = make_machine(
+        green_release_delay=0.3,
+        strict_green_waypoint_ids=[25],
+        strict_green_over_red_ratio=1.05,
+        strict_green_max_red_score=4,
+    )
+    machine.update_route("stop_zone", 25)
+    machine.update_planning_speed(3.0, 0.0)
+    machine.update_vehicle_speed(0.0, 0.0)
+    machine.update_traffic_light(TrafficLight.RED, 0.0)
+    machine.evaluate(0.01)
+    assert machine.evaluate(0.02).state == DecisionState.WAITING_FOR_GREEN
+
+    machine.update_traffic_light_scores(44, 40, 0.1)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.1)
+    assert machine.evaluate(0.1).state == DecisionState.WAITING_FOR_GREEN
+    machine.update_traffic_light_scores(36, 40, 0.5)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.5)
+    ambiguous = machine.evaluate(0.5)
+
+    assert ambiguous.state == DecisionState.WAITING_FOR_GREEN
+    assert ambiguous.stop_required
+
+    # Even green that is numerically stronger must not release this waypoint
+    # while substantial red evidence remains (observed as 44/60 at runtime).
+    machine.update_traffic_light_scores(44, 60, 0.6)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.6)
+    stronger_false_green = machine.evaluate(0.6)
+    assert stronger_false_green.state == DecisionState.WAITING_FOR_GREEN
+    assert stronger_false_green.stop_required
+
+
+def test_unambiguous_green_releases_strict_waypoint():
+    machine = make_machine(
+        green_release_delay=0.3,
+        strict_green_waypoint_ids=[25],
+        strict_green_over_red_ratio=1.05,
+        strict_green_max_red_score=4,
+    )
+    machine.update_route("stop_zone", 25)
+    machine.update_planning_speed(3.0, 0.0)
+    machine.update_vehicle_speed(0.0, 0.0)
+    machine.update_traffic_light(TrafficLight.RED, 0.0)
+    machine.evaluate(0.01)
+    machine.evaluate(0.02)
+
+    machine.update_traffic_light_scores(0, 40, 0.1)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.1)
+    assert machine.evaluate(0.1).state == DecisionState.WAITING_FOR_GREEN
+    machine.update_traffic_light_scores(0, 40, 0.41)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.41)
+    released = machine.evaluate(0.41)
+    assert released.state == DecisionState.RELEASED
+    assert not released.stop_required
+
+
+def test_ambiguous_green_remains_allowed_at_non_strict_verified_waypoint():
+    machine = make_machine(
+        green_release_delay=0.3,
+        strict_green_waypoint_ids=[25],
+        strict_green_over_red_ratio=1.05,
+    )
+    machine.update_route("stop_zone", 52)
+    machine.update_planning_speed(3.0, 0.0)
+    machine.update_vehicle_speed(0.0, 0.0)
+    machine.update_traffic_light(TrafficLight.RED, 0.0)
+    machine.evaluate(0.01)
+    machine.evaluate(0.02)
+
+    machine.update_traffic_light_scores(44, 40, 0.1)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.1)
+    machine.evaluate(0.1)
+    machine.update_traffic_light_scores(44, 40, 0.41)
+    machine.update_traffic_light(TrafficLight.GREEN, 0.41)
+    released = machine.evaluate(0.41)
+
+    assert released.state == DecisionState.RELEASED
+
+
 def test_release_is_retained_until_vehicle_leaves_controlled_zone():
     machine = make_machine(
         traffic_light_waypoint_ids=[25], green_release_delay=0.1

@@ -48,6 +48,10 @@ class TrafficLightStateMachine:
         planning_speed_timeout: float = 0.5,
         vehicle_speed_timeout: float = 0.5,
         green_release_delay: float = 0.3,
+        strict_green_waypoint_ids: Sequence[int] = (),
+        traffic_light_score_timeout: float = 0.75,
+        strict_green_over_red_ratio: float = 1.05,
+        strict_green_max_red_score: int = 4,
         treat_yellow_as_red: bool = True,
         require_green_in_controlled_zone: bool = True,
         waypoint_distance_timeout: float = 0.5,
@@ -75,6 +79,16 @@ class TrafficLightStateMachine:
         self.planning_speed_timeout = max(0.0, float(planning_speed_timeout))
         self.vehicle_speed_timeout = max(0.0, float(vehicle_speed_timeout))
         self.green_release_delay = max(0.0, float(green_release_delay))
+        self.strict_green_waypoint_ids = {
+            int(waypoint_id) for waypoint_id in strict_green_waypoint_ids
+        }
+        self.traffic_light_score_timeout = max(
+            0.0, float(traffic_light_score_timeout)
+        )
+        self.strict_green_over_red_ratio = max(
+            0.0, float(strict_green_over_red_ratio)
+        )
+        self.strict_green_max_red_score = max(0, int(strict_green_max_red_score))
         self.treat_yellow_as_red = bool(treat_yellow_as_red)
         self.require_green_in_controlled_zone = bool(
             require_green_in_controlled_zone
@@ -114,6 +128,9 @@ class TrafficLightStateMachine:
         self.vehicle_speed_time: Optional[float] = None
         self.traffic_light = TrafficLight.UNKNOWN
         self.traffic_light_time: Optional[float] = None
+        self.traffic_light_red_score = 0
+        self.traffic_light_green_score = 0
+        self.traffic_light_score_time: Optional[float] = None
         self.green_since: Optional[float] = None
         self.latched_waypoint_id: Optional[int] = None
         self.signal_stop_latched = False
@@ -150,6 +167,13 @@ class TrafficLightStateMachine:
             self.traffic_light = TrafficLight.UNKNOWN
         self.traffic_light_time = float(now)
 
+    def update_traffic_light_scores(
+        self, red_score: int, green_score: int, now: float
+    ) -> None:
+        self.traffic_light_red_score = max(0, int(red_score))
+        self.traffic_light_green_score = max(0, int(green_score))
+        self.traffic_light_score_time = float(now)
+
     def update_obstacle_distances(
         self, front_distance: float, merge_distance: float, now: float
     ) -> None:
@@ -166,6 +190,11 @@ class TrafficLightStateMachine:
         light_fresh = self._is_fresh(
             self.traffic_light_time, now, self.traffic_light_timeout
         )
+        light_scores_fresh = self._is_fresh(
+            self.traffic_light_score_time,
+            now,
+            self.traffic_light_score_timeout,
+        )
         speed_fresh = self._is_fresh(
             self.vehicle_speed_time, now, self.vehicle_speed_timeout
         )
@@ -181,7 +210,26 @@ class TrafficLightStateMachine:
             self.traffic_light == TrafficLight.RED
             or (self.treat_yellow_as_red and self.traffic_light == TrafficLight.YELLOW)
         )
-        raw_green_signal = light_fresh and self.traffic_light == TrafficLight.GREEN
+        associated_waypoint_id = (
+            self.latched_waypoint_id
+            if self.latched_waypoint_id is not None
+            else self.waypoint_id
+        )
+        strict_green_required = (
+            associated_waypoint_id in self.strict_green_waypoint_ids
+        )
+        strict_green_evidence = (
+            light_scores_fresh
+            and self.traffic_light_red_score <= self.strict_green_max_red_score
+            and self.traffic_light_green_score
+            >= self.strict_green_over_red_ratio
+            * max(1, self.traffic_light_red_score)
+        )
+        raw_green_signal = (
+            light_fresh
+            and self.traffic_light == TrafficLight.GREEN
+            and (not strict_green_required or strict_green_evidence)
+        )
         light_action_allowed = (
             not waypoint_distance_fresh
             or self.waypoint_distance <= self.traffic_light_activation_distance

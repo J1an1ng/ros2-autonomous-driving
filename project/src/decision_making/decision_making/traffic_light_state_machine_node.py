@@ -7,7 +7,7 @@ from geometry_msgs.msg import TwistStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from std_msgs.msg import Bool, Float32, Int32, String, UInt8
+from std_msgs.msg import Bool, Float32, Int32, Int32MultiArray, String, UInt8
 
 from decision_making.traffic_light_state_machine import TrafficLightStateMachine
 
@@ -28,6 +28,12 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("planning_speed_timeout", 0.5)
         self.declare_parameter("vehicle_speed_timeout", 0.5)
         self.declare_parameter("green_release_delay", 0.3)
+        self.declare_parameter(
+            "strict_green_waypoint_ids", Parameter.Type.INTEGER_ARRAY
+        )
+        self.declare_parameter("traffic_light_score_timeout", 0.75)
+        self.declare_parameter("strict_green_over_red_ratio", 1.05)
+        self.declare_parameter("strict_green_max_red_score", 4)
         self.declare_parameter("treat_yellow_as_red", True)
         self.declare_parameter("require_green_in_controlled_zone", True)
         self.declare_parameter("waypoint_distance_timeout", 0.5)
@@ -52,6 +58,12 @@ class TrafficLightStateMachineNode(Node):
                 "traffic_light_waypoint_ids", Parameter.Type.INTEGER_ARRAY, []
             ),
         ).value
+        strict_green_waypoint_ids = self.get_parameter_or(
+            "strict_green_waypoint_ids",
+            Parameter(
+                "strict_green_waypoint_ids", Parameter.Type.INTEGER_ARRAY, []
+            ),
+        ).value
         self.machine = TrafficLightStateMachine(
             controlled_route_states=controlled_states,
             traffic_light_waypoint_ids=waypoint_ids,
@@ -60,6 +72,16 @@ class TrafficLightStateMachineNode(Node):
             planning_speed_timeout=self.get_parameter("planning_speed_timeout").value,
             vehicle_speed_timeout=self.get_parameter("vehicle_speed_timeout").value,
             green_release_delay=self.get_parameter("green_release_delay").value,
+            strict_green_waypoint_ids=strict_green_waypoint_ids,
+            traffic_light_score_timeout=self.get_parameter(
+                "traffic_light_score_timeout"
+            ).value,
+            strict_green_over_red_ratio=self.get_parameter(
+                "strict_green_over_red_ratio"
+            ).value,
+            strict_green_max_red_score=self.get_parameter(
+                "strict_green_max_red_score"
+            ).value,
             treat_yellow_as_red=self.get_parameter("treat_yellow_as_red").value,
             require_green_in_controlled_zone=self.get_parameter(
                 "require_green_in_controlled_zone"
@@ -98,6 +120,12 @@ class TrafficLightStateMachineNode(Node):
             UInt8,
             "/perception/traffic_light_state",
             self.traffic_light_callback,
+            10,
+        )
+        self.create_subscription(
+            Int32MultiArray,
+            "/perception/traffic_light_scores",
+            self.traffic_light_scores_callback,
             10,
         )
         self.create_subscription(
@@ -163,6 +191,16 @@ class TrafficLightStateMachineNode(Node):
     def traffic_light_callback(self, msg: UInt8) -> None:
         self.machine.update_traffic_light(msg.data, self.now_seconds())
 
+    def traffic_light_scores_callback(self, msg: Int32MultiArray) -> None:
+        if len(msg.data) < 2:
+            self.get_logger().warning(
+                "Ignoring traffic-light score message with fewer than two values"
+            )
+            return
+        self.machine.update_traffic_light_scores(
+            msg.data[0], msg.data[1], self.now_seconds()
+        )
+
     def planning_speed_callback(self, msg: Float32) -> None:
         self.machine.update_planning_speed(msg.data, self.now_seconds())
 
@@ -219,6 +257,8 @@ class TrafficLightStateMachineNode(Node):
             f"route_state={self.machine.route_state} waypoint_id={self.machine.waypoint_id} "
             f"waypoint_distance={self.machine.waypoint_distance} "
             f"light={self.machine.traffic_light.name} "
+            f"light_scores={self.machine.traffic_light_red_score}/"
+            f"{self.machine.traffic_light_green_score} "
             f"front_distance={self.machine.front_obstacle_distance:.3f} "
             f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
             f"target_speed={output.target_speed:.3f}"

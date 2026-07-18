@@ -11,6 +11,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/int32_multi_array.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 
@@ -113,6 +114,8 @@ public:
         "semantic_topic", "/OurCar/Sensors/SemanticCamera/image_raw");
     state_topic_ = declare_parameter<std::string>(
         "state_topic", "/perception/traffic_light_state");
+    scores_topic_ = declare_parameter<std::string>(
+        "scores_topic", "/perception/traffic_light_scores");
     debug_topic_ = declare_parameter<std::string>(
         "debug_topic", "/perception/traffic_light_debug");
 
@@ -175,6 +178,7 @@ public:
     consecutive_frames_ = declare_parameter<int>("consecutive_frames", 4);
 
     state_pub_ = create_publisher<std_msgs::msg::UInt8>(state_topic_, 10);
+    scores_pub_ = create_publisher<std_msgs::msg::Int32MultiArray>(scores_topic_, 10);
     debug_pub_ = create_publisher<std_msgs::msg::String>(debug_topic_, 10);
 
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
@@ -203,6 +207,7 @@ public:
     }
     RCLCPP_INFO(get_logger(), "Publishing state: %s (0 UNKNOWN, 1 RED, 2 YELLOW, 3 GREEN)",
                 state_topic_.c_str());
+    RCLCPP_INFO(get_logger(), "Publishing red/green scores: %s", scores_topic_.c_str());
     RCLCPP_INFO(get_logger(), "Publishing debug: %s", debug_topic_.c_str());
   }
 
@@ -281,6 +286,10 @@ private:
                             const Score &yellow,
                             const Score &green,
                             const std::string &gate_debug) {
+    std_msgs::msg::Int32MultiArray scores_msg;
+    scores_msg.data = {WeightedScore(red), WeightedScore(green)};
+    scores_pub_->publish(scores_msg);
+
     std_msgs::msg::UInt8 state_msg;
     state_msg.data = stable_state;
     state_pub_->publish(state_msg);
@@ -640,8 +649,22 @@ private:
         std::clamp(signal_group_max_dx_ratio_, 0.0, 1.0) * static_cast<double>(width);
     std::vector<int> group;
     for (size_t i = 0; i < components.size(); ++i) {
-      if (std::abs(center_x(static_cast<int>(i)) - primary_x) <= max_dx) {
-        group.push_back(static_cast<int>(i));
+      const int index = static_cast<int>(i);
+      const auto &component = components[i];
+      const bool vertically_clipped =
+          component.min_y <= 0 || component.max_y >= height - 1;
+
+      // A component cut by the top/bottom of the traffic-light ROI has an
+      // incomplete housing and cannot be associated reliably. Keep it only
+      // when it is the primary (best centred) target. At waypoint 25 the
+      // forward lamp is fully visible around y=152..173, while an unrelated
+      // red lamp is clipped at y=0..8; grouping both permanently vetoes the
+      // real green signal.
+      if (index != primary && vertically_clipped) {
+        continue;
+      }
+      if (std::abs(center_x(index) - primary_x) <= max_dx) {
+        group.push_back(index);
       }
     }
     const auto largest = std::max_element(
@@ -1005,6 +1028,17 @@ private:
   }
 
   uint8_t UpdateStableState(uint8_t raw_state) {
+    // GREEN grants permission to move and therefore needs debounce. Every
+    // non-green observation revokes that permission immediately; retaining a
+    // previous stable GREEN for several red/unknown frames can otherwise let a
+    // stopped vehicle restart while the physical signal is red or unavailable.
+    if (raw_state != GREEN) {
+      candidate_state_ = raw_state;
+      candidate_count_ = 1;
+      stable_state_ = raw_state;
+      return stable_state_;
+    }
+
     if (raw_state == candidate_state_) {
       ++candidate_count_;
     } else {
@@ -1052,6 +1086,7 @@ private:
   std::string image_topic_;
   std::string semantic_topic_;
   std::string state_topic_;
+  std::string scores_topic_;
   std::string debug_topic_;
 
   bool use_semantic_gate_{true};
@@ -1116,6 +1151,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr semantic_sub_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr scores_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr debug_pub_;
 
   sensor_msgs::msg::Image::SharedPtr latest_semantic_;

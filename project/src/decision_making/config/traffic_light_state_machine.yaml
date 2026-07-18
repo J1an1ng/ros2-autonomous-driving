@@ -12,6 +12,15 @@ traffic_light_state_machine_node:
     planning_speed_timeout: 0.5
     vehicle_speed_timeout: 0.5
     green_release_delay: 0.3
+    # Waypoint 25 showed false GREEN while its red evidence (44) still exceeded
+    # green evidence (40). Require unambiguous green only at this light; the
+    # other verified lights retain the broader simulator-tuned classifier.
+    strict_green_waypoint_ids: [25]
+    traffic_light_score_timeout: 0.75
+    strict_green_over_red_ratio: 1.05
+    # Real green observations at waypoint 25 had red_score=0. False greens
+    # repeatedly retained red_score=32..44 (including 36/40 at release).
+    strict_green_max_red_score: 4
     treat_yellow_as_red: true
     # Fail safe only at the four allowlisted intersections. UNKNOWN/stale
     # perception may creep toward the stop boundary, but cannot cross it.

@@ -1,5 +1,30 @@
 # Release notes
 
+## full-system-v1.2.0
+
+Traffic-light safety release built on `full-system-v1.1.0`.
+
+Improvements:
+
+- Rejects vertically clipped secondary traffic lights so an unrelated
+  back-facing red signal cannot veto the forward green signal.
+- Revokes green authorization immediately on red, yellow, or unknown
+  perception instead of retaining a stale stable green.
+- Publishes paired red/green evidence scores on
+  `/perception/traffic_light_scores` for decision-layer validation.
+- Applies a waypoint-25-specific green release gate: green must clearly exceed
+  red and residual red evidence must remain at or below the validated score of
+  4. Other controlled lights retain their previously validated thresholds.
+- Adds decision debug output for the current red/green evidence scores.
+
+Validation:
+
+- Built the `perception` and `decision_making` packages successfully.
+- Passed all 35 related tests, including regressions for the observed 36/40
+  and 44/60 false-green evidence and the verified 0/40 true-green release.
+- Confirmed normal full-system startup after removing duplicate ROS graph
+  publishers from earlier diagnostic sessions.
+
 ## full-system-v1.1.0
 
 Validated full-system release built on `full-system-mvp-v1.0.0`.
