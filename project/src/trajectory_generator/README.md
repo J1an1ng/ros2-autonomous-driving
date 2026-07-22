@@ -51,7 +51,7 @@ Configured by `config/trajectory_generator.yaml`.
 | `continuity_candidate_weight` | `0.5` | Initial weight of the new path in the continuity blend; clamped to `[0, 1]`. |
 | `max_continuity_deviation` | `2.0` | Maximum corresponding-point difference over the blend window. Larger path jumps or branch changes are used without blending. |
 | `default_speed` | `2.0` | Speed used before `/route/speed_limit` is received. |
-| `max_speed` | `10.0` | Maximum normal target speed (36 km/h); lower route limits still take priority at corners and intersections. |
+| `max_speed` | `14.0` | Maximum normal target speed (50.4 km/h); lower route limits still take priority at corners and intersections. |
 | `slow_speed` | `2.0` | Maximum commanded target speed in intersection states. |
 | `stop_speed` | `0.0` | Terminal target speed for `route_complete`. |
 

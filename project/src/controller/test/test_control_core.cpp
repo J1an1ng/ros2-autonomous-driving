@@ -61,7 +61,7 @@ TEST(ControlCore, SpeedControllerUsesThrottleBelowTarget)
 {
   controller::SpeedController controller(controller::SpeedControllerConfig{});
   const auto command = controller.update(4.0, 1.0, 0.1);
-  EXPECT_GT(command.throttle, 0.0);
+  EXPECT_DOUBLE_EQ(command.throttle, 0.5);
   EXPECT_DOUBLE_EQ(command.brake, 0.0);
 }
 

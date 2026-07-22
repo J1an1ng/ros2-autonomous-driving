@@ -1,5 +1,38 @@
 # Release notes
 
+## full-system-v1.3.0
+
+Route and performance update built on `full-system-v1.2.0`.
+
+Improvements:
+
+- Integrates the latest recorded route geometry and extends the mission from
+  waypoint 59 through waypoint 63, including matching segment and zone
+  metadata.
+- Retains the validated non-zero planning speed at dynamic traffic-light stop
+  waypoints 25, 32, 52, and 59 so a stable green can release the vehicle.
+- Aligns the trajectory-generator and controller built-in defaults with the
+  configured 14 m/s (50.4 km/h) straight-route ceiling while preserving lower
+  curve, intersection, traffic-light, and NPC-event limits.
+- Raises the maximum throttle command from 0.35 to 0.50 so the vehicle reaches
+  the intended route and event pace sooner without changing the maximum brake
+  command or safety-stop behavior.
+- Updates route, trajectory, and controller documentation for the new route
+  and runtime limits.
+
+Validation:
+
+- Validated all 64 waypoint IDs, required fields, segment bounds, and zone
+  references in the release route map.
+- Built all eight ROS 2 workspace packages successfully.
+- Passed the route, trajectory, decision, and controller functional tests.
+- Confirmed the launched trajectory generator loads `max_speed=14.0` and the
+  launched controller loads `maximum_target_speed=14.0` and
+  `maximum_throttle=0.50`.
+- Full closed-loop Unity validation of the new waypoint 60--63 extension
+  remains required; the existing Stage 6 benchmark evidence covers the prior
+  waypoint 0--59 route.
+
 ## full-system-v1.2.0
 
 Traffic-light safety release built on `full-system-v1.1.0`.

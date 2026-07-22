@@ -78,7 +78,7 @@ private:
     declare_parameter<double>("lookahead_min", 2.0);
     declare_parameter<double>("lookahead_max", 7.0);
     declare_parameter<double>("minimum_forward_distance", 0.2);
-    declare_parameter<double>("maximum_target_speed", 10.0);
+    declare_parameter<double>("maximum_target_speed", 14.0);
     declare_parameter<bool>("normalize_steering", true);
     declare_parameter<double>("steering_sign", 1.0);
     declare_parameter<double>("maximum_steering_angle", 0.52);
@@ -88,7 +88,7 @@ private:
     declare_parameter<double>("speed_kd", 0.02);
     declare_parameter<double>("speed_integral_limit", 2.0);
     declare_parameter<double>("speed_error_deadband", 0.05);
-    declare_parameter<double>("maximum_throttle", 0.35);
+    declare_parameter<double>("maximum_throttle", 0.50);
     declare_parameter<double>("maximum_brake", 1.0);
     declare_parameter<double>("safe_stop_brake", 1.0);
     declare_parameter<double>("path_timeout", 1.0);
@@ -351,7 +351,7 @@ private:
   double lookahead_min_{2.0};
   double lookahead_max_{7.0};
   double minimum_forward_distance_{0.2};
-  double maximum_target_speed_{10.0};
+  double maximum_target_speed_{14.0};
   double maximum_steering_rate_{2.0};
   double safe_stop_brake_{1.0};
   double path_timeout_{1.0};

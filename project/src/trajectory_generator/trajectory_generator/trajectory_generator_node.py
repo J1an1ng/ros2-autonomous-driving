@@ -39,8 +39,8 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter("continuity_candidate_weight", 0.5)
         self.declare_parameter("max_continuity_deviation", 2.0)
         self.declare_parameter("default_speed", 2.0)
-        self.declare_parameter("max_speed", 8.0)
-        self.declare_parameter("slow_speed", 2.0)
+        self.declare_parameter("max_speed", 14.0)
+        self.declare_parameter("slow_speed", 3.0)
         self.declare_parameter("stop_speed", 0.0)
 
         self.map_frame = self.get_parameter("map_frame").value

@@ -205,12 +205,12 @@ Defaults are stored in `config/controller.yaml`.
 | `lookahead_base` | `3.0` | Base Pure Pursuit lookahead in metres. |
 | `lookahead_speed_gain` | `0.5` | Additional lookahead per m/s. |
 | `lookahead_min`, `lookahead_max` | `2.0`, `7.0` | Lookahead bounds in metres. |
-| `maximum_target_speed` | `10.0` | Straight-line command ceiling in m/s; lower route, decision and event limits still take priority. |
+| `maximum_target_speed` | `14.0` | Straight-line command ceiling in m/s (50.4 km/h); lower route, decision and event limits still take priority. |
 | `steering_sign` | `-1.0` | Measured convention: positive Unity steering turns right, so Pure Pursuit is inverted. |
 | `maximum_steering_angle` | `0.52` | Model steering-angle limit in radians. |
 | `maximum_steering_rate` | `2.0` | Normalized steering change per second. |
 | `speed_kp`, `speed_ki`, `speed_kd` | `0.35`, `0.05`, `0.02` | Longitudinal PID gains. |
-| `maximum_throttle` | `0.35` | Conservative initial throttle ceiling. |
+| `maximum_throttle` | `0.50` | Maximum acceleration command; raised to reach event sections at the intended pace while speed limits remain authoritative. |
 | `maximum_brake` | `1.0` | PID brake ceiling. |
 | `safe_stop_brake` | `1.0` | Brake used for missing data and stop requests. |
 | `path_timeout` | `1.0` | Maximum path age in seconds. |

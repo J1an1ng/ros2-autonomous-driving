@@ -34,7 +34,7 @@ struct SpeedControllerConfig
   double kd{0.02};
   double integral_limit{2.0};
   double error_deadband{0.05};
-  double maximum_throttle{0.35};
+  double maximum_throttle{0.50};
   double maximum_brake{1.0};
 };
 
