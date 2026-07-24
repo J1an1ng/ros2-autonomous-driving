@@ -426,7 +426,7 @@ def test_unknown_boundary_stop_cancels_if_fresh_distance_is_outside_boundary():
     assert not resumed.stop_required
 
 
-def test_explicit_red_stop_cannot_cancel_for_green_before_standstill():
+def test_confirmed_green_cancels_red_stop_before_standstill():
     machine = make_machine(
         traffic_light_waypoint_ids=[25], traffic_light_stop_distance=4.0
     )
@@ -441,11 +441,11 @@ def test_explicit_red_stop_cannot_cancel_for_green_before_standstill():
     machine.update_planning_speed(3.0, 0.2)
     machine.update_vehicle_speed(0.8, 0.2)
     machine.update_traffic_light(TrafficLight.GREEN, 0.2)
-    still_stopping = machine.evaluate(0.2)
+    released = machine.evaluate(0.2)
 
-    assert still_stopping.state == DecisionState.STOPPING_FOR_LIGHT
-    assert still_stopping.target_speed == 0.0
-    assert still_stopping.stop_required
+    assert released.state == DecisionState.RELEASED
+    assert released.target_speed == pytest.approx(3.0)
+    assert not released.stop_required
 
 
 def test_stale_light_stops_at_allowlisted_controlled_waypoint():
@@ -558,6 +558,56 @@ def test_merge_vehicle_limits_speed_and_uses_hysteresis():
     assert released.target_speed == pytest.approx(6.0)
 
 
+def test_merge_latch_survives_measured_pointcloud_gap():
+    machine = make_machine(
+        obstacle_timeout=1.0,
+        merge_stale_timeout=3.0,
+        merge_trigger_distance=8.0,
+        merge_target_speed=2.5,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_obstacle_distances(float("inf"), 2.5, 0.0)
+    assert machine.evaluate(0.1).state == DecisionState.SLOWING_FOR_MERGE
+
+    # The focused Event2 trace contained a 2.291 s point-cloud gap. Retain the
+    # last safe merge limit through that bounded gap instead of accelerating.
+    machine.update_planning_speed(8.0, 2.3)
+    during_gap = machine.evaluate(2.3)
+
+    assert during_gap.state == DecisionState.SLOWING_FOR_MERGE
+    assert during_gap.target_speed == pytest.approx(2.5)
+
+
+def test_stale_merge_observation_fails_safe_until_fresh_clearance():
+    machine = make_machine(
+        obstacle_timeout=1.0,
+        merge_stale_timeout=3.0,
+        merge_trigger_distance=8.0,
+        merge_target_speed=2.5,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_obstacle_distances(float("inf"), 2.5, 0.0)
+    machine.evaluate(0.1)
+
+    machine.update_planning_speed(8.0, 3.1)
+    stale = machine.evaluate(3.1)
+
+    assert stale.state == DecisionState.SLOWING_FOR_MERGE
+    assert stale.target_speed == 0.0
+    assert stale.stop_required
+    assert stale.reason == "merge_obstacle_stale_stop"
+
+    machine.update_planning_speed(8.0, 3.2)
+    machine.update_obstacle_distances(float("inf"), float("inf"), 3.2)
+    cleared = machine.evaluate(3.2)
+
+    assert cleared.state == DecisionState.CRUISE
+    assert cleared.target_speed == pytest.approx(8.0)
+    assert not cleared.stop_required
+
+
 def test_emergency_braking_has_priority_over_traffic_and_merge():
     machine = make_machine(emergency_min_distance=4.0, merge_target_speed=2.0)
     machine.update_route("stop_zone", 25)
@@ -611,6 +661,38 @@ def test_emergency_releases_only_after_clear_margin():
     released = machine.evaluate(0.3)
     assert released.state == DecisionState.CRUISE
     assert released.target_speed == pytest.approx(5.0)
+
+
+def test_emergency_does_not_release_before_complete_stop():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_release_margin=2.0,
+        merge_trigger_distance=8.0,
+        merge_target_speed=2.5,
+    )
+    machine.update_route("normal", 48)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(2.0, 0.0)
+    machine.update_obstacle_distances(3.0, 3.0, 0.0)
+    assert machine.evaluate(0.1).state == DecisionState.EMERGENCY_BRAKING
+
+    # Event2 moved from the front corridor into the merge corridor while the
+    # car was still moving. A fresh front=inf sample must not release braking
+    # until measured speed confirms a complete stop.
+    machine.update_planning_speed(8.0, 0.2)
+    machine.update_vehicle_speed(1.5, 0.2)
+    machine.update_obstacle_distances(float("inf"), 2.3, 0.2)
+    still_braking = machine.evaluate(0.2)
+
+    assert still_braking.state == DecisionState.EMERGENCY_BRAKING
+    assert still_braking.target_speed == 0.0
+    assert still_braking.stop_required
+
+    machine.update_vehicle_speed(0.1, 0.3)
+    stopped = machine.evaluate(0.3)
+
+    assert stopped.state == DecisionState.SLOWING_FOR_MERGE
+    assert stopped.target_speed == pytest.approx(2.5)
 
 
 def test_stale_emergency_observation_remains_fail_safe():

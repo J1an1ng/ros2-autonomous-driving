@@ -1,8 +1,8 @@
-# Team 20 Integration and Simulation Plan
+# Team 20 Integration and Simulation Baseline
 
-This document is the source of truth for integration work on the `temp_inte` branch. Before
-starting or changing any stage, check its entry criteria, test procedure, pass criteria,
-and required evidence here. Update the status table and test log after completing a stage.
+This document is the source of truth for the integrated system on the
+`release/full-system-v1.4.0` branch. It defines the system contract, validation procedure,
+current acceptance state, and remaining limitations.
 
 The final objective follows the assignment: start from benchmark spawn position 0, drive
 the predefined urban route without leaving the road or colliding, obey four dynamic traffic
@@ -16,13 +16,32 @@ one launch file.
 | 0 | Integration entry point and configuration | Passed | Build, unit tests, safe headless launch; see test log |
 | 1 | Simulation bridge and sensor/TF contract | Passed | Unity bridge, sensor/TF, and low-amplitude command checks; see test log |
 | 2 | Low-speed controller validation | Passed | Straight/curve tracking and six safety injections; see test log |
-| 3 | Route, trajectory, and no-event closed loop | Passed | Full route and waypoint-52 regression; see test log |
+| 3 | Route, trajectory, and no-event closed loop | Passed | Complete 0--63 route and safety-critical corner regressions |
 | 4 | Perception pipeline and traffic-light sensing | Passed | Maps, ROI regression, four traffic lights, stale-frame guard; see test log |
-| 5 | Decision making and individual events | Passed | Accepted with documented limitation: Event2 triggers, but its NPC does not perform the planned emergency-brake maneuver |
-| 6 | Full benchmark and repeatability | Passed | Three consecutive all-event missions, bags, metrics and plots; see Stage 6 completion |
+| 5 | Decision making and individual events | Passed | Event1 merge handling, Event2 emergency full stop, stale-obstacle fail-safe, and four traffic signals |
+| 6 | Full benchmark and repeatability | Passed | Earlier three-run benchmark plus current 0--63 all-event closed-loop validation |
 
 Status values are `Not started`, `In progress`, `Blocked`, and `Passed`. A later stage must
 not be marked `Passed` while an earlier required stage is blocked.
+
+### Current integrated baseline
+
+- One `full_system.launch.py` invocation starts Unity, the bridge, TF, perception, route
+  management, trajectory generation, decision making, control, OctoMap, and visualization.
+- The production route contains 64 waypoints indexed 0--63. Its final extension passes the
+  last signal and reaches the required goal; the safety-critical corners at 33--35 and
+  39--42 use the validated geometry and reduced 3/2 m/s speed limits.
+- Traffic-light detection uses RGB plus semantic gating. Mixed red/green evidence requires
+  four consecutive green frames; unambiguous green uses two frames. Confirmed green cancels
+  an in-progress traffic-light stop without requiring an artificial standstill.
+- A fresh merge obstacle limits speed to 2.5 m/s. A short obstacle-data gap retains that
+  limit; a latched observation older than `merge_stale_timeout` commands zero speed until a
+  fresh clear observation arrives. Emergency braking remains latched until fresh clearance
+  and measured standstill.
+- The accepted all-event run completed waypoint0--63 in 487.410 s with a maximum measured
+  speed of 4.403 m/s. Event2 entered emergency braking at 3.412 m and released at
+  0.034 m/s. No collision, road departure, runtime node death, or simultaneous throttle and
+  brake command was observed.
 
 ## System contract
 
@@ -977,78 +996,51 @@ Add concise entries in chronological order.
   `RCLError` occurred after Ctrl-C and is teardown-only, not a runtime test failure. The temporary
   simulator configuration was restored to spawn0 with both optional events disabled.
 
-### Stage 5 acceptance decision
+### Final integration acceptance
 
-- Date: 2026-07-17.
-- Stage 5 is accepted as complete for integration. The project owner explicitly waived the
-  remaining focused Event2 and final-profile waypoint25 red-phase tests after reviewing the
-  successful all-event full-route run.
-- Event2 generation, rendering, trigger, merge slowdown, clearance, and route continuation are
-  verified. Its Unity NPC does not execute the planned brake-in-lane maneuver, so no corresponding
-  ego `EMERGENCY_BRAKING` transition can be claimed. This remains a documented scenario limitation
-  and must be reported in Stage 6 evidence rather than represented as a passed emergency-brake test.
+The accepted production configuration uses spawn0, route index0, both Unity NPC events,
+all production ROS nodes, and `enable_motion=true`. The route contains waypoints 0--63.
 
-### Stage 6 completion
+- The complete graph starts from one launch file. Before motion, the readiness gate verifies
+  one `/car_command` publisher, valid `world -> OurCar/INS` TF, a non-empty world-frame
+  planning path, fresh vehicle/decision inputs, and full braking while motion is disabled.
+- The route traverses both safety-critical corners without kerb contact and continues through
+  the final signal to waypoint63. The final closed-loop mission completed in 487.410 s;
+  maximum and mean measured speeds were 4.403 and 2.290 m/s.
+- All four controlled intersections stop on red or unknown-at-boundary evidence and resume on
+  confirmed green. At the final signal, stable green released the decision latch in 8 ms;
+  speed remained at or above 1.574 m/s during the brief stop request, so no unnecessary
+  standstill occurred.
+- Event1 produces merge slowdown and recovery. During Event2, a stale obstacle interval at
+  waypoint47 commanded zero rather than restoring cruise. Fresh data resumed the 2.5 m/s
+  merge limit, and a 3.412 m front obstacle triggered `EMERGENCY_BRAKING`. The emergency
+  latch released only after speed reached 0.034 m/s. Minimum recorded Event2 front and merge
+  distances were 2.696 and 2.298 m.
+- No collision, road departure, manual intervention, runtime process death, path failure
+  before route completion, or simultaneous non-zero throttle/brake command was observed.
+  The maximum twist gap was 2.857 s; the controller entered its documented safe stop and
+  recovered. Decision output remained continuous with a maximum 0.066 s gap.
+- The current production packages build successfully. The aggregate result is 101 tests,
+  zero errors, one failure, and one skip. The only failure is the existing route-manager
+  flake8 check with 260 style findings; all functional, route-geometry, and traffic-light
+  stability tests pass.
+- The accepted MCAP is
+  `/tmp/full_route_final_fix_20260724/full_route_final_fix_20260724_0.mcap`
+  (8.6 MiB, 87,960 messages, 515.815 s including startup and post-completion capture).
+  Runtime logs are under
+  `~/.ros/log/2026-07-24-22-41-34-139334-localhost-61094/`.
 
-- Date: 2026-07-17.
-- Branch: `temp_inte`; benchmark baseline commit: `bfc5c00` (`Complete Stage 5
-  integration validation`). The three benchmark runs used that identical functional
-  configuration: spawn0, route index0, both Unity NPC events enabled, all production nodes,
-  and `enable_motion=true`.
-- A fresh out-of-tree build installed all seven functional packages successfully in
-  `/tmp/team20_stage6_bfc5c00`. All 72 decision/route/trajectory Python functional tests and
-  all 10 controller-core GTests passed. The only clean-workspace test failure was the
-  pre-existing route-manager flake8
-  test, which reports 260 formatting/import-order findings in existing Python files; no
-  functional test failed and Stage 6 did not mass-reformat unrelated code.
-- The pre-motion readiness gate passed with exactly one `/car_command` publisher, valid
-  `world -> OurCar/INS` TF, a non-empty `world` planning path, fresh twist and decision
-  inputs, and full braking while motion was disabled. Approximate healthy rates were
-  24--25 Hz twist, 9.9 Hz planning path, and 19.6 Hz decision output.
-- Three consecutive full missions were recorded without manual intervention. Each traversed
-  waypoints 0--59 and entered `route_complete`; no collision or road departure was observed,
-  no runtime node died, no path rejection/fallback occurred, and no command contained
-  simultaneous non-zero throttle and brake.
+### Remaining limitations
 
-  | Run | Mission time | Max / mean speed | Tracking RMSE / p95 | Event1 min merge | Event2 min merge | Result |
-  | --- | ---: | ---: | ---: | ---: | ---: | --- |
-  | 1 | 648.845 s | 3.155 / 1.697 m/s | 0.7563 / 2.0004 m | 2.437 m | 2.444 m | Complete |
-  | 2 | 651.614 s | 3.162 / 1.752 m/s | 0.7775 / 2.1516 m | 2.377 m | 2.443 m | Complete |
-  | 3 | 651.287 s | 3.153 / 1.625 m/s | 0.7440 / 2.0827 m | 2.438 m | 2.394 m | Complete |
-
-- All phase-aligned red signals produced a complete stop and stable green released the
-  vehicle. Recorded stop distances were 3.69--3.97 m at waypoint32, 3.74--3.92 m at
-  waypoint52, and 3.70--3.83 m at waypoint59. Waypoint25 was green on these deterministic
-  runs and released on approach. No permanent traffic-light latch recurred.
-- Both NPC regions produced finite right-front evidence, selected `SLOWING_FOR_MERGE`, and
-  released so the route could continue. Short nuisance merge slowdowns from static roadside
-  geometry also occurred (15--20 state entries per run) but all self-released.
-- Event2 retains the Stage 5 scenario limitation: all three bags have no finite front-path
-  obstacle at waypoints45--49 and no `EMERGENCY_BRAKING` entry. The Unity actor therefore did
-  not execute the assignment's intended brake-in-lane maneuver. Stage 6 verifies collision-
-  free handling of the event behavior actually generated, but does not claim a passed NPC
-  emergency-brake test.
-- Serialized Unity input occasionally produced long twist gaps (12.11--14.20 s maxima,
-  principally startup or sensor-stream pauses). The controller entered its documented safe
-  stop and recovered automatically when data resumed. Run2 also had an approximately 17 s
-  startup TF delay and recovered without intervention; planning-path and decision-output
-  maximum gaps during the recorded missions remained below 0.226 s and 0.097 s.
-- The raw evidence remains outside Git because the three MCAP bags total approximately
-  119 MiB: `/tmp/team20_stage6_evidence/run{1,2,3}/bag`, with matching ROS logs in each run
-  directory. Reproducible summary data and six SVG plots are committed under
-  `project/stage6_results/`; `project/tools/analyze_stage6_bags.py` regenerates them.
-- The three recorded runs exposed four Python `process has died` messages only after
-  `route_complete` during teardown. The affected entry points now tolerate Jazzy external
-  shutdown/context invalidation and use `rclpy.try_shutdown()`. A fresh full-stack restart
-  confirmed all four remain alive, receive simulation data, and later report
-  `process has finished cleanly`, with no traceback or `process has died`. The complete stack
-  still takes longer than launch's five-second SIGINT grace period and is then terminated
-  cleanly by SIGTERM; this shutdown latency affects Unity, TF and C++ nodes too and remains a
-  non-functional cleanup limitation.
-- This stage used an extracted official Jazzy rosbag2 overlay in `/tmp/rosbag_overlay`
-  because rosbag2 was absent from the system installation and sudo was unavailable. For a
-  normal machine setup, install `ros-jazzy-rosbag2` before reproducing the recordings.
-- **Stage 6 status:** passed with the explicit Event2 scenario and shutdown-latency
-  limitations above. The assignment route, traffic-light behavior, collision-free
-  repeatability, single-launch startup, controller safety, and evidence-generation goals
-  are demonstrated in three consecutive end-to-end missions.
+- Roadside geometry can still create conservative merge slowdowns. One stale-stop at
+  waypoint56 lasted 0.248 s and recovered on the next fresh sample.
+- Unity serializes sensor streams, so occasional vehicle-state gaps can trigger the intended
+  controller safe stop. Removing the freshness checks is not an acceptable workaround.
+- After `route_complete`, the single-point terminal path can produce a benign
+  fewer-than-two-points fallback warning while zero target speed holds the vehicle.
+- RViz may report an indexed-image shader warning and OctoMap may report empty-map startup
+  warnings. These do not affect vehicle behavior.
+- Unity can exceed launch's five-second SIGINT grace period and then exits on SIGTERM; every
+  ROS node exits cleanly.
+- Route-manager flake8 remains the only test-suite failure. It is formatting debt rather than
+  a functional integration failure.

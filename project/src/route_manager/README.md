@@ -114,11 +114,12 @@ traffic-light stop zones (IDs 25, 32, 52, and 59) use a conservative 3 m/s
 approach speed instead: the decision node owns the red/yellow stop. Keeping a
 non-zero planning speed at those waypoints lets the vehicle leave the stop
 zone after a stable green release and prevents a route-progress deadlock.
-The waypoint32 T-junction uses the latest rounded waypoint33--35 geometry and
-returns to an 8 m/s route limit after the controlled stop. The event
-intersection uses the updated waypoint39--42 samples, and the road-end turn
-uses the updated waypoint47--50 samples to keep the local path aligned with the
-recorded route through both bends.
+The waypoint32 T-junction uses the validated waypoint33--35 geometry and a
+3 m/s limit through the turn before returning to the normal limit at
+waypoint36. The event intersection uses the validated waypoint39--42 samples
+and a 2 m/s corner limit. The road-end turn uses the updated waypoint47--50
+samples to keep the local path aligned with the recorded route through both
+bends.
 
 Waypoints60--63 extend the route beyond the final traffic-light stop at
 waypoint59 and complete the turn back toward the starting area. The route map

@@ -40,6 +40,10 @@ traffic_light_state_machine_node:
     # The Unity depth pipeline runs at roughly 2.5 Hz. Leave enough margin so
     # one normal frame interval cannot clear and re-latch merge behavior.
     obstacle_timeout: 1.0
+    # Retain the merge speed through short stream stalls. If the gap exceeds
+    # this bound, fail safe to zero until fresh evidence proves the corridor
+    # clear; never restore route speed from an expired obstacle sample.
+    merge_stale_timeout: 3.0
     emergency_min_distance: 4.0
     emergency_reaction_time: 0.5
     emergency_deceleration: 5.0

@@ -87,6 +87,13 @@ ros2 launch simulation simulation.launch.py \
   config_file:=/path/to/simulation_config.json
 ```
 
+The bundled Unity player resolves `AD_Sim_Data/StreamingAssets/simulation_config.json`
+relative to its executable and cannot consume an arbitrary ROS launch path directly.
+The launch file therefore creates a lightweight temporary runtime overlay, copies the
+selected config into the expected relative location, and symlinks the large unchanged Unity
+assets. The overlay is removed when Unity exits. The installed/source config is never
+rewritten, so focused test settings cannot leak into a later normal launch.
+
 The TCP receiver binds to `127.0.0.1` by default and reads the sensor port from
 `sensorConfig.port` if a config file exists. This is the safe default for the bundled local
 Unity process. When Unity runs on another machine, expose the receiver explicitly:

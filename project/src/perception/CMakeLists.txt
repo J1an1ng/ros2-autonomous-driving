@@ -18,12 +18,22 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 add_executable(traffic_light_detector_node src/traffic_light_detector_node.cpp)
+target_include_directories(traffic_light_detector_node PRIVATE include)
 ament_target_dependencies(
   traffic_light_detector_node
   rclcpp
   sensor_msgs
   std_msgs
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(
+    test_traffic_light_stability_filter
+    test/test_traffic_light_stability_filter.cpp
+  )
+  target_include_directories(test_traffic_light_stability_filter PRIVATE include)
+endif()
 
 add_executable(occupancy_map_node src/occupancy_map_node.cpp)
 ament_target_dependencies(

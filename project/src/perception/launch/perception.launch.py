@@ -80,6 +80,12 @@ def generate_launch_description():
                 'state_topic': '/perception/traffic_light_state',
                 'debug_topic': '/perception/traffic_light_debug',
                 'max_semantic_stamp_delta_s': 1.0,
+                # Preserve four-frame filtering for ambiguous green evidence,
+                # but accept two consecutive strong green observations.
+                'consecutive_frames': 4,
+                'confident_green_frames': 2,
+                'confident_green_max_red_score': 4,
+                'confident_green_min_score': 20,
                 # Treat vertically separated high/low lamps for the same
                 # approach as one group while excluding other road approaches.
                 'target_light': 'signal_group',

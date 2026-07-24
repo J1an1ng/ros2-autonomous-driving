@@ -76,7 +76,7 @@ from their source frame into `OurCar/INS`, and publishes the two distance topics
 | `/decision/target_speed` | `std_msgs/msg/Float32` | controller | Final permitted target speed in m/s. The controller should use this instead of `/planning/target_speed`. |
 | `/decision/state` | `std_msgs/msg/String` | diagnostics | Current state-machine state name. |
 | `/decision/stop_required` | `std_msgs/msg/Bool` | controller/diagnostics | `true` while a traffic-light stop is latched. |
-| `/decision/debug` | `std_msgs/msg/String` | diagnostics | Compact description of the current state, reason, route context, light and speed output. |
+| `/decision/debug` | `std_msgs/msg/String` | diagnostics | Compact description of the current state, reason, route context, light, obstacle age, latch states, and speed output. |
 
 The controller should treat `/decision/target_speed == 0.0` or
 `/decision/stop_required == true` as a request to stop. The exact conversion to throttle
@@ -88,11 +88,11 @@ and brake remains the controller's responsibility.
 | --- | --- | --- |
 | `CRUISE` | Pass through the fresh planning speed. | Enter `APPROACHING_INTERSECTION` in a configured route state/waypoint. |
 | `APPROACHING_INTERSECTION` | Unknown/stale data and a remembered red/yellow are limited to `unknown_light_approach_speed` while a fresh waypoint distance remains outside the applicable stop boundary. | At/before the boundary, unknown/stale data or a remembered red/yellow enters `STOPPING_FOR_LIGHT`; continuously fresh green with no pending red/yellow grants one passage and enters `RELEASED`. |
-| `STOPPING_FOR_LIGHT` | Publish zero target speed and latch the stop even if route manager advances. | A fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
+| `STOPPING_FOR_LIGHT` | Publish zero target speed and retain the stop even if route manager advances. | Confirmed green cancels braking; otherwise a fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
 | `WAITING_FOR_GREEN` | Continue publishing zero. Unknown, red, yellow or stale light data cannot release the stop. | A continuously fresh green signal for `green_release_delay` enters `RELEASED`. |
 | `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
-| `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. | Release after the obstacle exceeds the trigger distance plus its hysteresis margin. |
-| `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Release only after a fresh front distance exceeds the speed-dependent stopping distance plus its hysteresis margin. |
+| `SLOWING_FOR_MERGE` | Limit speed to `merge_target_speed` while merge data is fresh or briefly unavailable. A gap beyond `merge_stale_timeout` commands zero. | Release only after fresh clearance evidence. |
+| `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Release only when fresh front clearance and a fresh measured standstill are both present. |
 
 `SLOWING_FOR_MERGE` and `EMERGENCY_BRAKING` are output behavior states. The underlying
 traffic-light state remains active, so an emergency cannot accidentally clear a red-light
@@ -117,11 +117,11 @@ still approaching, so a signal that legitimately leaves the camera field of view
 the hard boundary does not turn back into UNKNOWN braking.
 
 An associated red/yellow is remembered at first recognition. Instead of stopping at the
-camera-recognition distance, the vehicle continues at the bounded 1 m/s approach speed and
-brakes at `traffic_light_stop_distance`. That explicit stop remains latched until the
-vehicle has completely stopped, even if the signal turns green during the final approach.
-A boundary stop caused only by UNKNOWN may be cancelled before standstill by a stable
-green, or by a fresh distance proving that the hard stop boundary is still ahead.
+camera-recognition distance, the vehicle continues at the bounded approach speed and
+brakes at `traffic_light_stop_distance`. A subsequently confirmed green cancels braking
+before standstill; a stale, unknown, red, or yellow observation cannot. A boundary stop
+caused only by UNKNOWN may also be cancelled by a fresh distance proving that the hard
+stop boundary is still ahead.
 
 ## Safety and timeout behavior
 
@@ -135,8 +135,11 @@ green, or by a fresh distance proving that the hard stop boundary is still ahead
   vehicle. This is necessary because the detector reports `UNKNOWN` during normal driving.
 - Non-finite planning and speed values are ignored.
 - Yellow is treated as red by default and can be configured otherwise.
-- Emergency braking remains latched if obstacle data becomes stale after a hazard was seen.
-- A stale merge observation is cleared so it cannot restrict vehicle speed forever.
+- Emergency braking remains latched if obstacle data becomes stale after a hazard was seen,
+  and cannot release until the vehicle has reached a fresh measured standstill.
+- A latched merge observation survives short obstacle-stream gaps. If the gap exceeds
+  `merge_stale_timeout`, the decision target becomes zero until a fresh observation
+  explicitly clears the merge corridor.
 - Emergency distance is the greater of `emergency_min_distance` and
   `speed * reaction_time + speed^2 / (2 * deceleration)`.
 
@@ -167,7 +170,8 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `unknown_light_approach_speed` | `1.0` | Maximum approach speed outside that boundary while the light is unknown/stale, in m/s. |
 | `traffic_light_stop_distance` | `4.0` | Stop boundary for an associated red/yellow. The colour is latched when first seen, but the car creeps toward this boundary before braking. |
 | `traffic_light_activation_distance` | `20.0` | Maximum distance at which a detected colour is associated with the current controlled waypoint; farther colours are treated as unrelated. |
-| `obstacle_timeout` | `1.0` | Maximum accepted age of obstacle distances. The margin covers the approximately 2.5 Hz Unity depth pipeline without merge-latch oscillation. |
+| `obstacle_timeout` | `1.0` | Maximum age for treating an obstacle distance as a fresh observation. |
+| `merge_stale_timeout` | `3.0` | Maximum age for retaining the non-zero merge speed. An older latched observation fails safe to zero until fresh clearance arrives. |
 | `emergency_min_distance` | `4.0` | Minimum front-obstacle emergency distance, in metres. |
 | `emergency_reaction_time` | `0.5` | Reaction-time term in the dynamic stopping distance, in seconds. |
 | `emergency_deceleration` | `5.0` | Assumed available deceleration in the stopping-distance model, in m/s². |
@@ -239,7 +243,9 @@ The tests cover:
 - merge-speed limiting and release hysteresis;
 - speed-dependent emergency braking;
 - behavior priority when traffic-light, merge and emergency events overlap;
-- emergency release hysteresis and stale-data fail-safe behavior.
+- emergency release hysteresis, stale-data fail-safe behavior, and the full-stop release
+  requirement;
+- bounded merge-latch retention across measured point-cloud gaps.
 
 ### Manual ROS topic test
 

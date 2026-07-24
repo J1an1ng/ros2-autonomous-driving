@@ -42,6 +42,7 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("traffic_light_stop_distance", 4.0)
         self.declare_parameter("traffic_light_activation_distance", 20.0)
         self.declare_parameter("obstacle_timeout", 0.5)
+        self.declare_parameter("merge_stale_timeout", 3.0)
         self.declare_parameter("emergency_min_distance", 4.0)
         self.declare_parameter("emergency_reaction_time", 0.5)
         self.declare_parameter("emergency_deceleration", 5.0)
@@ -102,6 +103,7 @@ class TrafficLightStateMachineNode(Node):
                 "traffic_light_activation_distance"
             ).value,
             obstacle_timeout=self.get_parameter("obstacle_timeout").value,
+            merge_stale_timeout=self.get_parameter("merge_stale_timeout").value,
             emergency_min_distance=self.get_parameter("emergency_min_distance").value,
             emergency_reaction_time=self.get_parameter("emergency_reaction_time").value,
             emergency_deceleration=self.get_parameter("emergency_deceleration").value,
@@ -237,7 +239,13 @@ class TrafficLightStateMachineNode(Node):
         )
 
     def timer_callback(self) -> None:
-        output = self.machine.evaluate(self.now_seconds())
+        now = self.now_seconds()
+        output = self.machine.evaluate(now)
+        obstacle_age = (
+            math.inf
+            if self.machine.obstacle_time is None
+            else max(0.0, now - self.machine.obstacle_time)
+        )
 
         speed_msg = Float32()
         speed_msg.data = output.target_speed
@@ -261,6 +269,9 @@ class TrafficLightStateMachineNode(Node):
             f"{self.machine.traffic_light_green_score} "
             f"front_distance={self.machine.front_obstacle_distance:.3f} "
             f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
+            f"obstacle_age={obstacle_age:.3f} "
+            f"emergency_latched={self.machine.emergency_latched} "
+            f"merge_latched={self.machine.merge_latched} "
             f"target_speed={output.target_speed:.3f}"
         )
         self.debug_pub.publish(debug_msg)

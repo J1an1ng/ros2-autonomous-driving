@@ -60,6 +60,7 @@ class TrafficLightStateMachine:
         traffic_light_stop_distance: float = 4.0,
         traffic_light_activation_distance: float = 20.0,
         obstacle_timeout: float = 0.5,
+        merge_stale_timeout: float = 3.0,
         emergency_min_distance: float = 4.0,
         emergency_reaction_time: float = 0.5,
         emergency_deceleration: float = 5.0,
@@ -109,6 +110,9 @@ class TrafficLightStateMachine:
             float(traffic_light_activation_distance),
         )
         self.obstacle_timeout = max(0.0, float(obstacle_timeout))
+        self.merge_stale_timeout = max(
+            self.obstacle_timeout, float(merge_stale_timeout)
+        )
         self.emergency_min_distance = max(0.0, float(emergency_min_distance))
         self.emergency_reaction_time = max(0.0, float(emergency_reaction_time))
         self.emergency_deceleration = max(1e-3, float(emergency_deceleration))
@@ -298,16 +302,18 @@ class TrafficLightStateMachine:
 
         elif self.state == DecisionState.STOPPING_FOR_LIGHT:
             if stop_signal:
-                # Once an explicit red/yellow has requested a stop, retain the
-                # assignment-required complete stop even if the phase changes
-                # while the vehicle is braking.
+                # Retain a red/yellow request until a confirmed green replaces
+                # it. The detector has already debounced green before it
+                # reaches this state machine.
                 self.signal_stop_latched = True
-            if not self.signal_stop_latched and green_signal:
-                # An UNKNOWN-only boundary stop can be cancelled by a stable
-                # green before standstill; forcing a second green cycle would
-                # create an artificial deadlock after a brief missed frame.
+            if green_signal:
+                # A traffic signal grants passage as soon as green is
+                # confirmed. Forcing a complete stop because red was seen
+                # earlier made the vehicle brake on a visibly green phase.
                 self.state = DecisionState.RELEASED
                 self.latched_waypoint_id = None
+                self.signal_stop_latched = False
+                self.signal_stop_pending = False
                 self.green_since = None
             elif not self.signal_stop_latched and unknown_light_approach:
                 # Route topics are independent ROS messages. If a fresh
@@ -346,13 +352,26 @@ class TrafficLightStateMachine:
             current_speed * self.emergency_reaction_time
             + current_speed * current_speed / (2.0 * self.emergency_deceleration),
         )
+        merge_obstacle_stale_stop = False
         if obstacle_fresh:
             if self.front_obstacle_distance <= emergency_distance:
                 self.emergency_latched = True
             elif self.front_obstacle_distance >= (
                 emergency_distance + self.emergency_release_margin
             ):
-                self.emergency_latched = False
+                # Once emergency braking starts, require a fresh measured
+                # standstill before releasing. Event2 can move from the front
+                # corridor into the merge corridor while the car is still
+                # moving; releasing on that single front=inf sample caused
+                # throttle to resume before the required complete stop.
+                if (
+                    not self.emergency_latched
+                    or (
+                        speed_fresh
+                        and self.vehicle_speed <= self.stopped_speed_threshold
+                    )
+                ):
+                    self.emergency_latched = False
 
             if self.merge_obstacle_distance <= self.merge_trigger_distance:
                 self.merge_latched = True
@@ -361,9 +380,18 @@ class TrafficLightStateMachine:
             ):
                 self.merge_latched = False
         else:
-            # A stale merge observation must not limit the car forever. Emergency
-            # braking stays latched on stale data and therefore fails safe.
-            self.merge_latched = False
+            # Keep a previously observed merging vehicle until a fresh sample
+            # proves the corridor is clear. Short gaps retain the merge speed;
+            # a longer gap fails safe to a stop instead of restoring cruise.
+            obstacle_age = (
+                now - self.obstacle_time
+                if self.obstacle_time is not None
+                else math.inf
+            )
+            merge_obstacle_stale_stop = (
+                self.merge_latched
+                and not 0.0 <= obstacle_age <= self.merge_stale_timeout
+            )
 
         traffic_stop_required = self.state in (
             DecisionState.STOPPING_FOR_LIGHT,
@@ -384,6 +412,11 @@ class TrafficLightStateMachine:
             output_state = self.state
             stop_required = True
             reason = "traffic_light_stop_latched"
+        elif merge_obstacle_stale_stop:
+            target_speed = 0.0
+            output_state = DecisionState.SLOWING_FOR_MERGE
+            stop_required = True
+            reason = "merge_obstacle_stale_stop"
         elif self.merge_latched and planning_fresh:
             target_speed = min(permitted_speed, self.merge_target_speed)
             output_state = DecisionState.SLOWING_FOR_MERGE

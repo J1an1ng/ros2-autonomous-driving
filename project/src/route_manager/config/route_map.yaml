@@ -270,23 +270,23 @@ waypoints:
   y: 3.661
   z: 0.822
   yaw_deg: 165.745
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_approach
 - id: 34
-  x: 123.747
-  y: 8.293
+  x: 127.000
+  y: 3.700
   z: 0.825
-  yaw_deg: 132.882
-  speed_limit: 8
+  yaw_deg: 150.000
+  speed_limit: 3
   segment_id: 0
   type: curve_mid
 - id: 35
-  x: 124.346
+  x: 123.747
   y: 8.864
   z: 0.825
   yaw_deg: 94.822
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_exit
 - id: 36
@@ -314,35 +314,35 @@ waypoints:
   segment_id: 0
   type: intersection_approach
 - id: 39
-  x: 124.192
-  y: 47.259
+  x: 123.700
+  y: 45.500
   z: 0.822
-  yaw_deg: 89.559
-  speed_limit: 3
+  yaw_deg: 105.000
+  speed_limit: 2
   segment_id: 0
   type: intersection
 - id: 40
-  x: 118.965
-  y: 52.874
+  x: 122.000
+  y: 48.500
   z: 0.823
-  yaw_deg: 137.028
-  speed_limit: 8
+  yaw_deg: 125.000
+  speed_limit: 2
   segment_id: 0
   type: curve_mid
 - id: 41
-  x: 118.238
-  y: 52.652
+  x: 119.000
+  y: 50.800
   z: 0.822
-  yaw_deg: 163.92
-  speed_limit: 8
+  yaw_deg: 155.000
+  speed_limit: 2
   segment_id: 0
   type: curve_mid
 - id: 42
-  x: 114.305
-  y: 52.684
+  x: 114.500
+  y: 52.000
   z: 0.827
-  yaw_deg: 179.954
-  speed_limit: 14
+  yaw_deg: 178.000
+  speed_limit: 2
   segment_id: 0
   type: curve_exit
 - id: 43
