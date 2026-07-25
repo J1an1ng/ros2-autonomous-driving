@@ -2,7 +2,7 @@
 
 更新日期：2026-07-25
 
-版本目标：`full-system-v1.5.0`
+版本目标：`full-system-v1.6.0`
 
 ## 1. 当前结论
 
@@ -18,7 +18,7 @@ eventEnable: [true, true]
 route_initial_waypoint_index: 0
 ```
 
-2026-07-25 完成了两轮端到端验证：
+2026-07-25 在 v1.5.0 上完成了两轮端到端验证：
 
 - 无事件基线从 waypoint 0 行驶到 63，未进入 `FOLLOWING_VEHICLE`、
   `EMERGENCY_BRAKING` 或非预期的 `SLOWING_FOR_MERGE`。
@@ -29,6 +29,14 @@ route_initial_waypoint_index: 0
 
 两轮均未观察到碰撞、驶离道路、车辆行为残留制动或需要人工接管的情况。当前版本可
 作为演示、验收和后续场景扩展的生产基线。
+
+v1.6.0 安全修改及独立 merge 新鲜度修复合入后完成了双事件 waypoint 0--63
+回归。最新路线调整只保留 waypoint 33--35 的安全转弯几何，waypoint 39--42
+保持 v1.5.0 的几何和速度配置。调整后的 waypoint 39 到 43 用时 6.805 秒，低速
+方案为 9.505 秒；实测平均速度从 1.867 m/s 提升到 2.859 m/s。最新整路线
+rosbag 记录用时 370.258 秒；四个受控交通灯均停车并释放，事件区正常进入动态
+跟车，且没有紧急制动、油门/刹车同时输出、运行期进程死亡或路线完成前的 path
+fallback。
 
 ## 2. 已完成的系统功能
 
@@ -43,6 +51,8 @@ route_initial_waypoint_index: 0
 ### 路线、轨迹与控制
 
 - 路线覆盖 waypoint 0--63，并支持终点停车。
+- waypoint 33--35 保留闭环验证过的安全转弯几何和低速限制；waypoint 39--42
+  保持 v1.5.0 的几何和更快速度配置。
 - route manager 支持 waypoint 到达/越过判断、重复点连续推进、局部路线窗口和
   `route_complete`。
 - trajectory generator 生成平滑、受 waypoint 朝向约束的局部路径，并拒绝不合理
@@ -56,7 +66,10 @@ route_initial_waypoint_index: 0
 - 交通灯检测融合 RGB 灯色与 semantic 交通灯区域，包含组件选择、去抖、时间戳
   新鲜度和相邻信号排除。
 - waypoint 25、32、52、59 四处受控交通灯均已验证红灯停车和稳定绿灯释放。
-- 决策保留红灯停车锁存，UNKNOWN 或过期灯色不能错误释放已经确认的停车。
+- 强绿灯连续两帧即可确认，混合红绿证据仍需四帧；红、黄或 UNKNOWN 会立即撤销
+  绿灯许可。
+- 决策保留红灯停车锁存，但感知层已确认的绿灯可立即解除该锁存；UNKNOWN 或过期
+  灯色不能错误释放已经确认的停车。
 - 路口接近速度和硬停车边界分离，避免远距离过早停车。
 
 ### 车辆语义检测
@@ -88,15 +101,21 @@ route_initial_waypoint_index: 0
   停止。
 - 右前方汇入行为仅允许在 waypoint 43--48 触发，其他路段的横向车辆不会触发该
   专用状态。
+- 汇入障碍锁存在普通点云缺帧期间保持；观测超过 3 秒后进入
+  `merge_obstacle_stale_stop`，并且只能由新鲜安全观测解除。
+- 前车和汇入障碍分别维护新鲜度；只有真实汇入点云样本会刷新汇入时间戳，持续的
+  semantic 或 raw-front 更新不能伪造安全观测并解除锁存。
 
 ## 3. 最新验证证据
 
 ### 自动化测试
 
 - 8 个 ROS 包完整构建成功。
-- decision making 的融合、路径走廊和状态机测试：65/65 通过。
+- decision making 的融合、路径走廊、来源新鲜度和状态机测试：70/70 通过。
+- traffic-light stability filter GTest：4/4 通过。
 - controller core GTest：10/10 通过。
 - trajectory generator：34/34 通过。
+- route manager 功能测试：9/9 通过。
 - 完整 `colcon test` 的功能测试均通过；唯一失败仍是 route manager 既有 flake8
   检查，报告 260 项格式、引号和 import 顺序问题，另有 1 项跳过。
 

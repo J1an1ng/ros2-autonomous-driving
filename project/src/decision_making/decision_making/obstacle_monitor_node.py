@@ -12,6 +12,7 @@ from std_msgs.msg import Bool, Float32, Int32
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from decision_making.obstacle_fusion import (
+    VehicleObstacleFusion,
     fuse_vehicle_obstacle_distances,
     semantic_distance_is_plausible,
 )
@@ -371,7 +372,7 @@ class ObstacleMonitorNode(Node):
             safety_distances, self.safety_min_points
         )
         self.pointcloud_receive_time = self.get_clock().now()
-        self.publish_distances()
+        self.publish_distances(publish_merge=True)
 
     def safety_pointcloud_callback(self, msg: PointCloud2) -> None:
         try:
@@ -411,7 +412,7 @@ class ObstacleMonitorNode(Node):
         self.raw_safety_receive_time = self.get_clock().now()
         self.publish_distances()
 
-    def publish_distances(self) -> None:
+    def publish_distances(self, publish_merge: bool = False) -> None:
         now = self.get_clock().now()
         pointcloud_fresh = False
         if self.pointcloud_receive_time is not None:
@@ -475,12 +476,18 @@ class ObstacleMonitorNode(Node):
             pointcloud_match_front_distance=path_front_distance,
         )
 
+        self._publish_fusion(fusion, publish_merge=publish_merge)
+
+    def _publish_fusion(
+        self, fusion: VehicleObstacleFusion, publish_merge: bool
+    ) -> None:
         front_msg = Float32()
         front_msg.data = float(fusion.front_distance)
         self.front_pub.publish(front_msg)
-        merge_msg = Float32()
-        merge_msg.data = float(fusion.merge_distance)
-        self.merge_pub.publish(merge_msg)
+        if publish_merge:
+            merge_msg = Float32()
+            merge_msg.data = float(fusion.merge_distance)
+            self.merge_pub.publish(merge_msg)
 
     def semantic_vehicle_is_fresh(self) -> bool:
         if (

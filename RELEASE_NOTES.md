@@ -1,5 +1,47 @@
 # Release notes
 
+## full-system-v1.6.0
+
+Safety backport release built on `full-system-v1.5.0`.
+
+Improvements:
+
+- Retains an active merge-obstacle latch across short point-cloud gaps. If the
+  observation is more than 3 seconds old, the decision layer now enters
+  `merge_obstacle_stale_stop` instead of incorrectly returning to cruise; only
+  a fresh safe observation from the actual merge source clears the latch.
+  Front/semantic-only updates use independent freshness and cannot synthesize
+  merge clearance.
+- Restores the closed-loop-validated corner geometry and conservative speed
+  limits at waypoints 33--35. Waypoints 39--42 retain the faster v1.5
+  event-intersection geometry and speed profile. Regression tests protect both
+  route profiles and route completeness.
+- Lets a confirmed green immediately cancel an existing traffic-light brake
+  latch. Unambiguous green is confirmed in two consecutive frames, while
+  mixed red/green evidence still requires four consecutive frames.
+- Preserves all v1.5 semantic-vehicle fusion, adaptive-following, and
+  waypoint 0--63 route-completion behavior.
+
+Validation:
+
+- Built all eight ROS 2 workspace packages successfully.
+- Passed all 70 decision-making tests, all four traffic-light stability-filter
+  tests, all 10 controller tests, all 34 trajectory tests, and all nine
+  route-manager functional tests. The route-manager flake8 check remains at
+  its unchanged baseline of 260 existing style issues.
+- Completed the waypoint 0--63 Unity run with both NPC events enabled in
+  370.258 recorded seconds. The restored waypoint 33--35 turn and unchanged
+  v1.5 waypoint 39--42 turn completed without intervention. Relative to the
+  rejected 2 m/s waypoint 39--42 profile, the waypoint 39-to-43 traversal
+  improved from 9.505 to 6.805 seconds and measured mean speed improved from
+  1.867 to 2.859 m/s.
+- Stopped and released at all four controlled traffic lights, with stop
+  requests issued approximately 3.63, 3.82, 3.82, and 3.51 m from waypoints
+  25, 32, 52, and 59 respectively.
+- Entered adaptive following in the NPC-event region with no emergency-brake
+  entry, no simultaneous throttle/brake output, no runtime process death, and
+  no path fallback before route completion.
+
 ## full-system-v1.5.0
 
 Semantic-vehicle fusion and adaptive-following release packaged directly from

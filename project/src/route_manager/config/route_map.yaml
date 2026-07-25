@@ -270,23 +270,23 @@ waypoints:
   y: 3.661
   z: 0.822
   yaw_deg: 165.745
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_approach
 - id: 34
-  x: 123.747
-  y: 8.293
+  x: 127.000
+  y: 3.700
   z: 0.825
-  yaw_deg: 132.882
-  speed_limit: 8
+  yaw_deg: 150.000
+  speed_limit: 3
   segment_id: 0
   type: curve_mid
 - id: 35
-  x: 124.346
+  x: 123.747
   y: 8.864
   z: 0.825
   yaw_deg: 94.822
-  speed_limit: 8
+  speed_limit: 3
   segment_id: 0
   type: curve_exit
 - id: 36

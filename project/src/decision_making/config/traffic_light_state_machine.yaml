@@ -69,6 +69,9 @@ traffic_light_state_machine_node:
     merge_trigger_distance: 12.0
     merge_release_margin: 2.0
     merge_target_speed: 1.5
+    # Retain the merge latch across short depth gaps. If no fresh sample arrives
+    # within this fail-safe deadline, stop until a fresh safe sample clears it.
+    merge_stale_timeout: 3.0
     # Continuous adaptive following. Positive range rate means the gap is
     # opening; negative means the ego vehicle is closing on the lead vehicle.
     following_enabled: true

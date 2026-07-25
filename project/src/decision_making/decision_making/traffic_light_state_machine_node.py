@@ -56,6 +56,7 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("merge_trigger_distance", 12.0)
         self.declare_parameter("merge_release_margin", 2.0)
         self.declare_parameter("merge_target_speed", 1.5)
+        self.declare_parameter("merge_stale_timeout", 3.0)
         self.declare_parameter("following_enabled", True)
         self.declare_parameter("following_activation_distance", 30.0)
         self.declare_parameter("following_time_headway", 1.5)
@@ -173,6 +174,7 @@ class TrafficLightStateMachineNode(Node):
             merge_trigger_distance=self.get_parameter("merge_trigger_distance").value,
             merge_release_margin=self.get_parameter("merge_release_margin").value,
             merge_target_speed=self.get_parameter("merge_target_speed").value,
+            merge_stale_timeout=self.get_parameter("merge_stale_timeout").value,
             following_enabled=self.get_parameter("following_enabled").value,
             following_activation_distance=self.get_parameter(
                 "following_activation_distance"
@@ -319,22 +321,29 @@ class TrafficLightStateMachineNode(Node):
 
     def front_obstacle_callback(self, msg: Float32) -> None:
         self.front_obstacle_distance = msg.data
-        self.machine.update_obstacle_distances(
-            self.front_obstacle_distance,
-            self.merge_obstacle_distance,
-            self.now_seconds(),
+        self.machine.update_front_obstacle_distance(
+            self.front_obstacle_distance, self.now_seconds()
         )
 
     def merge_obstacle_callback(self, msg: Float32) -> None:
         self.merge_obstacle_distance = msg.data
-        self.machine.update_obstacle_distances(
-            self.front_obstacle_distance,
-            self.merge_obstacle_distance,
-            self.now_seconds(),
+        self.machine.update_merge_obstacle_distance(
+            self.merge_obstacle_distance, self.now_seconds()
         )
 
     def timer_callback(self) -> None:
-        output = self.machine.evaluate(self.now_seconds())
+        now = self.now_seconds()
+        output = self.machine.evaluate(now)
+        front_obstacle_age = (
+            now - self.machine.front_obstacle_time
+            if self.machine.front_obstacle_time is not None
+            else math.inf
+        )
+        merge_obstacle_age = (
+            now - self.machine.merge_obstacle_time
+            if self.machine.merge_obstacle_time is not None
+            else math.inf
+        )
 
         speed_msg = Float32()
         speed_msg.data = output.target_speed
@@ -366,6 +375,10 @@ class TrafficLightStateMachineNode(Node):
             f"{self.machine.following_raw_target_speed:.3f} "
             f"front_distance={self.machine.front_obstacle_distance:.3f} "
             f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
+            f"front_obstacle_age={front_obstacle_age:.3f} "
+            f"merge_obstacle_age={merge_obstacle_age:.3f} "
+            f"emergency_latched={self.machine.emergency_latched} "
+            f"merge_latched={self.machine.merge_latched} "
             f"target_speed={output.target_speed:.3f}"
         )
         self.debug_pub.publish(debug_msg)

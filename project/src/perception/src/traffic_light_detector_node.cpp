@@ -15,6 +15,8 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/u_int8.hpp>
 
+#include "perception/traffic_light_stability_filter.hpp"
+
 namespace {
 
 enum TrafficLightState : uint8_t {
@@ -176,6 +178,17 @@ public:
     yellow_over_green_ratio_ = declare_parameter<double>("yellow_over_green_ratio", 1.25);
     green_over_red_ratio_ = declare_parameter<double>("green_over_red_ratio", 0.80);
     consecutive_frames_ = declare_parameter<int>("consecutive_frames", 4);
+    confident_green_frames_ = declare_parameter<int>("confident_green_frames", 2);
+    confident_green_max_red_score_ =
+        declare_parameter<int>("confident_green_max_red_score", 4);
+    confident_green_min_score_ =
+        declare_parameter<int>("confident_green_min_score", 20);
+    stability_filter_ =
+        std::make_unique<perception::TrafficLightStabilityFilter>(
+            consecutive_frames_,
+            confident_green_frames_,
+            confident_green_max_red_score_,
+            confident_green_min_score_);
 
     state_pub_ = create_publisher<std_msgs::msg::UInt8>(state_topic_, 10);
     scores_pub_ = create_publisher<std_msgs::msg::Int32MultiArray>(scores_topic_, 10);
@@ -241,7 +254,10 @@ private:
     std::vector<std::vector<uint8_t>> semantic_gates;
     std::string gate_debug;
     if (!BuildSemanticGates(*msg, roi, semantic_gates, gate_debug)) {
-      PublishStateAndDebug(*msg, roi, UNKNOWN, UNKNOWN, Score{}, Score{}, Score{}, gate_debug);
+      const uint8_t stable_state =
+          stability_filter_->update(UNKNOWN, 0, 0);
+      PublishStateAndDebug(
+          *msg, roi, UNKNOWN, stable_state, Score{}, Score{}, Score{}, gate_debug);
       return;
     }
 
@@ -271,7 +287,8 @@ private:
     }
 
     const uint8_t raw_state = CombineSignalGroupStates(component_states);
-    const uint8_t stable_state = UpdateStableState(raw_state);
+    const uint8_t stable_state = stability_filter_->update(
+        raw_state, WeightedScore(red), WeightedScore(green));
 
     gate_debug += " component_states=" + BuildComponentStatesDebug(component_states);
 
@@ -1027,31 +1044,6 @@ private:
     return UNKNOWN;
   }
 
-  uint8_t UpdateStableState(uint8_t raw_state) {
-    // GREEN grants permission to move and therefore needs debounce. Every
-    // non-green observation revokes that permission immediately; retaining a
-    // previous stable GREEN for several red/unknown frames can otherwise let a
-    // stopped vehicle restart while the physical signal is red or unavailable.
-    if (raw_state != GREEN) {
-      candidate_state_ = raw_state;
-      candidate_count_ = 1;
-      stable_state_ = raw_state;
-      return stable_state_;
-    }
-
-    if (raw_state == candidate_state_) {
-      ++candidate_count_;
-    } else {
-      candidate_state_ = raw_state;
-      candidate_count_ = 1;
-    }
-
-    if (candidate_count_ >= std::max(1, consecutive_frames_)) {
-      stable_state_ = candidate_state_;
-    }
-    return stable_state_;
-  }
-
   std::string BuildDebugString(const sensor_msgs::msg::Image &msg,
                                const Roi &roi,
                                uint8_t raw_state,
@@ -1143,10 +1135,10 @@ private:
   double yellow_over_green_ratio_{1.25};
   double green_over_red_ratio_{0.80};
   int consecutive_frames_{4};
-
-  uint8_t candidate_state_{UNKNOWN};
-  int candidate_count_{0};
-  uint8_t stable_state_{UNKNOWN};
+  int confident_green_frames_{2};
+  int confident_green_max_red_score_{4};
+  int confident_green_min_score_{20};
+  std::unique_ptr<perception::TrafficLightStabilityFilter> stability_filter_;
 
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr semantic_sub_;

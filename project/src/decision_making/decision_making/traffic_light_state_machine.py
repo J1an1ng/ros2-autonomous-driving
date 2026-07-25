@@ -75,6 +75,7 @@ class TrafficLightStateMachine:
         merge_trigger_distance: float = 10.0,
         merge_release_margin: float = 2.0,
         merge_target_speed: float = 2.0,
+        merge_stale_timeout: float = 3.0,
         following_enabled: bool = True,
         following_activation_distance: float = 30.0,
         following_time_headway: float = 1.5,
@@ -158,6 +159,9 @@ class TrafficLightStateMachine:
         self.merge_trigger_distance = max(0.0, float(merge_trigger_distance))
         self.merge_release_margin = max(0.0, float(merge_release_margin))
         self.merge_target_speed = max(0.0, float(merge_target_speed))
+        self.merge_stale_timeout = max(
+            self.obstacle_timeout, float(merge_stale_timeout)
+        )
         self.following_enabled = bool(following_enabled)
         self.following_activation_distance = max(
             0.0, float(following_activation_distance)
@@ -218,7 +222,8 @@ class TrafficLightStateMachine:
         self.signal_stop_pending = False
         self.front_obstacle_distance = math.inf
         self.merge_obstacle_distance = math.inf
-        self.obstacle_time: Optional[float] = None
+        self.front_obstacle_time: Optional[float] = None
+        self.merge_obstacle_time: Optional[float] = None
         self.front_obstacle_range_rate = 0.0
         self.effective_front_obstacle_range_rate = 0.0
         self.front_obstacle_range_rate_time: Optional[float] = None
@@ -271,6 +276,12 @@ class TrafficLightStateMachine:
     def update_obstacle_distances(
         self, front_distance: float, merge_distance: float, now: float
     ) -> None:
+        self.update_front_obstacle_distance(front_distance, now)
+        self.update_merge_obstacle_distance(merge_distance, now)
+
+    def update_front_obstacle_distance(
+        self, front_distance: float, now: float
+    ) -> None:
         sanitized_front = self._sanitize_distance(front_distance)
         sample_changed = (
             math.isfinite(sanitized_front)
@@ -315,8 +326,13 @@ class TrafficLightStateMachine:
             self.front_obstacle_range_rate_time = None
 
         self.front_obstacle_distance = sanitized_front
+        self.front_obstacle_time = float(now)
+
+    def update_merge_obstacle_distance(
+        self, merge_distance: float, now: float
+    ) -> None:
         self.merge_obstacle_distance = self._sanitize_distance(merge_distance)
-        self.obstacle_time = float(now)
+        self.merge_obstacle_time = float(now)
 
     def evaluate(self, now: float) -> DecisionOutput:
         now = float(now)
@@ -339,8 +355,11 @@ class TrafficLightStateMachine:
         waypoint_distance_fresh = self._is_fresh(
             self.waypoint_distance_time, now, self.waypoint_distance_timeout
         )
-        obstacle_fresh = self._is_fresh(
-            self.obstacle_time, now, self.obstacle_timeout
+        front_obstacle_fresh = self._is_fresh(
+            self.front_obstacle_time, now, self.obstacle_timeout
+        )
+        merge_obstacle_fresh = self._is_fresh(
+            self.merge_obstacle_time, now, self.obstacle_timeout
         )
 
         raw_stop_signal = light_fresh and (
@@ -437,16 +456,15 @@ class TrafficLightStateMachine:
 
         elif self.state == DecisionState.STOPPING_FOR_LIGHT:
             if stop_signal:
-                # Once an explicit red/yellow has requested a stop, retain the
-                # assignment-required complete stop even if the phase changes
-                # while the vehicle is braking.
                 self.signal_stop_latched = True
-            if not self.signal_stop_latched and green_signal:
-                # An UNKNOWN-only boundary stop can be cancelled by a stable
-                # green before standstill; forcing a second green cycle would
-                # create an artificial deadlock after a brief missed frame.
+            if green_signal:
+                # Perception already debounces green. Once it is confirmed,
+                # release any existing red/yellow brake latch immediately so
+                # the vehicle does not wait for a needless full stop.
                 self.state = DecisionState.RELEASED
                 self.latched_waypoint_id = None
+                self.signal_stop_latched = False
+                self.signal_stop_pending = False
                 self.green_since = None
             elif not self.signal_stop_latched and unknown_light_approach:
                 # Route topics are independent ROS messages. If a fresh
@@ -511,7 +529,8 @@ class TrafficLightStateMachine:
             not self.merge_behavior_waypoint_ids
             or self.waypoint_id in self.merge_behavior_waypoint_ids
         )
-        if obstacle_fresh:
+        merge_obstacle_stale_stop = False
+        if front_obstacle_fresh:
             if (
                 vehicle_behavior_allowed
                 and self.front_obstacle_distance <= emergency_distance
@@ -572,6 +591,10 @@ class TrafficLightStateMachine:
                     self.emergency_latched_time = None
                     self.emergency_follow_release_since = None
 
+        else:
+            self.emergency_follow_release_since = None
+
+        if merge_obstacle_fresh:
             if (
                 merge_behavior_allowed
                 and self.merge_obstacle_distance <= self.merge_trigger_distance
@@ -584,10 +607,15 @@ class TrafficLightStateMachine:
             ):
                 self.merge_latched = False
         else:
-            # A stale merge observation must not limit the car forever. Emergency
-            # braking stays latched on stale data and therefore fails safe.
-            self.merge_latched = False
-            self.emergency_follow_release_since = None
+            obstacle_age = (
+                now - self.merge_obstacle_time
+                if self.merge_obstacle_time is not None
+                else math.inf
+            )
+            merge_obstacle_stale_stop = (
+                self.merge_latched
+                and not 0.0 <= obstacle_age <= self.merge_stale_timeout
+            )
 
         traffic_stop_required = self.state in (
             DecisionState.STOPPING_FOR_LIGHT,
@@ -601,7 +629,7 @@ class TrafficLightStateMachine:
         following_active = (
             self.following_enabled
             and vehicle_behavior_allowed
-            and obstacle_fresh
+            and front_obstacle_fresh
             and math.isfinite(self.front_obstacle_distance)
             and self.front_obstacle_distance
             <= self.following_activation_distance
@@ -672,6 +700,11 @@ class TrafficLightStateMachine:
                 )
                 else "traffic_light_stop_latched"
             )
+        elif merge_obstacle_stale_stop:
+            target_speed = 0.0
+            output_state = DecisionState.SLOWING_FOR_MERGE
+            stop_required = True
+            reason = "merge_obstacle_stale_stop"
         elif following_active:
             target_speed = following_target
             output_state = DecisionState.FOLLOWING_VEHICLE

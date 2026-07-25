@@ -85,6 +85,12 @@ def generate_launch_description():
                 'target_light': 'signal_group',
                 'signal_group_max_dx_ratio': 0.16,
                 'signal_group_min_size_ratio': 0.45,
+                # Strong green (little/no red evidence) may release after two
+                # frames. Mixed red/green evidence still needs four frames.
+                'consecutive_frames': 4,
+                'confident_green_frames': 2,
+                'confident_green_max_red_score': 4,
+                'confident_green_min_score': 20,
             }],
         ),
 

@@ -99,10 +99,10 @@ and brake remains the controller's responsibility.
 | --- | --- | --- |
 | `CRUISE` | Pass through the fresh planning speed. | Enter `APPROACHING_INTERSECTION` in a configured route state/waypoint. |
 | `APPROACHING_INTERSECTION` | Unknown/stale data and a remembered red/yellow are limited to `unknown_light_approach_speed` while a fresh waypoint distance remains outside the applicable stop boundary. | At/before the boundary, unknown/stale data or a remembered red/yellow enters `STOPPING_FOR_LIGHT`; continuously fresh green with no pending red/yellow grants one passage and enters `RELEASED`. |
-| `STOPPING_FOR_LIGHT` | Publish zero target speed and latch the stop even if route manager advances. | A fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
+| `STOPPING_FOR_LIGHT` | Publish zero target speed and latch the stop even if route manager advances. | A confirmed green immediately enters `RELEASED`; otherwise, a fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
 | `WAITING_FOR_GREEN` | Continue publishing zero. Unknown, red, yellow or stale light data cannot release the stop. | A continuously fresh green signal for `green_release_delay` enters `RELEASED`. |
 | `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
-| `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. | Release after the obstacle exceeds the trigger distance plus its hysteresis margin. |
+| `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. A latch older than `merge_stale_timeout` commands a full stop. | Release only after a fresh obstacle observation exceeds the trigger distance plus its hysteresis margin. |
 | `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Complete a full ego stop, satisfy the minimum hold time, and release only after the front distance exceeds the static following gap plus its hysteresis margin. |
 | `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Hold current speed inside the desired-gap deadband. | Return to planning speed after the lead vehicle leaves the activation range. |
 
@@ -112,7 +112,7 @@ remains active, so following or emergency control cannot clear a red-light stop 
 Decision priority is:
 
 ```text
-emergency braking > traffic-light stop > adaptive following > merge slowdown > planning speed
+emergency braking > traffic-light stop > stale-merge stop > adaptive following > merge slowdown > planning speed
 ```
 
 The stop latch is necessary because the current route manager advances to the next
@@ -128,11 +128,11 @@ still approaching, so a signal that legitimately leaves the camera field of view
 the hard boundary does not turn back into UNKNOWN braking.
 
 An associated red/yellow is remembered at first recognition. Instead of stopping at the
-camera-recognition distance, the vehicle continues at the bounded 1 m/s approach speed and
-brakes at `traffic_light_stop_distance`. That explicit stop remains latched until the
-vehicle has completely stopped, even if the signal turns green during the final approach.
-A boundary stop caused only by UNKNOWN may be cancelled before standstill by a stable
-green, or by a fresh distance proving that the hard stop boundary is still ahead.
+camera-recognition distance, the vehicle continues at the bounded approach speed and
+brakes at `traffic_light_stop_distance`. A green that has passed the perception
+confirmation policy immediately clears that brake latch, including during the final
+approach. A boundary stop caused only by UNKNOWN may also be cancelled by confirmed green,
+or by a fresh distance proving that the hard stop boundary is still ahead.
 
 ## Safety and timeout behavior
 
@@ -151,14 +151,19 @@ green, or by a fresh distance proving that the hard stop boundary is still ahead
   Full braking may hand back to adaptive following before standstill only after the
   minimum hold time and sustained evidence that the ego vehicle is no longer closing
   significantly on the lead vehicle.
-- A stale merge observation is cleared so it cannot restrict vehicle speed forever.
+- A latched merge observation survives ordinary point-cloud gaps. Once it is older than
+  `merge_stale_timeout`, the state machine requests a fail-safe stop with reason
+  `merge_obstacle_stale_stop`; only a fresh safe observation clears the latch.
+- Front and merge distances maintain independent receive times. Semantic and raw-safety
+  front updates cannot refresh the merge timestamp or publish synthetic merge clearance;
+  a new merge observation is emitted only for an actual preprocessed point-cloud sample.
 - Emergency distance is the greater of `emergency_min_distance` and
   `emergency_min_distance + closing_speed * reaction_time
   + closing_speed^2 / (2 * deceleration)`. A stable gap therefore does not
   cause full braking merely because ego speed increases.
 
-The perception message has no header, so freshness is measured from its local ROS receive
-time rather than a source timestamp.
+The distance messages have no header, so front and merge freshness are measured
+independently from their local ROS receive times rather than source timestamps.
 
 ## Parameters
 
@@ -199,6 +204,7 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `merge_trigger_distance` | `12.0` | Right-front obstacle distance that activates early Event2 slowdown before the short-range emergency corridor is needed. |
 | `merge_release_margin` | `2.0` | Additional clearance required to release merge slowdown, in metres. |
 | `merge_target_speed` | `1.5` | Maximum crawl speed while yielding to a merging vehicle, in m/s. |
+| `merge_stale_timeout` | `3.0` | Maximum age of a latched merge observation before a fail-safe stop is requested. A fresh safe observation is required to release it. |
 | `following_enabled` | `true` | Enable continuous adaptive vehicle following. |
 | `following_activation_distance` | `20.0` | Maximum semantic-vehicle distance at which following control is active, in metres. |
 | `following_time_headway` | `2.2` | Time-headway contribution to the desired gap, in seconds. |
@@ -289,6 +295,8 @@ The tests cover:
 - distance-bounded UNKNOWN-light approach and stale-distance rejection;
 - fail-safe behavior after planning-speed timeout.
 - merge-speed limiting and release hysteresis;
+- merge-latch retention, stale fail-safe stopping, and fresh-safe release;
+- independence of front-only updates from merge-source freshness;
 - speed-dependent emergency braking;
 - global semantic/point-cloud-confirmed longitudinal following;
 - rejection of unmatched semantic cross traffic outside validated direct-control waypoints;

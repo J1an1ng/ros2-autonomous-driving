@@ -59,7 +59,9 @@ instances, while green is accepted only when every currently selected lamp is co
 green. An unclassified member therefore cannot be masked by another member's green. This lets a
 lower lamp take over when its high-mounted partner leaves the camera view without confusing
 same-housing red reflections with a real red lamp. Four consecutive group classifications
-are required before the stable state changes.
+are required for mixed red/green evidence. A strong green with at most four red-score
+points and at least 20 green-score points is accepted after two consecutive frames.
+Every red, yellow, or unknown frame still revokes green permission immediately.
 If no valid component exists, or the RGB/semantic timestamp difference exceeds
 `max_semantic_stamp_delta_s=1.0`, the published state is UNKNOWN. This prevents a frozen
 semantic frame from continuously supporting stale green evidence.
@@ -77,4 +79,5 @@ yellow evidence to clearly exceed concurrent green evidence before yellow can ov
 A true yellow with no green evidence remains yellow. In the simulator, a lit green bulb may
 coexist with red housing reflections, so `green_over_red_ratio=0.80` lets green override them
 once its evidence reaches 80% of red; a pure red frame has no green evidence and remains red.
-A state still needs four consecutive raw classifications before publication.
+Mixed red/green evidence still needs four consecutive raw green classifications before
+publication; unambiguous green needs two.
