@@ -40,34 +40,92 @@ traffic_light_state_machine_node:
     # The Unity depth pipeline runs at roughly 2.5 Hz. Leave enough margin so
     # one normal frame interval cannot clear and re-latch merge behavior.
     obstacle_timeout: 1.0
-    # Retain the merge speed through short stream stalls. If the gap exceeds
-    # this bound, fail safe to zero until fresh evidence proves the corridor
-    # clear; never restore route speed from an expired obstacle sample.
-    merge_stale_timeout: 3.0
     emergency_min_distance: 4.0
+    # Preserve a physical following gap after stopping. Event2 depth is the
+    # camera-to-NPC range, so braking distance alone would stop at contact.
+    emergency_standstill_distance: 6.0
     emergency_reaction_time: 0.5
-    emergency_deceleration: 5.0
+    # Event2 full-brake logs measured only about 0.64--0.76 m/s^2. Use the
+    # conservative measured capability in the stopping-distance calculation.
+    emergency_deceleration: 0.7
     emergency_release_margin: 2.0
-    # Event1 validation showed a 3.13 m minimum clearance with the former
-    # 10 m trigger. Intervene closer to the actual merge conflict instead of
-    # slowing as soon as the distant NPC becomes visible.
-    merge_trigger_distance: 8.0
+    # Keep one continuous initial brake application, then permit the guarded
+    # handoff below if the lead vehicle has started moving again.
+    emergency_min_hold_time: 1.0
+    # Reserve full braking for near field. T-junction cross traffic may have a
+    # large radial closing rate while off path, and an ordinary braking lead
+    # vehicle is handled progressively by adaptive following at longer range.
+    emergency_trigger_max_distance: 10.0
+    # If the lead vehicle begins moving again, return from full braking to
+    # adaptive following after sustained non-closing evidence.
+    emergency_follow_release_min_distance: 5.4
+    # The low-pass estimate trails the first real opening sample. A small
+    # residual closing rate is safe for adaptive following at this low speed.
+    emergency_follow_release_min_range_rate: -0.6
+    emergency_follow_release_max_speed: 2.0
+    emergency_follow_release_confirmation: 0.1
+    # The semantic vehicle distance also feeds the front safety calculation.
+    # This merge band remains a lower-priority speed cap at low vehicle speeds.
+    merge_trigger_distance: 12.0
     merge_release_margin: 2.0
-    merge_target_speed: 2.5
+    merge_target_speed: 1.5
+    # Continuous adaptive following. Positive range rate means the gap is
+    # opening; negative means the ego vehicle is closing on the lead vehicle.
+    following_enabled: true
+    following_activation_distance: 20.0
+    following_time_headway: 2.2
+    following_distance_gain: 0.10
+    following_range_rate_alpha: 0.5
+    following_range_rate_timeout: 1.5
+    following_distance_deadband: 0.75
+    following_range_rate_deadband: 0.2
+    # Slew limits apply to the target-speed command, not physical acceleration.
+    following_target_acceleration: 1.0
+    following_target_deceleration: 4.0
+    following_max_abs_range_rate: 6.0
+    # Longitudinal vehicle following and emergency protection apply globally.
+    # The obstacle monitor requires semantic/point-cloud agreement outside the
+    # Event2 exception, so longitudinal behavior is enabled on every waypoint.
+    vehicle_behavior_global: true
+    # Right-front merge yielding is specific to the Event2 T-junction.
+    merge_behavior_waypoint_ids: [43, 44, 45, 46, 47, 48]
     update_rate: 20.0
 
 obstacle_monitor_node:
   ros__parameters:
     pointcloud_topic: /perception/pcl/points_preprocessed
+    # Use the unfiltered camera cloud only for the short-range safety corridor.
+    # Event2 evidence remained absent from the preprocessed near field even at
+    # physical contact, while path/merge returns remained available farther out.
+    safety_pointcloud_topic: /perception/pcl/points
+    safety_pointcloud_timeout: 0.5
     vehicle_frame: OurCar/INS
     planning_path_topic: /planning/path
     planning_path_timeout: 0.75
+    # Stale path-corridor returns cannot confirm a new semantic vehicle.
+    pointcloud_match_timeout: 0.75
     # The upstream occupancy node transforms depth with the latest available TF.
     # Use the same policy instead of requesting a slightly future image stamp.
     use_latest_tf: true
     front_min_x: 0.5
     front_max_x: 30.0
     front_half_width: 1.2
+    # Last-resort collision protection independent of path projection. Keep
+    # this shorter than the known waypoint-48 fixed return at about 3.97 m.
+    # Requiring five points rejects isolated depth noise.
+    safety_corridor_enabled: true
+    safety_min_x: 0.5
+    safety_max_x: 3.5
+    safety_half_width: 1.5
+    safety_min_points: 5
+    # At waypoint48 the mapped road-end structure simultaneously occupies the
+    # path, raw-safety and merge corridors (measured about 3.1/3.3/3.1 m).
+    # Event2 instead produces a near raw-safety return while path/merge remain
+    # about 10--12 m. Latch suppression only for the mapped triple signature.
+    fixed_structure_suppression_waypoint_ids: [48]
+    fixed_structure_max_path_distance: 9.5
+    fixed_structure_max_safety_distance: 4.0
+    fixed_structure_max_merge_distance: 9.5
     merge_min_x: 0.5
     merge_max_x: 15.0
     # REP-103 vehicle coordinates: +x forward, +y left, therefore right is -y.
@@ -75,6 +133,19 @@ obstacle_monitor_node:
     # is acted on once it enters the nearer right-front corridor.
     merge_right_min_y: -2.5
     merge_right_max_y: -0.8
+    # Semantic classification, depth and lateral gates are fused with the
+    # planning-path point-cloud corridor before global vehicle control.
+    semantic_vehicle_timeout: 1.0
+    semantic_vehicle_max_abs_range_rate: 6.0
+    semantic_vehicle_jump_tolerance: 1.5
+    vehicle_distance_match_tolerance: 2.5
+    vehicle_distance_match_relative_tolerance: 0.2
+    # Event2 point-cloud corridors observe road geometry instead of the NPC.
+    # Keep the direct semantic behavior only in its validated route window;
+    # all other waypoints require semantic/point-cloud range agreement.
+    semantic_direct_control_waypoint_ids: [43, 44, 45, 46, 47, 48]
+    # Retain only a sub-metre generic last-resort guard without semantic proof.
+    unconfirmed_emergency_distance: 0.8
     # Reject the curb/road-shoulder returns observed around z=-0.57..-0.67 m.
     min_z: -0.5
     max_z: 2.0

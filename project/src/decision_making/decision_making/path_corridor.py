@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import math
-from typing import Optional, Sequence, Tuple
+from typing import Iterable, Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,68 @@ class PathProjection:
     along: float
     lateral: float
     distance: float
+
+
+def in_vehicle_safety_corridor(
+    x: float,
+    y: float,
+    min_x: float,
+    max_x: float,
+    half_width: float,
+) -> bool:
+    """Return whether a point is inside the short ego-frame collision corridor."""
+    values = (x, y, min_x, max_x, half_width)
+    if not all(math.isfinite(float(value)) for value in values):
+        return False
+    return min_x <= x <= max_x and abs(y) <= max(0.0, half_width)
+
+
+def robust_nearest_distance(
+    distances: Iterable[float],
+    minimum_points: int,
+) -> float:
+    """Return the nearest distance supported by the requested number of points.
+
+    Using the Nth-nearest point prevents a single depth outlier from commanding
+    an emergency stop while retaining a conservative distance for solid objects.
+    """
+    required = max(1, int(minimum_points))
+    finite_distances = sorted(
+        float(distance)
+        for distance in distances
+        if math.isfinite(float(distance)) and float(distance) >= 0.0
+    )
+    if len(finite_distances) < required:
+        return math.inf
+    return finite_distances[required - 1]
+
+
+def matches_fixed_structure_signature(
+    waypoint_id: Optional[int],
+    suppression_waypoint_ids: Iterable[int],
+    path_front_distance: float,
+    safety_front_distance: float,
+    merge_distance: float,
+    max_path_distance: float,
+    max_safety_distance: float,
+    max_merge_distance: float,
+) -> bool:
+    """Identify a mapped structure simultaneously spanning all three corridors."""
+    if waypoint_id is None or int(waypoint_id) not in {
+        int(value) for value in suppression_waypoint_ids
+    }:
+        return False
+    distances_and_limits = (
+        (path_front_distance, max_path_distance),
+        (safety_front_distance, max_safety_distance),
+        (merge_distance, max_merge_distance),
+    )
+    return all(
+        math.isfinite(float(distance))
+        and math.isfinite(float(limit))
+        and 0.0 <= float(distance) <= max(0.0, float(limit))
+        for distance, limit in distances_and_limits
+    )
 
 
 def prepare_path(
@@ -73,4 +135,3 @@ def project_to_path(
             best = candidate
         cumulative += length
     return best
-

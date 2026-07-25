@@ -1,7 +1,8 @@
 # Perception
 
-The perception launch converts Unity depth into point clouds and occupancy maps and detects
-the relevant dynamic traffic-light colour from aligned RGB and semantic images.
+The perception launch converts Unity depth into point clouds and occupancy maps, detects
+the relevant dynamic traffic-light colour, and publishes a diagnostic semantic-vehicle
+distance from the aligned semantic and depth cameras.
 
 ## Launch
 
@@ -28,6 +29,24 @@ the corresponding full-system launch arguments. OctoMap can be disabled with
 | `/perception/octomap/projected_map` | OctoMap 2D projection. |
 | `/perception/traffic_light_state` | `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN`. |
 | `/perception/traffic_light_debug` | Raw/stable state, scores, selected semantic component, ROI, and timestamp delta. |
+| `/perception/front_vehicle_detected` | `true` only when a red vehicle component has enough fresh valid depth samples. |
+| `/perception/front_vehicle_distance` | Robust near-surface depth in metres for the nearest accepted red vehicle component, otherwise `inf`. |
+| `/perception/front_vehicle_debug` | Colour-mask, component, bounding-box, depth-pixel, distance, and synchronization diagnostics. |
+
+The vehicle detector treats red semantic pixels as NPC vehicles and deliberately does not
+match the yellow semantic class used by traffic lights. It extracts connected components
+inside a configurable central ROI, rejects small colour noise, and fuses each component with
+the latest depth image. Its reported distance is the 20th percentile of valid component
+depths rather than a single minimum pixel. Depth-camera intrinsics then convert the component
+centre into a lateral offset; components outside `max_abs_lateral_m=2.8` remain visible in
+debug output but are not reported as front vehicles. Decision making consumes these topics
+and requires fresh semantic/point-cloud range agreement outside the validated waypoint
+43--48 direct-semantic window. This prevents red cross traffic and roadside vehicles from
+causing longitudinal braking elsewhere on the route.
+
+With no simulator running, the isolated fusion check can be repeated with
+`python3 tools/smoke_test_semantic_vehicle_detector.py`. It verifies a synthetic red
+component at 12 m and verifies that an equally sized yellow component is rejected.
 
 The traffic detector uses the left RGB image for bulb colour and the semantic image only to
 select traffic-light components. `signal_group` first selects the component nearest the
@@ -40,9 +59,7 @@ instances, while green is accepted only when every currently selected lamp is co
 green. An unclassified member therefore cannot be masked by another member's green. This lets a
 lower lamp take over when its high-mounted partner leaves the camera view without confusing
 same-housing red reflections with a real red lamp. Four consecutive group classifications
-are required for ambiguous green evidence. Unambiguous evidence with red score at most 4
-and green score at least 20 is accepted after two consecutive frames. Any non-green
-observation still revokes green immediately.
+are required before the stable state changes.
 If no valid component exists, or the RGB/semantic timestamp difference exceeds
 `max_semantic_stamp_delta_s=1.0`, the published state is UNKNOWN. This prevents a frozen
 semantic frame from continuously supporting stale green evidence.
@@ -60,5 +77,4 @@ yellow evidence to clearly exceed concurrent green evidence before yellow can ov
 A true yellow with no green evidence remains yellow. In the simulator, a lit green bulb may
 coexist with red housing reflections, so `green_over_red_ratio=0.80` lets green override them
 once its evidence reaches 80% of red; a pure red frame has no green evidence and remains red.
-Ambiguous green still needs four consecutive raw classifications before publication;
-strong green uses the two-frame path described above.
+A state still needs four consecutive raw classifications before publication.

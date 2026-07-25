@@ -67,7 +67,8 @@ Node name:
 
 The `obstacle_monitor_node` subscribes to
 `/perception/pcl/points_preprocessed` (`sensor_msgs/msg/PointCloud2`), transforms the points
-from their source frame into `OurCar/INS`, and publishes the two distance topics above.
+from their source frame into `OurCar/INS`, fuses the path-relative point cloud with the
+semantic vehicle detector, and publishes the two control-facing distances above.
 
 ### Published topics
 
@@ -76,7 +77,17 @@ from their source frame into `OurCar/INS`, and publishes the two distance topics
 | `/decision/target_speed` | `std_msgs/msg/Float32` | controller | Final permitted target speed in m/s. The controller should use this instead of `/planning/target_speed`. |
 | `/decision/state` | `std_msgs/msg/String` | diagnostics | Current state-machine state name. |
 | `/decision/stop_required` | `std_msgs/msg/Bool` | controller/diagnostics | `true` while a traffic-light stop is latched. |
-| `/decision/debug` | `std_msgs/msg/String` | diagnostics | Compact description of the current state, reason, route context, light, obstacle age, latch states, and speed output. |
+| `/decision/debug` | `std_msgs/msg/String` | diagnostics | Compact description of the current state, reason, route context, light and speed output. |
+
+The two control-facing obstacle distances are vehicle-specific fused outputs. Across the
+route, a fresh semantic vehicle must agree with the planning-path point-cloud corridor
+within the larger of 2.5 m or 20% of semantic range. This rejects semantic cross traffic
+and point-cloud-only static structures while enabling longitudinal following at every
+waypoint. Point-cloud agreement expires after 0.75 s. Event2 waypoints 43--48 retain a
+validated direct-semantic exception because
+their point-cloud regions measure unrelated road geometry near the NPC. The raw
+vehicle-frame safety cloud is not used for semantic range matching; it remains independent
+as a last-resort generic collision guard below 0.8 m.
 
 The controller should treat `/decision/target_speed == 0.0` or
 `/decision/stop_required == true` as a request to stop. The exact conversion to throttle
@@ -88,20 +99,20 @@ and brake remains the controller's responsibility.
 | --- | --- | --- |
 | `CRUISE` | Pass through the fresh planning speed. | Enter `APPROACHING_INTERSECTION` in a configured route state/waypoint. |
 | `APPROACHING_INTERSECTION` | Unknown/stale data and a remembered red/yellow are limited to `unknown_light_approach_speed` while a fresh waypoint distance remains outside the applicable stop boundary. | At/before the boundary, unknown/stale data or a remembered red/yellow enters `STOPPING_FOR_LIGHT`; continuously fresh green with no pending red/yellow grants one passage and enters `RELEASED`. |
-| `STOPPING_FOR_LIGHT` | Publish zero target speed and retain the stop even if route manager advances. | Confirmed green cancels braking; otherwise a fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
+| `STOPPING_FOR_LIGHT` | Publish zero target speed and latch the stop even if route manager advances. | A fresh measured speed below `stopped_speed_threshold` enters `WAITING_FOR_GREEN`. |
 | `WAITING_FOR_GREEN` | Continue publishing zero. Unknown, red, yellow or stale light data cannot release the stop. | A continuously fresh green signal for `green_release_delay` enters `RELEASED`. |
 | `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
-| `SLOWING_FOR_MERGE` | Limit speed to `merge_target_speed` while merge data is fresh or briefly unavailable. A gap beyond `merge_stale_timeout` commands zero. | Release only after fresh clearance evidence. |
-| `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Release only when fresh front clearance and a fresh measured standstill are both present. |
+| `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. | Release after the obstacle exceeds the trigger distance plus its hysteresis margin. |
+| `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Complete a full ego stop, satisfy the minimum hold time, and release only after the front distance exceeds the static following gap plus its hysteresis margin. |
+| `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Hold current speed inside the desired-gap deadband. | Return to planning speed after the lead vehicle leaves the activation range. |
 
-`SLOWING_FOR_MERGE` and `EMERGENCY_BRAKING` are output behavior states. The underlying
-traffic-light state remains active, so an emergency cannot accidentally clear a red-light
-stop latch.
+The vehicle-related states are output behaviors. The underlying traffic-light state
+remains active, so following or emergency control cannot clear a red-light stop latch.
 
 Decision priority is:
 
 ```text
-emergency braking > traffic-light stop > merge slowdown > planning speed
+emergency braking > traffic-light stop > adaptive following > merge slowdown > planning speed
 ```
 
 The stop latch is necessary because the current route manager advances to the next
@@ -117,11 +128,11 @@ still approaching, so a signal that legitimately leaves the camera field of view
 the hard boundary does not turn back into UNKNOWN braking.
 
 An associated red/yellow is remembered at first recognition. Instead of stopping at the
-camera-recognition distance, the vehicle continues at the bounded approach speed and
-brakes at `traffic_light_stop_distance`. A subsequently confirmed green cancels braking
-before standstill; a stale, unknown, red, or yellow observation cannot. A boundary stop
-caused only by UNKNOWN may also be cancelled by a fresh distance proving that the hard
-stop boundary is still ahead.
+camera-recognition distance, the vehicle continues at the bounded 1 m/s approach speed and
+brakes at `traffic_light_stop_distance`. That explicit stop remains latched until the
+vehicle has completely stopped, even if the signal turns green during the final approach.
+A boundary stop caused only by UNKNOWN may be cancelled before standstill by a stable
+green, or by a fresh distance proving that the hard stop boundary is still ahead.
 
 ## Safety and timeout behavior
 
@@ -135,13 +146,16 @@ stop boundary is still ahead.
   vehicle. This is necessary because the detector reports `UNKNOWN` during normal driving.
 - Non-finite planning and speed values are ignored.
 - Yellow is treated as red by default and can be configured otherwise.
-- Emergency braking remains latched if obstacle data becomes stale after a hazard was seen,
-  and cannot release until the vehicle has reached a fresh measured standstill.
-- A latched merge observation survives short obstacle-stream gaps. If the gap exceeds
-  `merge_stale_timeout`, the decision target becomes zero until a fresh observation
-  explicitly clears the merge corridor.
+- Emergency braking remains latched if obstacle data becomes stale after a hazard was seen.
+- A shrinking speed-dependent threshold cannot by itself release emergency braking.
+  Full braking may hand back to adaptive following before standstill only after the
+  minimum hold time and sustained evidence that the ego vehicle is no longer closing
+  significantly on the lead vehicle.
+- A stale merge observation is cleared so it cannot restrict vehicle speed forever.
 - Emergency distance is the greater of `emergency_min_distance` and
-  `speed * reaction_time + speed^2 / (2 * deceleration)`.
+  `emergency_min_distance + closing_speed * reaction_time
+  + closing_speed^2 / (2 * deceleration)`. A stable gap therefore does not
+  cause full braking merely because ego speed increases.
 
 The perception message has no header, so freshness is measured from its local ROS receive
 time rather than a source timestamp.
@@ -170,15 +184,36 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `unknown_light_approach_speed` | `1.0` | Maximum approach speed outside that boundary while the light is unknown/stale, in m/s. |
 | `traffic_light_stop_distance` | `4.0` | Stop boundary for an associated red/yellow. The colour is latched when first seen, but the car creeps toward this boundary before braking. |
 | `traffic_light_activation_distance` | `20.0` | Maximum distance at which a detected colour is associated with the current controlled waypoint; farther colours are treated as unrelated. |
-| `obstacle_timeout` | `1.0` | Maximum age for treating an obstacle distance as a fresh observation. |
-| `merge_stale_timeout` | `3.0` | Maximum age for retaining the non-zero merge speed. An older latched observation fails safe to zero until fresh clearance arrives. |
+| `obstacle_timeout` | `1.0` | Maximum accepted age of obstacle distances. The margin covers the approximately 2.5 Hz Unity depth pipeline without merge-latch oscillation. |
 | `emergency_min_distance` | `4.0` | Minimum front-obstacle emergency distance, in metres. |
+| `emergency_standstill_distance` | `6.0` | Desired remaining gap after stopping behind a vehicle, in metres. |
 | `emergency_reaction_time` | `0.5` | Reaction-time term in the dynamic stopping distance, in seconds. |
-| `emergency_deceleration` | `5.0` | Assumed available deceleration in the stopping-distance model, in m/s². |
-| `emergency_release_margin` | `2.0` | Additional clearance required to release emergency braking, in metres. |
-| `merge_trigger_distance` | `8.0` | Right-front obstacle distance that activates merge slowdown, in metres. Event1 tuning delays intervention until the NPC is nearer the conflict area. |
+| `emergency_deceleration` | `0.7` | Conservative available deceleration measured from Event2 full-brake logs, in m/s². |
+| `emergency_release_margin` | `2.0` | Additional clearance beyond the static following gap required before releasing a completed emergency stop, in metres. |
+| `emergency_min_hold_time` | `1.0` | Minimum emergency-brake latch duration after a front hazard is detected. |
+| `emergency_trigger_max_distance` | `10.0` | Near-field ceiling for full emergency activation; farther closing traffic is handled continuously. |
+| `emergency_follow_release_min_distance` | `5.4` | Minimum measured gap for handing emergency braking back to adaptive following before standstill. |
+| `emergency_follow_release_min_range_rate` | `-0.6` | Minimum filtered gap rate for early handoff, in m/s; the gap may close only slowly. |
+| `emergency_follow_release_max_speed` | `2.0` | Maximum ego speed at which early emergency-to-following handoff is permitted, in m/s. |
+| `emergency_follow_release_confirmation` | `0.1` | Time for which early-handoff conditions must remain true, in seconds. |
+| `merge_trigger_distance` | `12.0` | Right-front obstacle distance that activates early Event2 slowdown before the short-range emergency corridor is needed. |
 | `merge_release_margin` | `2.0` | Additional clearance required to release merge slowdown, in metres. |
-| `merge_target_speed` | `2.5` | Maximum target speed while yielding to a merging vehicle, in m/s. |
+| `merge_target_speed` | `1.5` | Maximum crawl speed while yielding to a merging vehicle, in m/s. |
+| `following_enabled` | `true` | Enable continuous adaptive vehicle following. |
+| `following_activation_distance` | `20.0` | Maximum semantic-vehicle distance at which following control is active, in metres. |
+| `following_time_headway` | `2.2` | Time-headway contribution to the desired gap, in seconds. |
+| `following_distance_gain` | `0.10` | Gain converting distance error into target-speed correction. |
+| `following_range_rate_alpha` | `0.5` | Low-pass weight for new gap-rate samples. |
+| `following_range_rate_timeout` | `1.5` | Maximum age of a gap-rate estimate, in seconds. |
+| `following_distance_deadband` | `0.75` | Gap-error band in which stable following holds current speed, in metres. |
+| `following_range_rate_deadband` | `0.2` | Relative-speed band in which the gap is considered stable, in m/s. |
+| `following_target_acceleration` | `1.0` | Maximum upward target-speed slew rate, in m/s². |
+| `following_target_deceleration` | `4.0` | Maximum downward target-speed slew rate, in m/s². |
+| `following_max_abs_range_rate` | `6.0` | Clamp applied to measured gap rate, in m/s. |
+| `vehicle_behavior_global` | `true` | Enable fused longitudinal following and emergency protection at every waypoint. |
+| `vehicle_behavior_waypoint_ids` | unset | Optional longitudinal-vehicle allowlist used only when global behavior is disabled. |
+| `merge_behavior_waypoint_ids` | `43..48` | Waypoint allowlist for Event2-specific right-front merge yielding. |
+| `semantic_direct_control_waypoint_ids` | `43..48` | Validated waypoints where semantic vehicle depth may control without point-cloud range agreement. |
 | `update_rate` | `20.0` | Decision output rate, in Hz. |
 
 The obstacle monitor transforms `/planning/path` into `OurCar/INS` and projects each cloud
@@ -186,10 +221,23 @@ point onto that polyline. The default emergency corridor covers arc length `0.5.
 points within 1.2 m of the future path. The merge band covers arc length `0.5..15 m` and
 signed path-relative offset `-2.5..-0.8 m`; negative offset is right of the local path
 tangent. This prevents a road-end barrier outside a turn from being interpreted as an
-in-lane obstacle. If the path is missing, stale for more than 0.75 s, or cannot be
+in-lane obstacle. A second, last-resort vehicle-frame safety corridor uses the raw
+`/perception/pcl/points` camera cloud and covers only `x=0.5..3.5 m` and
+`|y|<=1.5 m`; at least five supporting points are required, and its fifth-nearest
+distance is combined with the path-relative result. The short upper bound
+stays below the known waypoint-48 fixed return near 3.97 m while catching an obstacle that
+path projection loses immediately before contact. If the path is missing, stale for more
+than 0.75 s, or cannot be
 transformed, the same numerical bounds are applied as conservative rectangular
 vehicle-frame ROIs. Height defaults to `z=-0.5..2.0 m`; the lower bound rejects curb and
 road-shoulder returns near `z=-0.57..-0.67 m` while retaining vehicle-body points.
+At waypoint 48, a mapped road-end structure can simultaneously occupy the path, safety and
+merge corridors. Suppression is recognized as soon as raw safety is within 4 m while the
+latest path and merge distances are both within 9.5 m; it is then latched until the waypoint
+changes and omitted from the front-stop output. The merge crawl remains active so steering
+can carry the vehicle around the turn. Event2's measured emergency signature remains
+actionable because its raw safety distance is near `2.5 m` while the path distance remains
+about `11.8..12.7 m`.
 `use_latest_tf=true` matches the
 upstream occupancy node's transform policy and avoids millisecond-scale future
 extrapolation caused by the serialized Unity sensor stream. These values require tuning in
@@ -242,10 +290,11 @@ The tests cover:
 - fail-safe behavior after planning-speed timeout.
 - merge-speed limiting and release hysteresis;
 - speed-dependent emergency braking;
+- global semantic/point-cloud-confirmed longitudinal following;
+- rejection of unmatched semantic cross traffic outside validated direct-control waypoints;
+- separation of path-corridor matching from the raw near-field guard;
 - behavior priority when traffic-light, merge and emergency events overlap;
-- emergency release hysteresis, stale-data fail-safe behavior, and the full-stop release
-  requirement;
-- bounded merge-latch retention across measured point-cloud gaps.
+- emergency release hysteresis and stale-data fail-safe behavior.
 
 ### Manual ROS topic test
 
@@ -296,6 +345,16 @@ ros2 topic pub -r 10 /decision/front_obstacle_distance std_msgs/msg/Float32 \
   "{data: 2.0}"
 ```
 
+The retained production Unity configuration uses spawn 0 with both NPC events enabled.
+Run the complete route with:
+
+```bash
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=true \
+  enable_visualization:=false
+```
+
 ## Current limitations and future work
 
 - The four traffic-light waypoint IDs were validated under motion in Stage 4.
@@ -306,12 +365,13 @@ ros2 topic pub -r 10 /decision/front_obstacle_distance std_msgs/msg/Float32 \
 - It does not modify `/planning/path`.
 - Point-cloud ROI detection measures proximity, not object identity or relative velocity.
   Static roadside objects can therefore cause false positives if the ROI is too wide.
-- The merge event is not yet restricted to a verified route segment because the route map
-  has no dedicated merge-event label. Its ROI and thresholds require Unity track testing.
-- Emergency and merge behaviors have unit tests but still require end-to-end validation
-  with perception, planning and the final controller.
-- A project-level launch file must eventually start simulation, perception, route manager,
-  trajectory generator, decision making and controller together.
+- Event2-specific merge yielding is intentionally restricted to waypoints 43--48.
+- Global vehicle following requires a fresh semantic/point-cloud range match outside the
+  validated Event2 direct-control window; a vehicle temporarily hidden from either sensor
+  can therefore be released after the configured timeout.
+- The full-route no-event and two-event scenarios have been validated in Unity. Additional
+  vehicle placements, lighting conditions and sensor dropouts remain useful regression
+  cases.
 
 When decision behaviors are tuned or extended, update the topic tables, priority rules,
 parameters, tests and limitations in this README.

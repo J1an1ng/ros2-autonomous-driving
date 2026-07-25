@@ -42,14 +42,38 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("traffic_light_stop_distance", 4.0)
         self.declare_parameter("traffic_light_activation_distance", 20.0)
         self.declare_parameter("obstacle_timeout", 0.5)
-        self.declare_parameter("merge_stale_timeout", 3.0)
         self.declare_parameter("emergency_min_distance", 4.0)
+        self.declare_parameter("emergency_standstill_distance", 0.0)
         self.declare_parameter("emergency_reaction_time", 0.5)
         self.declare_parameter("emergency_deceleration", 5.0)
         self.declare_parameter("emergency_release_margin", 2.0)
-        self.declare_parameter("merge_trigger_distance", 10.0)
+        self.declare_parameter("emergency_min_hold_time", 2.5)
+        self.declare_parameter("emergency_trigger_max_distance", 0.0)
+        self.declare_parameter("emergency_follow_release_min_distance", 0.0)
+        self.declare_parameter("emergency_follow_release_min_range_rate", 0.0)
+        self.declare_parameter("emergency_follow_release_max_speed", 0.0)
+        self.declare_parameter("emergency_follow_release_confirmation", 0.0)
+        self.declare_parameter("merge_trigger_distance", 12.0)
         self.declare_parameter("merge_release_margin", 2.0)
-        self.declare_parameter("merge_target_speed", 2.0)
+        self.declare_parameter("merge_target_speed", 1.5)
+        self.declare_parameter("following_enabled", True)
+        self.declare_parameter("following_activation_distance", 30.0)
+        self.declare_parameter("following_time_headway", 1.5)
+        self.declare_parameter("following_distance_gain", 0.35)
+        self.declare_parameter("following_range_rate_alpha", 0.5)
+        self.declare_parameter("following_range_rate_timeout", 1.5)
+        self.declare_parameter("following_distance_deadband", 0.75)
+        self.declare_parameter("following_range_rate_deadband", 0.2)
+        self.declare_parameter("following_target_acceleration", 1.0)
+        self.declare_parameter("following_target_deceleration", 2.0)
+        self.declare_parameter("following_max_abs_range_rate", 6.0)
+        self.declare_parameter(
+            "vehicle_behavior_waypoint_ids", Parameter.Type.INTEGER_ARRAY
+        )
+        self.declare_parameter("vehicle_behavior_global", False)
+        self.declare_parameter(
+            "merge_behavior_waypoint_ids", Parameter.Type.INTEGER_ARRAY
+        )
         self.declare_parameter("update_rate", 20.0)
 
         controlled_states = self.get_parameter("controlled_route_states").value
@@ -63,6 +87,24 @@ class TrafficLightStateMachineNode(Node):
             "strict_green_waypoint_ids",
             Parameter(
                 "strict_green_waypoint_ids", Parameter.Type.INTEGER_ARRAY, []
+            ),
+        ).value
+        vehicle_behavior_waypoint_ids = self.get_parameter_or(
+            "vehicle_behavior_waypoint_ids",
+            Parameter(
+                "vehicle_behavior_waypoint_ids",
+                Parameter.Type.INTEGER_ARRAY,
+                [],
+            ),
+        ).value
+        if bool(self.get_parameter("vehicle_behavior_global").value):
+            vehicle_behavior_waypoint_ids = []
+        merge_behavior_waypoint_ids = self.get_parameter_or(
+            "merge_behavior_waypoint_ids",
+            Parameter(
+                "merge_behavior_waypoint_ids",
+                Parameter.Type.INTEGER_ARRAY,
+                [],
             ),
         ).value
         self.machine = TrafficLightStateMachine(
@@ -103,14 +145,67 @@ class TrafficLightStateMachineNode(Node):
                 "traffic_light_activation_distance"
             ).value,
             obstacle_timeout=self.get_parameter("obstacle_timeout").value,
-            merge_stale_timeout=self.get_parameter("merge_stale_timeout").value,
             emergency_min_distance=self.get_parameter("emergency_min_distance").value,
+            emergency_standstill_distance=self.get_parameter(
+                "emergency_standstill_distance"
+            ).value,
             emergency_reaction_time=self.get_parameter("emergency_reaction_time").value,
             emergency_deceleration=self.get_parameter("emergency_deceleration").value,
             emergency_release_margin=self.get_parameter("emergency_release_margin").value,
+            emergency_min_hold_time=self.get_parameter(
+                "emergency_min_hold_time"
+            ).value,
+            emergency_trigger_max_distance=self.get_parameter(
+                "emergency_trigger_max_distance"
+            ).value,
+            emergency_follow_release_min_distance=self.get_parameter(
+                "emergency_follow_release_min_distance"
+            ).value,
+            emergency_follow_release_min_range_rate=self.get_parameter(
+                "emergency_follow_release_min_range_rate"
+            ).value,
+            emergency_follow_release_max_speed=self.get_parameter(
+                "emergency_follow_release_max_speed"
+            ).value,
+            emergency_follow_release_confirmation=self.get_parameter(
+                "emergency_follow_release_confirmation"
+            ).value,
             merge_trigger_distance=self.get_parameter("merge_trigger_distance").value,
             merge_release_margin=self.get_parameter("merge_release_margin").value,
             merge_target_speed=self.get_parameter("merge_target_speed").value,
+            following_enabled=self.get_parameter("following_enabled").value,
+            following_activation_distance=self.get_parameter(
+                "following_activation_distance"
+            ).value,
+            following_time_headway=self.get_parameter(
+                "following_time_headway"
+            ).value,
+            following_distance_gain=self.get_parameter(
+                "following_distance_gain"
+            ).value,
+            following_range_rate_alpha=self.get_parameter(
+                "following_range_rate_alpha"
+            ).value,
+            following_range_rate_timeout=self.get_parameter(
+                "following_range_rate_timeout"
+            ).value,
+            following_distance_deadband=self.get_parameter(
+                "following_distance_deadband"
+            ).value,
+            following_range_rate_deadband=self.get_parameter(
+                "following_range_rate_deadband"
+            ).value,
+            following_target_acceleration=self.get_parameter(
+                "following_target_acceleration"
+            ).value,
+            following_target_deceleration=self.get_parameter(
+                "following_target_deceleration"
+            ).value,
+            following_max_abs_range_rate=self.get_parameter(
+                "following_max_abs_range_rate"
+            ).value,
+            vehicle_behavior_waypoint_ids=vehicle_behavior_waypoint_ids,
+            merge_behavior_waypoint_ids=merge_behavior_waypoint_ids,
         )
 
         self.route_state = ""
@@ -239,13 +334,7 @@ class TrafficLightStateMachineNode(Node):
         )
 
     def timer_callback(self) -> None:
-        now = self.now_seconds()
-        output = self.machine.evaluate(now)
-        obstacle_age = (
-            math.inf
-            if self.machine.obstacle_time is None
-            else max(0.0, now - self.machine.obstacle_time)
-        )
+        output = self.machine.evaluate(self.now_seconds())
 
         speed_msg = Float32()
         speed_msg.data = output.target_speed
@@ -267,11 +356,16 @@ class TrafficLightStateMachineNode(Node):
             f"light={self.machine.traffic_light.name} "
             f"light_scores={self.machine.traffic_light_red_score}/"
             f"{self.machine.traffic_light_green_score} "
+            f"strict_green={self.machine.strict_green_required}/"
+            f"{self.machine.strict_green_evidence} "
+            f"emergency_threshold={self.machine.emergency_distance:.3f} "
+            f"range_rate="
+            f"{self.machine.effective_front_obstacle_range_rate:.3f} "
+            f"following_gap={self.machine.following_distance_target:.3f} "
+            f"following_raw_target="
+            f"{self.machine.following_raw_target_speed:.3f} "
             f"front_distance={self.machine.front_obstacle_distance:.3f} "
             f"merge_distance={self.machine.merge_obstacle_distance:.3f} "
-            f"obstacle_age={obstacle_age:.3f} "
-            f"emergency_latched={self.machine.emergency_latched} "
-            f"merge_latched={self.machine.merge_latched} "
             f"target_speed={output.target_speed:.3f}"
         )
         self.debug_pub.publish(debug_msg)

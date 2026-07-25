@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from decision_making.traffic_light_state_machine import (
@@ -426,7 +428,7 @@ def test_unknown_boundary_stop_cancels_if_fresh_distance_is_outside_boundary():
     assert not resumed.stop_required
 
 
-def test_confirmed_green_cancels_red_stop_before_standstill():
+def test_explicit_red_stop_cannot_cancel_for_green_before_standstill():
     machine = make_machine(
         traffic_light_waypoint_ids=[25], traffic_light_stop_distance=4.0
     )
@@ -441,11 +443,11 @@ def test_confirmed_green_cancels_red_stop_before_standstill():
     machine.update_planning_speed(3.0, 0.2)
     machine.update_vehicle_speed(0.8, 0.2)
     machine.update_traffic_light(TrafficLight.GREEN, 0.2)
-    released = machine.evaluate(0.2)
+    still_stopping = machine.evaluate(0.2)
 
-    assert released.state == DecisionState.RELEASED
-    assert released.target_speed == pytest.approx(3.0)
-    assert not released.stop_required
+    assert still_stopping.state == DecisionState.STOPPING_FOR_LIGHT
+    assert still_stopping.target_speed == 0.0
+    assert still_stopping.stop_required
 
 
 def test_stale_light_stops_at_allowlisted_controlled_waypoint():
@@ -536,76 +538,26 @@ def test_planning_speed_timeout_fails_safe_to_zero():
 
 def test_merge_vehicle_limits_speed_and_uses_hysteresis():
     machine = make_machine(
-        merge_trigger_distance=8.0,
+        merge_trigger_distance=12.0,
         merge_release_margin=2.0,
-        merge_target_speed=2.5,
+        merge_target_speed=1.5,
     )
     machine.update_route("normal", 12)
     machine.update_planning_speed(6.0, 0.0)
-    machine.update_obstacle_distances(float("inf"), 7.0, 0.0)
+    machine.update_obstacle_distances(float("inf"), 11.5, 0.0)
 
     slowing = machine.evaluate(0.1)
     machine.update_planning_speed(6.0, 0.2)
-    machine.update_obstacle_distances(float("inf"), 9.0, 0.2)
+    machine.update_obstacle_distances(float("inf"), 13.0, 0.2)
     hysteresis = machine.evaluate(0.2)
-    machine.update_obstacle_distances(float("inf"), 10.1, 0.3)
+    machine.update_obstacle_distances(float("inf"), 14.1, 0.3)
     released = machine.evaluate(0.3)
 
     assert slowing.state == DecisionState.SLOWING_FOR_MERGE
-    assert slowing.target_speed == pytest.approx(2.5)
+    assert slowing.target_speed == pytest.approx(1.5)
     assert hysteresis.state == DecisionState.SLOWING_FOR_MERGE
     assert released.state == DecisionState.CRUISE
     assert released.target_speed == pytest.approx(6.0)
-
-
-def test_merge_latch_survives_measured_pointcloud_gap():
-    machine = make_machine(
-        obstacle_timeout=1.0,
-        merge_stale_timeout=3.0,
-        merge_trigger_distance=8.0,
-        merge_target_speed=2.5,
-    )
-    machine.update_route("normal", 47)
-    machine.update_planning_speed(8.0, 0.0)
-    machine.update_obstacle_distances(float("inf"), 2.5, 0.0)
-    assert machine.evaluate(0.1).state == DecisionState.SLOWING_FOR_MERGE
-
-    # The focused Event2 trace contained a 2.291 s point-cloud gap. Retain the
-    # last safe merge limit through that bounded gap instead of accelerating.
-    machine.update_planning_speed(8.0, 2.3)
-    during_gap = machine.evaluate(2.3)
-
-    assert during_gap.state == DecisionState.SLOWING_FOR_MERGE
-    assert during_gap.target_speed == pytest.approx(2.5)
-
-
-def test_stale_merge_observation_fails_safe_until_fresh_clearance():
-    machine = make_machine(
-        obstacle_timeout=1.0,
-        merge_stale_timeout=3.0,
-        merge_trigger_distance=8.0,
-        merge_target_speed=2.5,
-    )
-    machine.update_route("normal", 47)
-    machine.update_planning_speed(8.0, 0.0)
-    machine.update_obstacle_distances(float("inf"), 2.5, 0.0)
-    machine.evaluate(0.1)
-
-    machine.update_planning_speed(8.0, 3.1)
-    stale = machine.evaluate(3.1)
-
-    assert stale.state == DecisionState.SLOWING_FOR_MERGE
-    assert stale.target_speed == 0.0
-    assert stale.stop_required
-    assert stale.reason == "merge_obstacle_stale_stop"
-
-    machine.update_planning_speed(8.0, 3.2)
-    machine.update_obstacle_distances(float("inf"), float("inf"), 3.2)
-    cleared = machine.evaluate(3.2)
-
-    assert cleared.state == DecisionState.CRUISE
-    assert cleared.target_speed == pytest.approx(8.0)
-    assert not cleared.stop_required
 
 
 def test_emergency_braking_has_priority_over_traffic_and_merge():
@@ -624,21 +576,43 @@ def test_emergency_braking_has_priority_over_traffic_and_merge():
     assert output.reason == "front_obstacle_emergency"
 
 
-def test_emergency_threshold_grows_with_vehicle_speed():
+def test_emergency_threshold_grows_with_relative_closing_speed():
     machine = make_machine(
         emergency_min_distance=2.0,
         emergency_reaction_time=0.5,
         emergency_deceleration=5.0,
+        following_max_abs_range_rate=10.0,
     )
     machine.update_route("normal", 12)
-    machine.update_planning_speed(8.0, 0.0)
-    machine.update_vehicle_speed(10.0, 0.0)
-    machine.update_obstacle_distances(14.0, float("inf"), 0.0)
+    machine.update_obstacle_distances(20.0, float("inf"), 0.0)
+    machine.update_planning_speed(8.0, 0.6)
+    machine.update_vehicle_speed(10.0, 0.6)
+    machine.update_obstacle_distances(14.0, float("inf"), 0.6)
+
+    output = machine.evaluate(0.6)
+
+    # Relative closing speed is 10 m/s:
+    # 10 * 0.5 + 10^2 / (2 * 5) = 15 metres.
+    assert output.state == DecisionState.EMERGENCY_BRAKING
+
+
+def test_stable_lead_vehicle_does_not_emergency_brake_from_ego_speed_alone():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_standstill_distance=6.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=0.7,
+    )
+    machine.update_route("normal", 45)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(4.0, 0.0)
+    machine.update_obstacle_distances(18.0, 18.0, 0.0)
 
     output = machine.evaluate(0.1)
 
-    # 10 * 0.5 + 10^2 / (2 * 5) = 15 metres.
-    assert output.state == DecisionState.EMERGENCY_BRAKING
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert output.target_speed == pytest.approx(4.0)
+    assert not output.stop_required
 
 
 def test_emergency_releases_only_after_clear_margin():
@@ -659,40 +633,362 @@ def test_emergency_releases_only_after_clear_margin():
 
     machine.update_obstacle_distances(6.1, float("inf"), 0.3)
     released = machine.evaluate(0.3)
-    assert released.state == DecisionState.CRUISE
-    assert released.target_speed == pytest.approx(5.0)
+    assert released.state == DecisionState.FOLLOWING_VEHICLE
+    assert not machine.emergency_latched
+    assert released.target_speed > 0.0
 
 
-def test_emergency_does_not_release_before_complete_stop():
+def test_waypoint47_far_closing_vehicle_uses_adaptive_braking():
+    machine = make_machine(
+        stopped_speed_threshold=0.15,
+        emergency_min_distance=4.0,
+        emergency_standstill_distance=6.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=0.7,
+        emergency_release_margin=2.0,
+        emergency_min_hold_time=2.5,
+        emergency_trigger_max_distance=10.0,
+        merge_trigger_distance=0.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_obstacle_distances(19.50, 19.50, 0.0)
+    machine.update_planning_speed(14.0, 1.3)
+    machine.update_vehicle_speed(3.27, 1.3)
+    machine.update_obstacle_distances(15.07, 15.07, 1.3)
+    slowing = machine.evaluate(1.3)
+
+    assert slowing.state == DecisionState.FOLLOWING_VEHICLE
+    assert 0.0 < slowing.target_speed < 3.27
+    assert not slowing.stop_required
+
+
+def test_emergency_stays_latched_while_gap_is_still_closing():
     machine = make_machine(
         emergency_min_distance=4.0,
-        emergency_release_margin=2.0,
-        merge_trigger_distance=8.0,
-        merge_target_speed=2.5,
+        emergency_standstill_distance=6.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=0.7,
+        emergency_min_hold_time=1.0,
+        emergency_trigger_max_distance=10.0,
+        emergency_follow_release_min_distance=5.4,
+        emergency_follow_release_min_range_rate=-0.3,
+        emergency_follow_release_max_speed=2.0,
+        emergency_follow_release_confirmation=0.3,
+        following_range_rate_alpha=1.0,
+        merge_trigger_distance=0.0,
     )
-    machine.update_route("normal", 48)
+    machine.update_route("normal", 47)
     machine.update_planning_speed(8.0, 0.0)
-    machine.update_vehicle_speed(2.0, 0.0)
-    machine.update_obstacle_distances(3.0, 3.0, 0.0)
-    assert machine.evaluate(0.1).state == DecisionState.EMERGENCY_BRAKING
+    machine.update_vehicle_speed(3.0, 0.0)
+    machine.update_obstacle_distances(10.0, 10.0, 0.0)
+    machine.evaluate(0.0)
 
-    # Event2 moved from the front corridor into the merge corridor while the
-    # car was still moving. A fresh front=inf sample must not release braking
-    # until measured speed confirms a complete stop.
-    machine.update_planning_speed(8.0, 0.2)
-    machine.update_vehicle_speed(1.5, 0.2)
-    machine.update_obstacle_distances(float("inf"), 2.3, 0.2)
-    still_braking = machine.evaluate(0.2)
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(3.0, 1.0)
+    machine.update_obstacle_distances(6.0, 6.0, 1.0)
+    assert machine.evaluate(1.0).state == DecisionState.EMERGENCY_BRAKING
+
+    machine.update_planning_speed(8.0, 3.0)
+    machine.update_vehicle_speed(1.5, 3.0)
+    machine.update_obstacle_distances(5.0, 5.0, 3.0)
+    machine.evaluate(3.0)
+    still_braking = machine.evaluate(3.4)
 
     assert still_braking.state == DecisionState.EMERGENCY_BRAKING
     assert still_braking.target_speed == 0.0
     assert still_braking.stop_required
 
-    machine.update_vehicle_speed(0.1, 0.3)
-    stopped = machine.evaluate(0.3)
 
-    assert stopped.state == DecisionState.SLOWING_FOR_MERGE
-    assert stopped.target_speed == pytest.approx(2.5)
+def test_emergency_hands_back_to_following_when_lead_vehicle_moves():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_standstill_distance=6.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=0.7,
+        emergency_min_hold_time=1.0,
+        emergency_trigger_max_distance=10.0,
+        emergency_follow_release_min_distance=5.4,
+        emergency_follow_release_min_range_rate=-0.6,
+        emergency_follow_release_max_speed=2.0,
+        emergency_follow_release_confirmation=0.1,
+        following_range_rate_alpha=1.0,
+        merge_trigger_distance=0.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(3.0, 0.0)
+    machine.update_obstacle_distances(10.0, 10.0, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(3.0, 1.0)
+    machine.update_obstacle_distances(6.8, 6.8, 1.0)
+    assert machine.evaluate(1.0).state == DecisionState.EMERGENCY_BRAKING
+
+    # Ego is still moving, but the filtered range now shrinks by only 0.55 m/s,
+    # matching the first lead-vehicle recovery evidence observed at waypoint 47.
+    machine.update_planning_speed(8.0, 3.0)
+    machine.update_vehicle_speed(1.8, 3.0)
+    machine.update_obstacle_distances(5.7, 5.7, 3.0)
+    assert machine.evaluate(3.0).state == DecisionState.EMERGENCY_BRAKING
+    released = machine.evaluate(3.11)
+
+    assert released.state == DecisionState.FOLLOWING_VEHICLE
+    assert 0.0 < released.target_speed < 1.8
+    assert not released.stop_required
+    assert not machine.emergency_latched
+
+
+def test_adaptive_following_holds_speed_at_desired_stable_gap():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        following_time_headway=1.5,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(4.0, 0.0)
+    machine.update_obstacle_distances(12.0, 12.0, 0.0)
+
+    output = machine.evaluate(0.0)
+
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert output.target_speed == pytest.approx(4.0)
+    assert not output.stop_required
+
+
+def test_adaptive_following_does_not_accelerate_into_non_opening_gap():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_range_rate_alpha=1.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(3.5, 0.0)
+    machine.update_obstacle_distances(19.0, 19.0, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(8.0, 0.5)
+    machine.update_vehicle_speed(3.5, 0.5)
+    machine.update_obstacle_distances(18.9, 18.9, 0.5)
+    non_opening = machine.evaluate(0.5)
+
+    assert non_opening.state == DecisionState.FOLLOWING_VEHICLE
+    assert non_opening.target_speed <= 3.5
+
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(3.5, 1.0)
+    machine.update_obstacle_distances(19.5, 19.5, 1.0)
+    opening = machine.evaluate(1.0)
+
+    assert opening.target_speed > 3.5
+
+
+def test_adaptive_following_brakes_early_on_closing_vehicle():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_range_rate_alpha=1.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(3.7, 0.0)
+    machine.update_obstacle_distances(18.8, 18.8, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(3.7, 1.0)
+    machine.update_obstacle_distances(18.3, 18.3, 1.0)
+    slowing = machine.evaluate(1.0)
+
+    assert slowing.state == DecisionState.FOLLOWING_VEHICLE
+    assert 0.0 < slowing.target_speed < 3.7
+
+
+def test_event2_stable_nineteen_metre_gap_does_not_create_first_full_stop():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_standstill_distance=6.0,
+        emergency_reaction_time=0.5,
+        emergency_deceleration=0.7,
+        following_time_headway=1.5,
+    )
+    machine.update_route("normal", 44)
+    samples = [
+        (0.0, 3.57, 19.03),
+        (0.5, 3.66, 19.02),
+        (1.0, 3.75, 18.84),
+        (1.5, 3.83, 18.65),
+        (2.0, 3.86, 18.46),
+        (2.5, 3.90, 18.35),
+    ]
+
+    outputs = []
+    for now, speed, distance in samples:
+        machine.update_planning_speed(14.0, now)
+        machine.update_vehicle_speed(speed, now)
+        machine.update_obstacle_distances(distance, distance, now)
+        outputs.append(machine.evaluate(now))
+
+    assert all(
+        output.state == DecisionState.FOLLOWING_VEHICLE
+        for output in outputs
+    )
+    assert not machine.emergency_latched
+
+
+def test_adaptive_following_reduces_target_when_gap_is_closing():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        emergency_deceleration=5.0,
+        following_time_headway=1.5,
+        following_distance_gain=0.35,
+        following_target_deceleration=2.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(4.0, 0.0)
+    machine.update_obstacle_distances(15.0, 15.0, 0.0)
+    initial = machine.evaluate(0.0)
+
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(4.0, 1.0)
+    machine.update_obstacle_distances(13.0, 13.0, 1.0)
+    closing = machine.evaluate(1.0)
+
+    assert initial.target_speed == pytest.approx(4.0)
+    assert closing.state == DecisionState.FOLLOWING_VEHICLE
+    assert 0.0 < closing.target_speed < initial.target_speed
+    assert machine.front_obstacle_range_rate == pytest.approx(-2.0)
+
+
+def test_t_junction_cross_traffic_is_ignored_before_conflict_waypoints():
+    machine = make_machine(
+        vehicle_behavior_waypoint_ids=[43, 44, 45, 46, 47, 48],
+        emergency_standstill_distance=6.0,
+        emergency_deceleration=0.7,
+    )
+    machine.update_route("normal", 38)
+    machine.update_obstacle_distances(22.0, 22.0, 0.0)
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(4.0, 1.0)
+    machine.update_obstacle_distances(17.0, 17.0, 1.0)
+
+    output = machine.evaluate(1.0)
+
+    assert output.state == DecisionState.CRUISE
+    assert output.target_speed == pytest.approx(8.0)
+    assert not machine.emergency_latched
+
+
+def test_global_front_vehicle_following_applies_outside_event2_waypoints():
+    machine = make_machine(
+        vehicle_behavior_waypoint_ids=[],
+        merge_behavior_waypoint_ids=[43, 44, 45, 46, 47, 48],
+        following_activation_distance=20.0,
+        emergency_standstill_distance=6.0,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(3.5, 0.0)
+    machine.update_obstacle_distances(15.0, math.inf, 0.0)
+
+    output = machine.evaluate(0.0)
+
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert output.target_speed <= 3.5
+    assert not output.stop_required
+
+
+def test_event2_merge_slowdown_does_not_apply_globally():
+    machine = make_machine(
+        vehicle_behavior_waypoint_ids=[],
+        merge_behavior_waypoint_ids=[43, 44, 45, 46, 47, 48],
+        following_enabled=False,
+        merge_trigger_distance=12.0,
+        merge_target_speed=1.5,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(3.0, 0.0)
+    machine.update_obstacle_distances(math.inf, 8.0, 0.0)
+
+    outside_event2 = machine.evaluate(0.0)
+    machine.update_route("normal", 47)
+    inside_event2 = machine.evaluate(0.1)
+
+    assert outside_event2.state == DecisionState.CRUISE
+    assert outside_event2.target_speed == pytest.approx(8.0)
+    assert inside_event2.state == DecisionState.SLOWING_FOR_MERGE
+    assert inside_event2.target_speed == pytest.approx(1.5)
+
+
+def test_far_braking_lead_vehicle_uses_following_not_full_emergency():
+    machine = make_machine(
+        vehicle_behavior_waypoint_ids=[43, 44, 45, 46, 47, 48],
+        following_activation_distance=20.0,
+        emergency_standstill_distance=6.0,
+        emergency_deceleration=0.7,
+        emergency_trigger_max_distance=10.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_obstacle_distances(24.0, 24.0, 0.0)
+    machine.update_planning_speed(8.0, 1.3)
+    machine.update_vehicle_speed(4.0, 1.3)
+    machine.update_obstacle_distances(18.4, 18.4, 1.3)
+
+    output = machine.evaluate(1.3)
+
+    assert machine.front_obstacle_range_rate < -4.0
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert output.target_speed < 4.0
+    assert not output.stop_required
+    assert not machine.emergency_latched
+
+
+def test_near_fast_closing_vehicle_retains_full_emergency_stop():
+    machine = make_machine(
+        vehicle_behavior_waypoint_ids=[43, 44, 45, 46, 47, 48],
+        emergency_standstill_distance=6.0,
+        emergency_deceleration=0.7,
+        emergency_trigger_max_distance=10.0,
+    )
+    machine.update_route("normal", 47)
+    machine.update_obstacle_distances(14.0, 14.0, 0.0)
+    machine.update_planning_speed(8.0, 1.0)
+    machine.update_vehicle_speed(3.0, 1.0)
+    machine.update_obstacle_distances(9.0, 9.0, 1.0)
+
+    output = machine.evaluate(1.0)
+
+    assert output.state == DecisionState.EMERGENCY_BRAKING
+    assert output.target_speed == 0.0
+    assert output.stop_required
+
+
+def test_emergency_respects_minimum_hold_time_after_detection_flicker():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_release_margin=2.0,
+        emergency_min_hold_time=1.0,
+    )
+    machine.update_route("normal", 12)
+    machine.update_planning_speed(5.0, 0.0)
+    machine.update_vehicle_speed(2.0, 0.0)
+    machine.update_obstacle_distances(3.0, float("inf"), 0.0)
+    assert machine.evaluate(0.0).state == DecisionState.EMERGENCY_BRAKING
+
+    machine.update_obstacle_distances(float("inf"), float("inf"), 0.1)
+    held = machine.evaluate(0.1)
+    assert held.state == DecisionState.EMERGENCY_BRAKING
+
+    machine.update_planning_speed(5.0, 1.01)
+    machine.update_vehicle_speed(0.0, 1.01)
+    machine.update_obstacle_distances(float("inf"), float("inf"), 1.01)
+    released = machine.evaluate(1.01)
+    assert released.state == DecisionState.CRUISE
 
 
 def test_stale_emergency_observation_remains_fail_safe():

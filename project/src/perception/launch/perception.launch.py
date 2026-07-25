@@ -80,17 +80,44 @@ def generate_launch_description():
                 'state_topic': '/perception/traffic_light_state',
                 'debug_topic': '/perception/traffic_light_debug',
                 'max_semantic_stamp_delta_s': 1.0,
-                # Preserve four-frame filtering for ambiguous green evidence,
-                # but accept two consecutive strong green observations.
-                'consecutive_frames': 4,
-                'confident_green_frames': 2,
-                'confident_green_max_red_score': 4,
-                'confident_green_min_score': 20,
                 # Treat vertically separated high/low lamps for the same
                 # approach as one group while excluding other road approaches.
                 'target_light': 'signal_group',
                 'signal_group_max_dx_ratio': 0.16,
                 'signal_group_min_size_ratio': 0.45,
+            }],
+        ),
+
+        # This node is intentionally diagnostic-only for the first validation
+        # stage. Decision making does not yet consume its distance output.
+        Node(
+            package='perception',
+            executable='semantic_vehicle_detector_node',
+            name='semantic_vehicle_detector_node',
+            output='screen',
+            parameters=[{
+                'semantic_topic': '/OurCar/Sensors/SemanticCamera/image_raw',
+                'depth_topic': '/OurCar/Sensors/DepthCamera/image_raw',
+                'camera_info_topic':
+                    '/OurCar/Sensors/DepthCamera/camera_info',
+                'detected_topic': '/perception/front_vehicle_detected',
+                'distance_topic': '/perception/front_vehicle_distance',
+                'debug_topic': '/perception/front_vehicle_debug',
+                'semantic_r': 255,
+                'semantic_g': 0,
+                'semantic_b': 0,
+                'semantic_tolerance': 45,
+                'roi_x_min': 0.12,
+                'roi_y_min': 0.10,
+                'roi_x_max': 0.88,
+                'roi_y_max': 0.98,
+                'min_component_pixels': 80,
+                'min_valid_depth_pixels': 20,
+                'distance_percentile': 0.20,
+                'max_depth_stamp_delta_s': 1.0,
+                # A baseline road-side red component at waypoint 48 measured
+                # at least about 3 m off the optical centreline.
+                'max_abs_lateral_m': 2.8,
             }],
         ),
     ])

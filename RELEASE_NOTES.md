@@ -1,5 +1,44 @@
 # Release notes
 
+## full-system-v1.5.0
+
+Semantic-vehicle fusion and adaptive-following release packaged directly from
+the validated `full-system-v1.2.0` working directory.
+
+Improvements:
+
+- Adds a segmentation-based vehicle detector for red semantic components,
+  paired with aligned depth and explicit yellow traffic-light exclusion.
+- Fuses fresh semantic detections with the path-corridor point cloud across
+  the whole route. Event 2 retains a bounded waypoint 43--48 direct-distance
+  fallback for the crossing and merging geometry.
+- Rejects stale, laterally implausible, and discontinuous detections, and
+  suppresses the known fixed structure near waypoint 48 without weakening the
+  short-range raw safety guard.
+- Adds adaptive following based on a 6 m standstill gap, a 2.2 s time gap, and
+  relative range rate. Braking now starts earlier and releases progressively
+  when the lead vehicle moves instead of forcing an unnecessary full stop.
+- Restricts merge behavior to its intended waypoint window while keeping
+  ordinary front-vehicle handling active over the full route.
+- Removes one-off Event 2 configuration selectors, monitor scripts, backup
+  files, and dedicated temporary diagnostic topics. Consolidated runtime
+  diagnostics remain available on `/decision/debug`.
+- Updates the project status and integration documentation with the validated
+  production configuration and test procedure.
+
+Validation:
+
+- Built all eight ROS 2 workspace packages successfully.
+- Passed all 65 decision-making, 10 controller, and 34 trajectory functional
+  tests.
+- Passed the route-manager functional tests; its existing repository-wide
+  flake8 debt remains unchanged.
+- Completed the waypoint 0--63 no-event run without false following,
+  emergency, or merge behavior.
+- Completed the waypoint 0--63 all-events run with adaptive following through
+  waypoints 43--50, a minimum fused front distance of approximately 9.92 m,
+  no collision, and normal route completion.
+
 ## full-system-v1.3.0
 
 Route and performance update built on `full-system-v1.2.0`.

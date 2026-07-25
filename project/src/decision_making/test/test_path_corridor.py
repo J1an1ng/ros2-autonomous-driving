@@ -2,7 +2,13 @@ import math
 
 import pytest
 
-from decision_making.path_corridor import prepare_path, project_to_path
+from decision_making.path_corridor import (
+    in_vehicle_safety_corridor,
+    matches_fixed_structure_signature,
+    prepare_path,
+    project_to_path,
+    robust_nearest_distance,
+)
 
 
 def test_straight_path_projection_reports_arc_length_and_signed_offset():
@@ -39,3 +45,37 @@ def test_prepare_path_removes_invalid_and_duplicate_points():
 def test_projection_requires_a_usable_segment():
     assert project_to_path(1.0, 0.0, []) is None
     assert project_to_path(1.0, 0.0, [(0.0, 0.0)]) is None
+
+
+def test_vehicle_safety_corridor_covers_only_the_short_ego_lane_region():
+    assert in_vehicle_safety_corridor(2.0, 0.9, 0.5, 3.5, 1.1)
+    assert not in_vehicle_safety_corridor(4.0, 0.0, 0.5, 3.5, 1.1)
+    assert not in_vehicle_safety_corridor(2.0, 1.2, 0.5, 3.5, 1.1)
+    assert not in_vehicle_safety_corridor(-1.0, 0.0, 0.5, 3.5, 1.1)
+
+
+def test_robust_nearest_distance_requires_multiple_supporting_points():
+    assert math.isinf(robust_nearest_distance([1.0, 1.1, 1.2], 5))
+    assert robust_nearest_distance(
+        [0.2, 2.0, 2.1, 2.2, 2.3, 2.4], 5
+    ) == pytest.approx(2.3)
+
+
+def test_robust_nearest_distance_ignores_invalid_values():
+    distance = robust_nearest_distance(
+        [math.nan, math.inf, -1.0, 1.0, 1.1], 2
+    )
+
+    assert distance == pytest.approx(1.1)
+
+
+def test_fixed_structure_signature_requires_all_corridors_at_mapped_waypoint():
+    assert matches_fixed_structure_signature(
+        48, [48], 9.45, 3.44, 7.56, 9.5, 4.0, 9.5
+    )
+    assert not matches_fixed_structure_signature(
+        48, [48], 11.81, 2.49, 10.79, 9.5, 4.0, 9.5
+    )
+    assert not matches_fixed_structure_signature(
+        47, [48], 3.08, 3.26, 3.08, 9.5, 4.0, 9.5
+    )

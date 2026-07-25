@@ -1,176 +1,255 @@
-# 项目集成状态总结
+# 项目完成情况与已知问题总结
 
-当前集成分支：`release/full-system-v1.4.0`
+更新日期：2026-07-25
+
+版本目标：`full-system-v1.5.0`
 
 ## 1. 当前结论
 
-任务要求的完整自动驾驶链路已经集成完成。系统可通过
-`system_bringup/full_system.launch.py` 一次启动 Unity、仿真桥、TF、感知、
-路线管理、轨迹生成、决策、控制、OctoMap 和可视化节点，并从 spawn0 自动完成
-waypoint0--63。
+完整自动驾驶链路已经集成并完成最新整路线回归。系统可通过一个 launch 文件启动
+Unity、仿真桥、感知、路线管理、轨迹生成、决策和控制节点，从 spawn 0 沿规定路线
+经过 waypoint 0--63 并在终点停车。
 
-当前生产路线包含64个 waypoint。waypoint60--63 是终点延长段，用于通过最后一个
-红绿灯并抵达目标点，不能删除。最新全事件闭环运行成功进入 `route_complete`，
-没有观察到碰撞、驶离道路、人工接管、运行期节点退出或油门与制动同时输出。
+当前 Unity 生产配置为：
 
-Event1 合流避让、Event2 前车紧急制动、stale-obstacle 安全策略、两处关键弯道以及
-四个动态红绿灯均已在完整路线中验证。当前版本可以作为演示和验收基线。
+```text
+spawnIndex: 0
+eventEnable: [true, true]
+route_initial_waypoint_index: 0
+```
 
-## 2. 当前系统能力
+2026-07-25 完成了两轮端到端验证：
+
+- 无事件基线从 waypoint 0 行驶到 63，未进入 `FOLLOWING_VEHICLE`、
+  `EMERGENCY_BRAKING` 或非预期的 `SLOWING_FOR_MERGE`。
+- 两个事件同时开启的完整路线也到达 waypoint 63。横穿/汇入车辆在 waypoint 43--45
+  被平缓处理；前车急刹在 waypoint 47--50 触发动态跟车制动，最小融合前车距离约
+  9.92 m。前车重新运动后自车没有强制刹停到 0，而是在约 1.37 m/s 后继续跟车，
+  随后正常恢复巡航。
+
+两轮均未观察到碰撞、驶离道路、车辆行为残留制动或需要人工接管的情况。当前版本可
+作为演示、验收和后续场景扩展的生产基线。
+
+## 2. 已完成的系统功能
 
 ### 仿真与统一启动
 
-- 完整系统统一入口为 `system_bringup/full_system.launch.py`。
-- 默认 `enable_motion=false`；运动未授权或关键输入缺失时，控制器持续安全制动。
-- 正式运行使用 spawn0、route index0，并启用两个 Unity NPC 事件。
-- 启动器会为 Unity 暂存所选仿真配置，确保 ROS bridge 与 Unity 可执行文件使用同一
-  spawn/event 设置，退出后自动清理临时运行目录。
-- `/car_command` 只能由生产 `controller_node` 发布。
+- `system_bringup/full_system.launch.py` 是完整系统统一入口。
+- 默认 `enable_motion=false`；输入缺失、数据过期或运动未授权时控制器输出安全制动。
+- `/car_command` 仅由生产 controller 发布，不能同时运行 dummy controller。
+- Unity TCP/UDP 桥、RGB、semantic、depth、车辆状态和 TF 均已接通。
+- 当前 source 和 install 中的 Unity 配置均保持 spawn 0、两个事件开启。
 
-### 路线与轨迹
+### 路线、轨迹与控制
 
-- 路线覆盖 waypoint0--63，终点发布 `route_complete` 和零目标速度。
-- route manager 支持到达/越过判定、重复点连续推进、局部路径窗口和终点保持。
-- waypoint33--35 与 waypoint39--42 使用闭环验证过的弯道几何；弯内限速分别为
-  3 m/s 和 2 m/s，避免切弯、压路牙和护栏碰撞。
-- trajectory generator 使用 waypoint 朝向约束和平滑路径校验。完整任务在
-  `route_complete` 前没有出现路径失败。
+- 路线覆盖 waypoint 0--63，并支持终点停车。
+- route manager 支持 waypoint 到达/越过判断、重复点连续推进、局部路线窗口和
+  `route_complete`。
+- trajectory generator 生成平滑、受 waypoint 朝向约束的局部路径，并拒绝不合理
+  路径。
+- controller 使用 Pure Pursuit 横向控制和 PID 纵向控制，包含路径、TF、车速、决策
+  速度和停车请求的新鲜度检查。
+- 安全停车命令固定为油门 0、转向 0、制动 1；正常控制不会同时输出油门和制动。
 
-### 感知与红绿灯
+### 交通灯感知与决策
 
-- 深度图、点云、地面过滤、二维占据栅格、膨胀地图和 OctoMap 已接入完整系统。
-- 障碍距离相对当前规划路径计算，输出前向距离和右前合流距离。
-- 红绿灯检测结合 RGB 与 semantic 图像，并检查两路图像的时间戳新鲜度。
-- waypoint25、32、52、59 四处受控信号均完成停车/放行验证。
-- 混合红绿证据需要连续四帧确认绿色；红分不高于4且绿分不低于20的明确绿色使用
-  连续两帧确认。任何非绿色帧都会重置快速确认序列。
-- 决策层收到确认绿色后可以立即取消正在进行的红灯或 UNKNOWN 边界停车，不再要求
-  车辆在已经变绿时先完全停住。
+- 交通灯检测融合 RGB 灯色与 semantic 交通灯区域，包含组件选择、去抖、时间戳
+  新鲜度和相邻信号排除。
+- waypoint 25、32、52、59 四处受控交通灯均已验证红灯停车和稳定绿灯释放。
+- 决策保留红灯停车锁存，UNKNOWN 或过期灯色不能错误释放已经确认的停车。
+- 路口接近速度和硬停车边界分离，避免远距离过早停车。
 
-### NPC 事件与决策
+### 车辆语义检测
 
-决策优先级为：
+- semantic 图像中的红色组件用于 NPC 车辆检测；黄色交通灯类别不会被当作车辆。
+- 红色连通组件需要满足面积、ROI、深度有效像素和横向走廊条件。
+- 车辆距离采用组件有效深度的近表面稳健分位数，而不是单个最小噪声像素。
+- 语义距离包含时间戳超时和物理可行的距离跳变过滤。
 
-`EMERGENCY_BRAKING > traffic-light stop > merge slowdown > planning speed`
+### 语义与点云融合
 
-- Event1 的右前 NPC 会触发 `SLOWING_FOR_MERGE`，障碍离开后根据新鲜观测恢复。
-- 新鲜合流障碍将速度限制为2.5 m/s。短时 obstacle 数据缺口继续保持该限速。
-- 已锁存的合流障碍超过 `merge_stale_timeout` 后进入
-  `merge_obstacle_stale_stop`，目标速度为0；只有新鲜的安全观测可以解除锁存。
-- Event2 的前向 NPC 能触发速度相关的紧急制动。紧急锁存只有在前向区域获得新鲜
-  清空证据且车辆速度低于停车阈值后才释放，避免尚未停稳就重新给油。
+- 全路线车辆控制默认要求“新鲜语义车辆 + 规划路径点云距离”一致。
+- 匹配容差为 2.5 m 与语义距离 20% 两者中的较大值。
+- 点云匹配证据超过 0.75 s 后失效，旧点云不能确认新车辆。
+- waypoint 43--48 是经实车仿真验证的直接语义窗口，因为该处点云走廊会测到与 NPC
+  无关的路面和道路结构。
+- 原始点云的短距离安全走廊只作为 0.8 m 内的最后碰撞保护，不参与远距离语义匹配。
+- waypoint 48 的固定道路结构签名会被抑制，避免永久误刹；真实车辆语义仍可控制。
+- 最终只向决策层发布融合后的前车距离和右前方汇入距离。
 
-### 控制与故障安全
+### 动态跟车和制动
 
-- 横向使用 Pure Pursuit，纵向使用 PID，并按照 Unity 的转向符号约定输出。
-- 控制器检查路径、TF、车速、决策速度和停车状态的新鲜度。
-- 安全停车输出固定为油门0、转向0、制动1。
-- 数据中断、显式停车和 motion disabled 均会进入安全制动；输入恢复后允许自动恢复。
-- 完整运行中没有出现油门与制动同时为正的命令。
+- `FOLLOWING_VEHICLE` 使用当前距离、期望安全间距和滤波后的距离变化率动态调整目标
+  速度。
+- 当前期望间距为 6.0 m 静止间距加 2.2 s 车头时距。
+- 距离持续缩小时逐渐增强制动；距离稳定时保持速度；距离增加时平滑恢复。
+- 只有近场风险进入紧急制动，避免远处横穿车辆因径向接近速度较大而过早满刹。
+- 前车重新运动并持续满足释放条件时，可从强制制动交回动态跟车，无需自车先完全
+  停止。
+- 右前方汇入行为仅允许在 waypoint 43--48 触发，其他路段的横向车辆不会触发该
+  专用状态。
 
-## 3. 当前验收结果
+## 3. 最新验证证据
 
-完整运行配置为 spawn0、route index0、两个 NPC 事件开启、全部生产节点开启以及
-`enable_motion=true`。
+### 自动化测试
+
+- 8 个 ROS 包完整构建成功。
+- decision making 的融合、路径走廊和状态机测试：65/65 通过。
+- controller core GTest：10/10 通过。
+- trajectory generator：34/34 通过。
+- 完整 `colcon test` 的功能测试均通过；唯一失败仍是 route manager 既有 flake8
+  检查，报告 260 项格式、引号和 import 顺序问题，另有 1 项跳过。
+
+### 无事件完整路线
 
 | 项目 | 结果 |
-| --- | ---: |
-| 路线 | waypoint0--63，`route_complete` |
-| 任务时间 | 487.410 s |
-| 最大/平均车速 | 4.403 / 2.290 m/s |
-| Event2 紧急制动触发距离 | 3.412 m |
-| Event2 最小前向/合流距离 | 2.696 / 2.298 m |
-| 紧急制动释放速度 | 0.034 m/s |
-| 最大 twist 消息间隔 | 2.857 s |
-| 最大决策速度输出间隔 | 0.066 s |
-| 油门与制动同时输出 | 0 |
-| 运行期节点退出 | 0 |
+| --- | --- |
+| 路线范围 | waypoint 0--63 |
+| 车辆跟随误触发 | 无 |
+| 紧急制动误触发 | 无 |
+| 非事件路段汇入减速 | 无 |
+| 终点停车 | 正常 |
 
-关键行为：
+测试中多次出现红色路侧或横向车辆语义候选，最近语义距离曾低于 2 m，但由于没有与
+新鲜规划路径点云匹配，均未影响纵向控制。
 
-- Event2 在 waypoint47 遇到2.597 s 的 stale-obstacle 安全停车窗口，期间没有恢复
-  巡航。新鲜数据返回后先恢复2.5 m/s 合流限速，随后进入唯一一次
-  `EMERGENCY_BRAKING`，约4.60 s 后在接近静止时释放。
-- 最后一个信号在 waypoint59 进入短暂停车请求。稳定绿灯发布后8 ms 内解除决策
-  锁存，整个窗口最低车速为1.574 m/s，没有再次出现绿灯亮起后完全刹停数秒的现象。
-- waypoint33--35 和 Event2 前的 waypoint39--42 弯道均沿验证过的车道中心轨迹通过，
-  没有观察到右轮上路牙或碰撞。
-- waypoint60--63 全部完成，车辆通过最后信号后抵达终点。
+### 两事件完整路线
 
-完整 MCAP：
+| 场景 | waypoint | 结果 |
+| --- | --- | --- |
+| 横穿/汇入车辆 | 43--45 | 约 19.7 m 开始平缓跟随，目标离开后恢复 |
+| 前车急刹 | 47--50 | 动态增强制动，最小融合前车距离约 9.92 m |
+| 前车重新运动 | 47--48 | 自车最低约 1.37 m/s 后继续跟车，没有不必要地刹停 |
+| 事件释放 | 50 | 正常返回 `CRUISE`，无残留制动 |
+| 路线终点 | 63 | 正常停车 |
 
-`/tmp/full_route_final_fix_20260724/full_route_final_fix_20260724_0.mcap`
+完整路线中自适应跟车出现于 waypoint 43、44、45、47、48、49、50；没有出现非预期
+的汇入减速，也没有进入不必要的 `EMERGENCY_BRAKING`。
 
-ROS 日志目录：
+### 历史 Stage 6 证据
 
-`~/.ros/log/2026-07-24-22-41-34-139334-localhost-61094/`
+早期三轮正式测试的统计数据和图表仍保存在 `stage6_results/`，分析脚本为
+`tools/analyze_stage6_bags.py`。这些结果对应当时 waypoint 0--59 的路线版本，应视为
+历史重复性证据；2026-07-25 的 waypoint 0--63 测试是当前行为基线。
 
-## 4. 构建与测试状态
+## 4. 当前生产接口
 
-当前生产配置中的 `route_manager`、`trajectory_generator`、`decision_making`、
-`perception` 和 `system_bringup` 均构建成功。
+核心输入：
 
-当前汇总结果为101项测试、0项 error、1项 failure、1项 skip。所有功能测试、
-路线安全几何测试和4项交通灯稳定滤波 GTest 均通过。唯一失败是 route manager
-已有的 flake8 检查，共260项引号、import 顺序和格式问题；这属于代码风格债务，不是
-运行功能失败。
+```text
+/OurCar/INS/pose
+/OurCar/INS/twist
+/OurCar/Sensors/RGBCameraLeft/image_raw
+/OurCar/Sensors/SemanticCamera/image_raw
+/OurCar/Sensors/DepthCamera/image_raw
+/planning/path
+/planning/target_speed
+/perception/traffic_light_state
+/perception/front_vehicle_detected
+/perception/front_vehicle_distance
+```
 
-## 5. 已知限制
+核心决策与控制输出：
 
-### 保守的合流误减速
+```text
+/decision/front_obstacle_distance
+/decision/merge_obstacle_distance
+/decision/target_speed
+/decision/stop_required
+/decision/state
+/decision/debug
+/car_command
+```
 
-路边静态结构偶尔会进入右前合流检测区域。最终运行在 waypoint56 出现一次0.248 s
-的 `merge_obstacle_stale_stop`，下一条新鲜观测到达后自动恢复。它不影响路线完成，
-但若继续优化乘坐平顺性，应增加道路区域门控、对象分类或运动时序判断，不能通过取消
-stale 安全停车来规避。
+为解决 Event2 问题临时增加的逐级点云距离、融合确认和动态跟车数值 topic 已在验证
+完成后删除。生产代码保留一个综合 `/decision/debug`，不再持续发布只供一次性监控
+脚本使用的中间消息。
 
-### Unity 传感器间隔
+## 5. 已知问题和限制
 
-Unity 串行发送多路传感器，完整负载下偶尔会延迟车辆状态。本次最大 twist 间隔为
-2.857 s，控制器按设计安全停车并自动恢复。应优先优化 Unity 传输调度，而不是放宽或
-删除控制器输入新鲜度检查。
+### Event2 直接语义窗口
 
-### 终点后路径提示
+waypoint 43--48 的点云会稳定观察到与 NPC 不同距离的道路结构，因此该窗口允许通过
+深度验证和横向门控的语义车辆直接控制。该例外只覆盖已验证路段，不应无条件扩展到
+全路线。
 
-进入 `route_complete` 后只剩单个终点，trajectory generator 可能报告
-“path has fewer than two points”并使用目标点 fallback。此时目标速度已经是0，
-车辆保持停车，因此不影响任务。
+### 全路线双传感器确认存在短暂释放可能
 
-### 可视化和退出提示
+Event2 窗口之外，语义或规划路径点云任一输入过期都会撤销车辆确认。这可以避免无车
+误刹，但在车辆短暂被遮挡或某个传感器掉帧时可能提前释放跟车。当前超时和控制速度
+已通过基线测试，后续新增天气、遮挡或不同车辆外观时仍需重新验证。
 
-RViz 可能输出 indexed-image shader 警告，OctoMap 启动时可能输出空地图提示。
-完整系统 Ctrl-C 后，Unity 有时超过 launch 的5秒 SIGINT 宽限期，随后由 SIGTERM
-正常结束；ROS 节点均能干净退出。
+### Unity 串行传感器可能暂停
 
-### 代码风格
+历史 rosbag 中 twist 偶发较长消息间隔。controller 会按设计进入安全制动并在数据
+恢复后继续，因此不建议取消超时保护。后续应优先优化 Unity 传输调度或分离高优先级
+车辆状态通道。
 
-route manager 的260项历史 flake8 问题仍需单独整理。若发布流程要求 CI 全绿，
-应建立纯格式化提交并重新运行完整回归，避免把格式化和功能修改混在一起。
+### route manager 风格检查
 
-## 6. 启动与证据
+route manager 的功能测试通过，但既有 flake8 测试仍报告 260 项格式问题。若发布流程
+要求 CI 全绿，应单独进行纯格式化提交并重新执行完整动态回归，避免把格式改写与安全
+逻辑修改混在一起。
+
+### 原始动态测试数据未长期归档
+
+部分历史 rosbag 位于 `/tmp`，不是长期存储。需要审计或课程归档时，应重新录制最小
+topic 集并复制到持久存储。
+
+## 6. 构建、测试和运行
 
 构建：
 
 ```bash
-cd <ros-workspace>
+cd <project>
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select \
-  simulation perception route_manager trajectory_generator \
-  decision_making controller system_bringup
+colcon build --symlink-install
 source install/setup.bash
+```
+
+运行单元测试：
+
+```bash
+colcon test --packages-select decision_making controller trajectory_generator
+colcon test-result --verbose
+```
+
+运行语义车辆独立回归：
+
+```bash
+python3 tools/smoke_test_semantic_vehicle_detector.py
 ```
 
 安全启动：
 
 ```bash
-ros2 launch system_bringup full_system.launch.py enable_motion:=false
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=false \
+  enable_visualization:=false
 ```
 
-确认唯一控制发布者、TF、规划路径、车速和决策话题正常后启动完整驾驶：
+完整驾驶：
 
 ```bash
-ros2 launch system_bringup full_system.launch.py enable_motion:=true
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=true \
+  enable_visualization:=false
 ```
 
-系统接口、readiness checklist 和详细验证要求见 `INTEGRATION_README.md`；
-模块参数见各包内 README。
+启动前必须确认 Unity 配置仍为 spawn 0、`eventEnable: [true, true]`，并确认
+`/car_command` 只有一个 publisher。
+
+## 7. 清理说明
+
+本次验证结束后已删除：
+
+- Event2 单独启用/禁用配置副本；
+- 无事件和全事件重复配置副本；
+- 配置切换与自动备份脚本；
+- 一次性 Event2/整路线监控脚本；
+- 仅供该脚本使用的中间诊断 topic；
+- 相应 Python 字节码缓存。
+
+保留的代码均属于生产安全行为、可复用回归测试或历史 Stage 6 证据。

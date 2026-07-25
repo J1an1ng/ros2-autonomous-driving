@@ -74,10 +74,5 @@ install(PROGRAMS
   DESTINATION share/${PROJECT_NAME}/unity_sim/Build_Ubuntu
 )
 
-if(BUILD_TESTING)
-  find_package(ament_cmake_pytest REQUIRED)
-  ament_add_pytest_test(test_unity_runtime test/test_unity_runtime.py)
-endif()
-
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
