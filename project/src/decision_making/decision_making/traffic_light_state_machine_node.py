@@ -33,12 +33,15 @@ class TrafficLightStateMachineNode(Node):
         )
         self.declare_parameter("traffic_light_score_timeout", 0.75)
         self.declare_parameter("strict_green_over_red_ratio", 1.05)
-        self.declare_parameter("strict_green_max_red_score", 4)
+        self.declare_parameter("strict_green_max_red_score", 15)
+        self.declare_parameter("strict_green_min_green_score", 0)
+        self.declare_parameter("strict_green_release_delay", 0.0)
         self.declare_parameter("treat_yellow_as_red", True)
         self.declare_parameter("require_green_in_controlled_zone", True)
         self.declare_parameter("waypoint_distance_timeout", 0.5)
         self.declare_parameter("unknown_light_stop_distance", 6.0)
         self.declare_parameter("unknown_light_approach_speed", 1.0)
+        self.declare_parameter("traffic_light_approach_deceleration", 0.0)
         self.declare_parameter("traffic_light_stop_distance", 4.0)
         self.declare_parameter("traffic_light_activation_distance", 20.0)
         self.declare_parameter("obstacle_timeout", 0.5)
@@ -51,8 +54,13 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("emergency_trigger_max_distance", 0.0)
         self.declare_parameter("emergency_follow_release_min_distance", 0.0)
         self.declare_parameter("emergency_follow_release_min_range_rate", 0.0)
+        self.declare_parameter(
+            "emergency_follow_release_min_raw_range_rate", math.inf
+        )
         self.declare_parameter("emergency_follow_release_max_speed", 0.0)
         self.declare_parameter("emergency_follow_release_confirmation", 0.0)
+        self.declare_parameter("emergency_follow_recovery_hold_time", 0.0)
+        self.declare_parameter("emergency_follow_recovery_acceleration", 1.0)
         self.declare_parameter("merge_trigger_distance", 12.0)
         self.declare_parameter("merge_release_margin", 2.0)
         self.declare_parameter("merge_target_speed", 1.5)
@@ -65,6 +73,11 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("following_range_rate_timeout", 1.5)
         self.declare_parameter("following_distance_deadband", 0.75)
         self.declare_parameter("following_range_rate_deadband", 0.2)
+        self.declare_parameter("following_min_rolling_speed", 0.0)
+        self.declare_parameter("following_min_rolling_clearance", 0.0)
+        self.declare_parameter(
+            "following_emergency_closing_speed_margin", math.inf
+        )
         self.declare_parameter("following_target_acceleration", 1.0)
         self.declare_parameter("following_target_deceleration", 2.0)
         self.declare_parameter("following_max_abs_range_rate", 6.0)
@@ -126,6 +139,12 @@ class TrafficLightStateMachineNode(Node):
             strict_green_max_red_score=self.get_parameter(
                 "strict_green_max_red_score"
             ).value,
+            strict_green_min_green_score=self.get_parameter(
+                "strict_green_min_green_score"
+            ).value,
+            strict_green_release_delay=self.get_parameter(
+                "strict_green_release_delay"
+            ).value,
             treat_yellow_as_red=self.get_parameter("treat_yellow_as_red").value,
             require_green_in_controlled_zone=self.get_parameter(
                 "require_green_in_controlled_zone"
@@ -138,6 +157,9 @@ class TrafficLightStateMachineNode(Node):
             ).value,
             unknown_light_approach_speed=self.get_parameter(
                 "unknown_light_approach_speed"
+            ).value,
+            traffic_light_approach_deceleration=self.get_parameter(
+                "traffic_light_approach_deceleration"
             ).value,
             traffic_light_stop_distance=self.get_parameter(
                 "traffic_light_stop_distance"
@@ -165,11 +187,20 @@ class TrafficLightStateMachineNode(Node):
             emergency_follow_release_min_range_rate=self.get_parameter(
                 "emergency_follow_release_min_range_rate"
             ).value,
+            emergency_follow_release_min_raw_range_rate=self.get_parameter(
+                "emergency_follow_release_min_raw_range_rate"
+            ).value,
             emergency_follow_release_max_speed=self.get_parameter(
                 "emergency_follow_release_max_speed"
             ).value,
             emergency_follow_release_confirmation=self.get_parameter(
                 "emergency_follow_release_confirmation"
+            ).value,
+            emergency_follow_recovery_hold_time=self.get_parameter(
+                "emergency_follow_recovery_hold_time"
+            ).value,
+            emergency_follow_recovery_acceleration=self.get_parameter(
+                "emergency_follow_recovery_acceleration"
             ).value,
             merge_trigger_distance=self.get_parameter("merge_trigger_distance").value,
             merge_release_margin=self.get_parameter("merge_release_margin").value,
@@ -196,6 +227,15 @@ class TrafficLightStateMachineNode(Node):
             ).value,
             following_range_rate_deadband=self.get_parameter(
                 "following_range_rate_deadband"
+            ).value,
+            following_min_rolling_speed=self.get_parameter(
+                "following_min_rolling_speed"
+            ).value,
+            following_min_rolling_clearance=self.get_parameter(
+                "following_min_rolling_clearance"
+            ).value,
+            following_emergency_closing_speed_margin=self.get_parameter(
+                "following_emergency_closing_speed_margin"
             ).value,
             following_target_acceleration=self.get_parameter(
                 "following_target_acceleration"
@@ -357,6 +397,11 @@ class TrafficLightStateMachineNode(Node):
         stop_msg.data = output.stop_required
         self.stop_required_pub.publish(stop_msg)
 
+        ego_speed = (
+            self.machine.vehicle_speed
+            if self.machine.vehicle_speed is not None
+            else math.nan
+        )
         debug_msg = String()
         debug_msg.data = (
             f"state={output.state.name} reason={output.reason} "
@@ -368,8 +413,13 @@ class TrafficLightStateMachineNode(Node):
             f"strict_green={self.machine.strict_green_required}/"
             f"{self.machine.strict_green_evidence} "
             f"emergency_threshold={self.machine.emergency_distance:.3f} "
+            f"emergency_closing_speed="
+            f"{self.machine.emergency_closing_speed:.3f} "
+            f"ego_speed={ego_speed:.3f} "
             f"range_rate="
             f"{self.machine.effective_front_obstacle_range_rate:.3f} "
+            f"raw_range_rate="
+            f"{self.machine.front_obstacle_raw_range_rate:.3f} "
             f"following_gap={self.machine.following_distance_target:.3f} "
             f"following_raw_target="
             f"{self.machine.following_raw_target_speed:.3f} "

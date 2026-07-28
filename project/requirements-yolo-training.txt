@@ -1,0 +1,4 @@
+# Training/export only. Runtime inference uses the vendored ONNX Runtime.
+ultralytics>=8.3,<9
+onnx>=1.16,<2
+onnxslim>=0.1,<1

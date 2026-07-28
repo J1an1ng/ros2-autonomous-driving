@@ -22,7 +22,7 @@
             "fov": 90.0
         },
         "segCamera": {
-            "enabled": true,
+            "enabled": false,
             "height": 480,
             "width": 640,
             "fov": 90.0

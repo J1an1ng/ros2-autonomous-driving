@@ -52,12 +52,15 @@ class TrafficLightStateMachine:
         strict_green_waypoint_ids: Sequence[int] = (),
         traffic_light_score_timeout: float = 0.75,
         strict_green_over_red_ratio: float = 1.05,
-        strict_green_max_red_score: int = 4,
+        strict_green_max_red_score: int = 15,
+        strict_green_min_green_score: int = 0,
+        strict_green_release_delay: float = 0.0,
         treat_yellow_as_red: bool = True,
         require_green_in_controlled_zone: bool = True,
         waypoint_distance_timeout: float = 0.5,
         unknown_light_stop_distance: float = 6.0,
         unknown_light_approach_speed: float = 1.0,
+        traffic_light_approach_deceleration: float = 0.0,
         traffic_light_stop_distance: float = 4.0,
         traffic_light_activation_distance: float = 20.0,
         obstacle_timeout: float = 0.5,
@@ -70,8 +73,11 @@ class TrafficLightStateMachine:
         emergency_trigger_max_distance: float = 0.0,
         emergency_follow_release_min_distance: float = 0.0,
         emergency_follow_release_min_range_rate: float = 0.0,
+        emergency_follow_release_min_raw_range_rate: float = math.inf,
         emergency_follow_release_max_speed: float = 0.0,
         emergency_follow_release_confirmation: float = 0.0,
+        emergency_follow_recovery_hold_time: float = 0.0,
+        emergency_follow_recovery_acceleration: float = 1.0,
         merge_trigger_distance: float = 10.0,
         merge_release_margin: float = 2.0,
         merge_target_speed: float = 2.0,
@@ -84,6 +90,9 @@ class TrafficLightStateMachine:
         following_range_rate_timeout: float = 1.5,
         following_distance_deadband: float = 0.75,
         following_range_rate_deadband: float = 0.2,
+        following_min_rolling_speed: float = 0.0,
+        following_min_rolling_clearance: float = 0.0,
+        following_emergency_closing_speed_margin: float = math.inf,
         following_target_acceleration: float = 1.0,
         following_target_deceleration: float = 2.0,
         following_max_abs_range_rate: float = 6.0,
@@ -111,6 +120,12 @@ class TrafficLightStateMachine:
             0.0, float(strict_green_over_red_ratio)
         )
         self.strict_green_max_red_score = max(0, int(strict_green_max_red_score))
+        self.strict_green_min_green_score = max(
+            0, int(strict_green_min_green_score)
+        )
+        self.strict_green_release_delay = max(
+            self.green_release_delay, float(strict_green_release_delay)
+        )
         self.treat_yellow_as_red = bool(treat_yellow_as_red)
         self.require_green_in_controlled_zone = bool(
             require_green_in_controlled_zone
@@ -121,6 +136,9 @@ class TrafficLightStateMachine:
         )
         self.unknown_light_approach_speed = max(
             0.0, float(unknown_light_approach_speed)
+        )
+        self.traffic_light_approach_deceleration = max(
+            0.0, float(traffic_light_approach_deceleration)
         )
         self.traffic_light_stop_distance = max(
             0.0, float(traffic_light_stop_distance)
@@ -150,11 +168,20 @@ class TrafficLightStateMachine:
         self.emergency_follow_release_min_range_rate = float(
             emergency_follow_release_min_range_rate
         )
+        self.emergency_follow_release_min_raw_range_rate = float(
+            emergency_follow_release_min_raw_range_rate
+        )
         self.emergency_follow_release_max_speed = max(
             0.0, float(emergency_follow_release_max_speed)
         )
         self.emergency_follow_release_confirmation = max(
             0.0, float(emergency_follow_release_confirmation)
+        )
+        self.emergency_follow_recovery_hold_time = max(
+            0.0, float(emergency_follow_recovery_hold_time)
+        )
+        self.emergency_follow_recovery_acceleration = max(
+            0.0, float(emergency_follow_recovery_acceleration)
         )
         self.merge_trigger_distance = max(0.0, float(merge_trigger_distance))
         self.merge_release_margin = max(0.0, float(merge_release_margin))
@@ -183,6 +210,15 @@ class TrafficLightStateMachine:
         )
         self.following_range_rate_deadband = max(
             0.0, float(following_range_rate_deadband)
+        )
+        self.following_min_rolling_speed = max(
+            0.0, float(following_min_rolling_speed)
+        )
+        self.following_min_rolling_clearance = max(
+            0.0, float(following_min_rolling_clearance)
+        )
+        self.following_emergency_closing_speed_margin = max(
+            0.0, float(following_emergency_closing_speed_margin)
         )
         self.following_target_acceleration = max(
             0.0, float(following_target_acceleration)
@@ -225,6 +261,8 @@ class TrafficLightStateMachine:
         self.front_obstacle_time: Optional[float] = None
         self.merge_obstacle_time: Optional[float] = None
         self.front_obstacle_range_rate = 0.0
+        self.front_obstacle_raw_range_rate = 0.0
+        self.front_obstacle_raw_range_rate_time: Optional[float] = None
         self.effective_front_obstacle_range_rate = 0.0
         self.front_obstacle_range_rate_time: Optional[float] = None
         self._front_distance_sample = math.inf
@@ -235,9 +273,11 @@ class TrafficLightStateMachine:
         self._following_command_speed: Optional[float] = None
         self._following_command_time: Optional[float] = None
         self.emergency_distance = self.emergency_min_distance
+        self.emergency_closing_speed = 0.0
         self.emergency_latched = False
         self.emergency_latched_time: Optional[float] = None
         self.emergency_follow_release_since: Optional[float] = None
+        self.emergency_follow_recovery_until: Optional[float] = None
         self.merge_latched = False
 
     def update_route(self, route_state: str, waypoint_id: Optional[int] = None) -> None:
@@ -307,6 +347,8 @@ class TrafficLightStateMachine:
                             raw_range_rate,
                         ),
                     )
+                    self.front_obstacle_raw_range_rate = raw_range_rate
+                    self.front_obstacle_raw_range_rate_time = float(now)
                     alpha = self.following_range_rate_alpha
                     if self.front_obstacle_range_rate_time is None:
                         self.front_obstacle_range_rate = raw_range_rate
@@ -324,6 +366,8 @@ class TrafficLightStateMachine:
             self._front_distance_sample_time = None
             self.front_obstacle_range_rate = 0.0
             self.front_obstacle_range_rate_time = None
+            self.front_obstacle_raw_range_rate = 0.0
+            self.front_obstacle_raw_range_rate_time = None
 
         self.front_obstacle_distance = sanitized_front
         self.front_obstacle_time = float(now)
@@ -377,6 +421,7 @@ class TrafficLightStateMachine:
         strict_green_evidence = (
             light_scores_fresh
             and self.traffic_light_red_score <= self.strict_green_max_red_score
+            and self.traffic_light_green_score >= self.strict_green_min_green_score
             and self.traffic_light_green_score
             >= self.strict_green_over_red_ratio
             * max(1, self.traffic_light_red_score)
@@ -479,7 +524,12 @@ class TrafficLightStateMachine:
             if green_signal:
                 if self.green_since is None:
                     self.green_since = now
-                if now - self.green_since >= self.green_release_delay:
+                release_delay = (
+                    self.strict_green_release_delay
+                    if strict_green_required
+                    else self.green_release_delay
+                )
+                if now - self.green_since >= release_delay:
                     self.state = DecisionState.RELEASED
                     self.latched_waypoint_id = None
                     self.signal_stop_latched = False
@@ -506,8 +556,44 @@ class TrafficLightStateMachine:
         range_rate = (
             self.front_obstacle_range_rate if range_rate_fresh else 0.0
         )
+        raw_range_rate_fresh = self._is_fresh(
+            self.front_obstacle_raw_range_rate_time,
+            now,
+            self.following_range_rate_timeout,
+        )
+        raw_opening_evidence = (
+            raw_range_rate_fresh
+            and self.front_obstacle_raw_range_rate
+            >= self.emergency_follow_release_min_raw_range_rate
+        )
+        following_range_rate = (
+            max(range_rate, self.front_obstacle_raw_range_rate)
+            if raw_opening_evidence
+            else range_rate
+        )
         self.effective_front_obstacle_range_rate = range_rate
         closing_speed = max(0.0, -range_rate)
+        rolling_clearance_available = (
+            self.following_enabled
+            and front_obstacle_fresh
+            and speed_fresh
+            and current_speed > self.stopped_speed_threshold
+            and self.front_obstacle_distance
+            >= (
+                self.emergency_standstill_distance
+                + self.following_min_rolling_clearance
+            )
+        )
+        if rolling_clearance_available:
+            # A same-direction lead vehicle cannot normally close the gap much
+            # faster than ego is moving. Bound isolated RGB-D range jumps while
+            # a safe surplus gap remains; below that boundary the unbounded
+            # measured closing rate immediately regains authority.
+            closing_speed = min(
+                closing_speed,
+                current_speed + self.following_emergency_closing_speed_margin,
+            )
+        self.emergency_closing_speed = closing_speed
         emergency_distance = max(
             self.emergency_min_distance,
             self.emergency_min_distance
@@ -530,6 +616,7 @@ class TrafficLightStateMachine:
             or self.waypoint_id in self.merge_behavior_waypoint_ids
         )
         merge_obstacle_stale_stop = False
+        emergency_follow_handoff = False
         if front_obstacle_fresh:
             if (
                 vehicle_behavior_allowed
@@ -538,6 +625,7 @@ class TrafficLightStateMachine:
                 if not self.emergency_latched:
                     self.emergency_latched_time = now
                 self.emergency_latched = True
+                self.emergency_follow_recovery_until = None
             if self.emergency_latched:
                 hold_complete = (
                     self.emergency_latched_time is None
@@ -564,8 +652,11 @@ class TrafficLightStateMachine:
                     <= self.emergency_follow_release_max_speed
                     and self.front_obstacle_distance
                     >= self.emergency_follow_release_min_distance
-                    and range_rate
-                    >= self.emergency_follow_release_min_range_rate
+                    and (
+                        range_rate
+                        >= self.emergency_follow_release_min_range_rate
+                        or raw_opening_evidence
+                    )
                 )
                 if follow_release_candidate:
                     if self.emergency_follow_release_since is None:
@@ -587,6 +678,10 @@ class TrafficLightStateMachine:
                     (vehicle_stopped and obstacle_clear)
                     or follow_release_confirmed
                 ):
+                    emergency_follow_handoff = True
+                    self.emergency_follow_recovery_until = (
+                        now + self.emergency_follow_recovery_hold_time
+                    )
                     self.emergency_latched = False
                     self.emergency_latched_time = None
                     self.emergency_follow_release_since = None
@@ -623,8 +718,26 @@ class TrafficLightStateMachine:
         )
         permitted_speed = float(requested_speed)
         if (unknown_light_approach or signal_light_approach) and planning_fresh:
+            approach_speed_limit = self.unknown_light_approach_speed
+            if self.traffic_light_approach_deceleration > 0.0:
+                stop_distance = (
+                    self.traffic_light_stop_distance
+                    if signal_light_approach
+                    else self.unknown_light_stop_distance
+                )
+                remaining_braking_distance = max(
+                    0.0, self.waypoint_distance - stop_distance
+                )
+                braking_envelope_speed = math.sqrt(
+                    2.0
+                    * self.traffic_light_approach_deceleration
+                    * remaining_braking_distance
+                )
+                approach_speed_limit = min(
+                    approach_speed_limit, braking_envelope_speed
+                )
             permitted_speed = min(
-                permitted_speed, self.unknown_light_approach_speed
+                permitted_speed, approach_speed_limit
             )
         following_active = (
             self.following_enabled
@@ -646,20 +759,24 @@ class TrafficLightStateMachine:
             )
             if (
                 abs(distance_error) <= self.following_distance_deadband
-                and abs(range_rate) <= self.following_range_rate_deadband
+                and abs(following_range_rate)
+                <= self.following_range_rate_deadband
             ):
                 # Preserve speed when both gap and relative motion are already
                 # inside the hold band.
                 raw_following_target = current_speed
             else:
                 estimated_lead_speed = max(
-                    0.0, current_speed + range_rate
+                    0.0, current_speed + following_range_rate
                 )
                 raw_following_target = (
                     estimated_lead_speed
                     + self.following_distance_gain * distance_error
                 )
-                if range_rate <= self.following_range_rate_deadband:
+                if (
+                    following_range_rate
+                    <= self.following_range_rate_deadband
+                ):
                     # Do not accelerate toward a lead vehicle while the gap is
                     # stable or closing. Acceleration is permitted again once
                     # the measured gap is clearly opening.
@@ -669,11 +786,62 @@ class TrafficLightStateMachine:
             self.following_raw_target_speed = max(
                 0.0, min(permitted_speed, raw_following_target)
             )
-            following_target = self._limit_following_target(
-                self.following_raw_target_speed,
-                current_speed,
-                now,
+            rolling_speed_floor_available = (
+                not self.emergency_latched
+                and current_speed > self.stopped_speed_threshold
+                and self.front_obstacle_distance
+                >= (
+                    self.emergency_standstill_distance
+                    + self.following_min_rolling_clearance
+                )
             )
+            if (
+                rolling_speed_floor_available
+                and self.following_min_rolling_speed > 0.0
+            ):
+                # Event2's lead vehicle brakes hard and then moves again. Keep
+                # a small crawl command while a safe surplus gap remains so
+                # adaptive following does not create an unnecessary standstill
+                # before the near-field emergency guard is reached. Never
+                # accelerate to reach this floor while the gap is closing.
+                rolling_target = min(
+                    permitted_speed,
+                    current_speed,
+                    self.following_min_rolling_speed,
+                )
+                self.following_raw_target_speed = max(
+                    self.following_raw_target_speed,
+                    rolling_target,
+                )
+            if emergency_follow_handoff:
+                # Do not inherit the stale low target computed during full
+                # braking. The release guards have confirmed safe recovery, so
+                # immediately accept an opening-gap target when it is higher.
+                following_target = max(
+                    current_speed, self.following_raw_target_speed
+                )
+                self._following_command_speed = following_target
+                self._following_command_time = now
+            elif (
+                self.emergency_follow_recovery_until is not None
+                and now <= self.emergency_follow_recovery_until
+            ):
+                recovery_target = max(
+                    current_speed, self.following_raw_target_speed
+                )
+                following_target = self._limit_following_target(
+                    recovery_target,
+                    current_speed,
+                    now,
+                    acceleration=self.emergency_follow_recovery_acceleration,
+                )
+            else:
+                self.emergency_follow_recovery_until = None
+                following_target = self._limit_following_target(
+                    self.following_raw_target_speed,
+                    current_speed,
+                    now,
+                )
             self.following_target_speed = following_target
         else:
             self._following_command_speed = None
@@ -735,8 +903,17 @@ class TrafficLightStateMachine:
         return DecisionOutput(target_speed, output_state, stop_required, reason)
 
     def _limit_following_target(
-        self, raw_target: float, current_speed: float, now: float
+        self,
+        raw_target: float,
+        current_speed: float,
+        now: float,
+        acceleration: Optional[float] = None,
     ) -> float:
+        acceleration_limit = (
+            self.following_target_acceleration
+            if acceleration is None
+            else max(0.0, float(acceleration))
+        )
         if (
             self._following_command_speed is None
             or self._following_command_time is None
@@ -750,7 +927,7 @@ class TrafficLightStateMachine:
             )
             upper = (
                 self._following_command_speed
-                + self.following_target_acceleration * dt
+                + acceleration_limit * dt
             )
             command = max(lower, min(upper, float(raw_target)))
         self._following_command_speed = max(0.0, command)

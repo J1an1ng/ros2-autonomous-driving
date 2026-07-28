@@ -18,9 +18,12 @@ traffic_light_state_machine_node:
     strict_green_waypoint_ids: [25]
     traffic_light_score_timeout: 0.75
     strict_green_over_red_ratio: 1.05
-    # Real green observations at waypoint 25 had red_score=0. False greens
-    # repeatedly retained red_score=32..44 (including 36/40 at release).
-    strict_green_max_red_score: 4
+    # Correct waypoint-25 green samples measured 10/42, 0/57 and 0/108.
+    # The reproduced false release was only 0/22 and returned to RED 34/12
+    # after 57 ms. Require a strong, sustained green before granting passage.
+    strict_green_max_red_score: 10
+    strict_green_min_green_score: 30
+    strict_green_release_delay: 0.3
     treat_yellow_as_red: true
     # Fail safe only at the four allowlisted intersections. UNKNOWN/stale
     # perception may creep toward the stop boundary, but cannot cross it.
@@ -29,9 +32,14 @@ traffic_light_state_machine_node:
     # Waypoints advance within 3 m. Keep the validated 4 m hard-stop boundary
     # while permitting a faster approach to a still-unclassified signal.
     unknown_light_stop_distance: 4.0
-    # The vehicle may approach the controlled boundary at up to 3 m/s; the
-    # state machine still commands a full stop at the boundary unless green.
-    unknown_light_approach_speed: 3.0
+    # Keep a generous far-field ceiling. The braking envelope below reduces
+    # this continuously as the controlled waypoint approaches, instead of
+    # stepping from the road speed directly down to 3 m/s at waypoint 59.
+    unknown_light_approach_speed: 8.0
+    # Distance-based speed envelope sqrt(2*a*remaining_distance). This reuses
+    # the conservative deceleration measured in Event2 and reaches zero at the
+    # hard-stop boundary while avoiding unnecessary far-field braking.
+    traffic_light_approach_deceleration: 0.7
     # Remember a detected red/yellow, creep toward its waypoint, then stop at
     # this boundary instead of braking immediately at first recognition.
     traffic_light_stop_distance: 4.0
@@ -62,9 +70,20 @@ traffic_light_state_machine_node:
     # The low-pass estimate trails the first real opening sample. A small
     # residual closing rate is safe for adaptive following at this low speed.
     emergency_follow_release_min_range_rate: -0.6
+    # The filtered rate deliberately reacts slowly to a hard-braking lead
+    # vehicle. A fresh, clearly opening raw range may release full braking
+    # earlier, while the distance and low-ego-speed guards still apply.
+    emergency_follow_release_min_raw_range_rate: 0.5
     emergency_follow_release_max_speed: 2.0
     emergency_follow_release_confirmation: 0.1
-    # The semantic vehicle distance also feeds the front safety calculation.
+    # After a confirmed moving-lead handoff, let full-brake inertia unwind
+    # before adaptive following is allowed to request more deceleration.
+    emergency_follow_recovery_hold_time: 1.0
+    # React immediately to a moving lead vehicle, then ramp the target gently.
+    # The initial handoff removes restart delay without demanding hard
+    # acceleration.
+    emergency_follow_recovery_acceleration: 1.5
+    # The YOLO RGB-D vehicle distance also feeds the front safety calculation.
     # This merge band remains a lower-priority speed cap at low vehicle speeds.
     merge_trigger_distance: 12.0
     merge_release_margin: 2.0
@@ -82,12 +101,20 @@ traffic_light_state_machine_node:
     following_range_rate_timeout: 1.5
     following_distance_deadband: 0.75
     following_range_rate_deadband: 0.2
+    # Keep rolling at low speed while at least 2 m remains beyond the desired
+    # standstill gap. The emergency latch still overrides this floor.
+    following_min_rolling_speed: 0.6
+    following_min_rolling_clearance: 2.0
+    # Reject physically inconsistent RGB-D closing spikes while the gap still
+    # exceeds the rolling-clearance boundary. Full measured closing speed is
+    # restored immediately inside that boundary.
+    following_emergency_closing_speed_margin: 0.5
     # Slew limits apply to the target-speed command, not physical acceleration.
     following_target_acceleration: 1.0
     following_target_deceleration: 4.0
     following_max_abs_range_rate: 6.0
     # Longitudinal vehicle following and emergency protection apply globally.
-    # The obstacle monitor requires semantic/point-cloud agreement outside the
+    # The obstacle monitor requires vision/point-cloud agreement outside the
     # Event2 exception, so longitudinal behavior is enabled on every waypoint.
     vehicle_behavior_global: true
     # Right-front merge yielding is specific to the Event2 T-junction.
@@ -105,7 +132,7 @@ obstacle_monitor_node:
     vehicle_frame: OurCar/INS
     planning_path_topic: /planning/path
     planning_path_timeout: 0.75
-    # Stale path-corridor returns cannot confirm a new semantic vehicle.
+    # Stale path-corridor returns cannot confirm a new vision vehicle.
     pointcloud_match_timeout: 0.75
     # The upstream occupancy node transforms depth with the latest available TF.
     # Use the same policy instead of requesting a slightly future image stamp.
@@ -136,18 +163,18 @@ obstacle_monitor_node:
     # is acted on once it enters the nearer right-front corridor.
     merge_right_min_y: -2.5
     merge_right_max_y: -0.8
-    # Semantic classification, depth and lateral gates are fused with the
+    # YOLO classification, RGB-D range and lateral gates are fused with the
     # planning-path point-cloud corridor before global vehicle control.
-    semantic_vehicle_timeout: 1.0
-    semantic_vehicle_max_abs_range_rate: 6.0
-    semantic_vehicle_jump_tolerance: 1.5
+    vision_vehicle_timeout: 1.0
+    vision_vehicle_max_abs_range_rate: 6.0
+    vision_vehicle_jump_tolerance: 1.5
     vehicle_distance_match_tolerance: 2.5
     vehicle_distance_match_relative_tolerance: 0.2
     # Event2 point-cloud corridors observe road geometry instead of the NPC.
-    # Keep the direct semantic behavior only in its validated route window;
-    # all other waypoints require semantic/point-cloud range agreement.
-    semantic_direct_control_waypoint_ids: [43, 44, 45, 46, 47, 48]
-    # Retain only a sub-metre generic last-resort guard without semantic proof.
+    # Keep direct vision behavior only in its validated route window; all
+    # other waypoints require vision/point-cloud range agreement.
+    vision_direct_control_waypoint_ids: [43, 44, 45, 46, 47, 48]
+    # Retain only a sub-metre generic last-resort guard without vision proof.
     unconfirmed_emergency_distance: 0.8
     # Reject the curb/road-shoulder returns observed around z=-0.57..-0.67 m.
     min_z: -0.5

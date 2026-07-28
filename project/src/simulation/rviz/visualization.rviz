@@ -120,15 +120,6 @@ Visualization Manager:
       Show Trail: false
       Value: true
     - Alpha: 1
-      Class: rviz_default_plugins/Axes
-      Enabled: true
-      Length: 1
-      Name: Seg Camera
-      Radius: 0.10000000149011612
-      Reference Frame: OurCar/Sensors/SemanticCamera
-      Show Trail: false
-      Value: true
-    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -191,11 +182,11 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
-      Image Topic: /Unity_ROS_message_Rx/OurCar/Sensors/SemanticCamera/image_raw
+      Image Topic: /perception/yolo/debug_image
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: Segmentation Camera
+      Name: YOLO RGB-D Debug
       Normalize Range: true
       Queue Size: 2
       Transport Hint: raw

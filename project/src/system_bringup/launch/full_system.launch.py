@@ -28,6 +28,7 @@ def generate_launch_description():
     enable_visualization = LaunchConfiguration("enable_visualization")
     enable_motion = LaunchConfiguration("enable_motion")
     simulation_config = LaunchConfiguration("simulation_config")
+    yolo_model = LaunchConfiguration("yolo_model")
     route_file = LaunchConfiguration("route_file")
     route_initial_waypoint_index = LaunchConfiguration(
         "route_initial_waypoint_index"
@@ -49,6 +50,9 @@ def generate_launch_description():
     controller_config = PathJoinSubstitution(
         [FindPackageShare("controller"), "config", "controller.yaml"]
     )
+    default_yolo_model = PathJoinSubstitution(
+        [FindPackageShare("perception"), "models", "yolov8n.onnx"]
+    )
 
     return LaunchDescription(
         [
@@ -65,6 +69,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "simulation_config", default_value=default_simulation_config
             ),
+            DeclareLaunchArgument("yolo_model", default_value=default_yolo_model),
             DeclareLaunchArgument("route_file", default_value=default_route_file),
             DeclareLaunchArgument(
                 "route_initial_waypoint_index", default_value="0"
@@ -79,7 +84,10 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 package_launch("perception", "perception.launch.py"),
-                launch_arguments={"enable_octomap": enable_octomap}.items(),
+                launch_arguments={
+                    "enable_octomap": enable_octomap,
+                    "yolo_model": yolo_model,
+                }.items(),
                 condition=IfCondition(enable_perception),
             ),
             Node(

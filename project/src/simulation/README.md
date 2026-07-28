@@ -62,11 +62,12 @@ OurCar/Center -> OurCar/Sensors/SensorBase
 OurCar/Sensors/SensorBase -> OurCar/Sensors/DepthCamera
 OurCar/Sensors/SensorBase -> OurCar/Sensors/RGBCameraLeft
 OurCar/Sensors/SensorBase -> OurCar/Sensors/RGBCameraRight
-OurCar/Sensors/SensorBase -> OurCar/Sensors/SemanticCamera
 ```
 
 Together with the dynamic `world -> OurCar/INS` transform from the true-state stream,
 these frames provide the complete TF chain from each sensor to `world`.
+The segmentation camera is disabled in the production Unity configuration because
+perception uses YOLO on RGB together with metric depth.
 
 Start the bridge, Unity, TF publishers, and RViz:
 

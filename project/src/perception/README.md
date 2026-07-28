@@ -1,83 +1,134 @@
-# Perception
+# Perception: YOLO RGB-D pipeline
 
-The perception launch converts Unity depth into point clouds and occupancy maps, detects
-the relevant dynamic traffic-light colour, and publishes a diagnostic semantic-vehicle
-distance from the aligned semantic and depth cameras.
+This package implements the assignment without using the Unity semantic
+camera. One YOLOv8 inference on the left RGB image detects vehicles and
+traffic lights. Depth-camera pixels are reconstructed in 3-D, transformed
+through TF into the left-camera frame, and projected into the YOLO boxes.
 
-## Launch
+```text
+RGB left ──> YOLOv8 ONNX ──> vehicle box ─┐
+                                          ├─> robust RGB-D range ─> decision
+Depth + CameraInfo + TF ─> RGB projection ┘
 
-Perception is normally started by the single system launch. Motion remains disabled unless
-it is explicitly enabled:
-
-```bash
-ros2 launch system_bringup full_system.launch.py enable_motion:=false
+RGB left ──> YOLO traffic-light box ─> HSV bulb colour ─> temporal filter
 ```
 
-For perception-only debugging, disable route, decision, trajectory, and controller through
-the corresponding full-system launch arguments. OctoMap can be disabled with
-`enable_octomap:=false` when only camera/traffic-light tuning is required.
+The semantic camera is disabled in
+`simulation_config.json`; it is neither subscribed to nor launched.
 
-## Outputs
+## Runtime
 
-| Topic | Meaning |
-| --- | --- |
-| `/perception/pcl/points` | Raw depth projection in the depth-camera frame. |
-| `/perception/pcl/points_preprocessed` | Ground-filtered obstacle cloud in `world`. |
-| `/perception/depth/projected_map` | Local 2D occupied cells at 0.25 m resolution. |
-| `/perception/extended_map` | Inflated 2D map. |
-| `/perception/octomap/octomap_binary` | Binary 3D OctoMap. |
-| `/perception/octomap/projected_map` | OctoMap 2D projection. |
-| `/perception/traffic_light_state` | `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN`. |
-| `/perception/traffic_light_debug` | Raw/stable state, scores, selected semantic component, ROI, and timestamp delta. |
-| `/perception/front_vehicle_detected` | `true` only when a red vehicle component has enough fresh valid depth samples. |
-| `/perception/front_vehicle_distance` | Robust near-surface depth in metres for the nearest accepted red vehicle component, otherwise `inf`. |
-| `/perception/front_vehicle_debug` | Colour-mask, component, bounding-box, depth-pixel, distance, and synchronization diagnostics. |
+The package includes a fixed-size COCO YOLOv8n model and the CPU version of
+Microsoft ONNX Runtime 1.22.0. A Python or Ultralytics installation is not
+needed at runtime. OpenCV handles letterboxing, NMS, HSV classification and
+debug drawing.
 
-The vehicle detector treats red semantic pixels as NPC vehicles and deliberately does not
-match the yellow semantic class used by traffic lights. It extracts connected components
-inside a configurable central ROI, rejects small colour noise, and fuses each component with
-the latest depth image. Its reported distance is the 20th percentile of valid component
-depths rather than a single minimum pixel. Depth-camera intrinsics then convert the component
-centre into a lateral offset; components outside `max_abs_lateral_m=2.8` remain visible in
-debug output but are not reported as front vehicles. Decision making consumes these topics
-and requires fresh semantic/point-cloud range agreement outside the validated waypoint
-43--48 direct-semantic window. This prevents red cross traffic and roadside vehicles from
-causing longitudinal braking elsewhere on the route.
+Build and start the perception package:
 
-With no simulator running, the isolated fusion check can be repeated with
-`python3 tools/smoke_test_semantic_vehicle_detector.py`. It verifies a synthetic red
-component at 12 m and verifies that an equally sized yellow component is rejected.
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select perception
+source install/setup.bash
+ros2 launch perception perception.launch.py
+```
 
-The traffic detector uses the left RGB image for bulb colour and the semantic image only to
-select traffic-light components. `signal_group` first selects the component nearest the
-expected forward-signal position, then groups vertically separated high/low lamps whose
-horizontal centers are within `signal_group_max_dx_ratio=0.16` of the image width and whose
-semantic areas are at least `signal_group_min_size_ratio=0.45` of the largest group member.
-The relative-size guard rejects a smaller adjacent signal between the two main lamps. Each lamp
-is classified independently before group aggregation: red has safety priority across lamp
-instances, while green is accepted only when every currently selected lamp is confirmed
-green. An unclassified member therefore cannot be masked by another member's green. This lets a
-lower lamp take over when its high-mounted partner leaves the camera view without confusing
-same-housing red reflections with a real red lamp. Four consecutive group classifications
-are required for mixed red/green evidence. A strong green with at most four red-score
-points and at least 20 green-score points is accepted after two consecutive frames.
-Every red, yellow, or unknown frame still revokes green permission immediately.
-If no valid component exists, or the RGB/semantic timestamp difference exceeds
-`max_semantic_stamp_delta_s=1.0`, the published state is UNKNOWN. This prevents a frozen
-semantic frame from continuously supporting stale green evidence.
+Use another compatible model without changing the source:
 
-Stage 4 verified controlled waypoint IDs 25, 32, 52, and 59. The detector can see lights on
-adjacent roads outside those approaches; the decision node's waypoint allowlist is therefore
-required and must not be removed during tuning.
+```bash
+ros2 launch perception perception.launch.py \
+  yolo_model:=/absolute/path/to/best.onnx
+```
 
-The principal detector thresholds remain parameters declared in
-`traffic_light_detector_node.cpp`. Inspect `/perception/traffic_light_debug` before changing
-them. The deterministic simulator profile deliberately gives red and green broad hue,
-saturation, and value gates, while yellow uses the narrower 42--58 degree hue interval and
-higher saturation/value requirements. `yellow_over_green_ratio=1.25` additionally requires
-yellow evidence to clearly exceed concurrent green evidence before yellow can override it.
-A true yellow with no green evidence remains yellow. In the simulator, a lit green bulb may
-coexist with red housing reflections, so `green_over_red_ratio=0.80` lets green override them
-once its evidence reaches 80% of red; a pure red frame has no green evidence and remains red.
-Mixed red/green evidence still needs four consecutive raw green classifications before
-publication; unambiguous green needs two.
+The launch file starts:
+
+- `occupancy_map_node`, which converts depth to the existing point-cloud and
+  occupancy topics;
+- `octomap_server_node`;
+- `yolo_rgbd_detector_node`, which replaces both former semantic vehicle
+  detection and the former traffic-light detector.
+
+## Topics
+
+| Direction | Topic | Type | Meaning |
+| --- | --- | --- | --- |
+| input | `/OurCar/Sensors/RGBCameraLeft/image_raw` | `sensor_msgs/Image` | YOLO/colour image |
+| input | `/OurCar/Sensors/RGBCameraLeft/camera_info` | `sensor_msgs/CameraInfo` | RGB intrinsics |
+| input | `/OurCar/Sensors/DepthCamera/image_raw` | `sensor_msgs/Image` | Metric depth |
+| input | `/OurCar/Sensors/DepthCamera/camera_info` | `sensor_msgs/CameraInfo` | Depth intrinsics |
+| output | `/perception/front_vehicle_detected` | `std_msgs/Bool` | Accepted vehicle box with valid range |
+| output | `/perception/front_vehicle_distance` | `std_msgs/Float32` | 20th-percentile box depth in metres, otherwise `inf` |
+| output | `/perception/traffic_light_state` | `std_msgs/UInt8` | `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN` |
+| output | `/perception/traffic_light_scores` | `std_msgs/Int32MultiArray` | Decision evidence `[red, green]`; yellow remains in the debug string |
+| output | `/perception/yolo/debug_image` | `sensor_msgs/Image` | Boxes, class IDs, confidence and range |
+| output | `/perception/front_vehicle_debug` | `std_msgs/String` | Vehicle rejection/measurement details |
+| output | `/perception/traffic_light_debug` | `std_msgs/String` | Light selection and colour details |
+
+The vehicle classes are COCO `car`, `bus`, and `truck`. A measurement is
+accepted only when enough reprojected depth samples lie inside the trimmed
+box, its robust range is valid, and its lateral offset is within the configured
+front corridor. The decision node then checks YOLO/RGB-D range against the
+planning-path point cloud except at the validated Event2 waypoints.
+
+Traffic-light detections can affect control only at waypoints 25, 32, 52 and
+59 and within 20 m of the waypoint. The candidate nearest the configured
+target point is classified from HSV pixels inside its box and passed through
+the existing temporal stability filter. Missing images, TF, camera
+calibration, model, or inference errors publish fail-safe `UNKNOWN`,
+`detected=false`, and `distance=inf`.
+
+All thresholds, class IDs and topic names are in
+`config/yolo_rgbd.yaml`.
+
+## Improve Unity recognition with fine-tuning
+
+The bundled COCO weights provide a runnable baseline. Because Unity vehicles
+and small traffic lights differ visually from real COCO images, collect and
+label simulator images when baseline recall is insufficient:
+
+1. Start Unity with motion disabled and collect diverse RGB frames:
+
+   ```bash
+   source /opt/ros/jazzy/setup.bash
+   python3 tools/collect_yolo_frames.py \
+     --output-dir datasets/team20_yolo/unlabelled
+   ```
+
+2. Label each vehicle with class `vehicle` and the complete signal housing
+   with class `traffic_light`. Export YOLO bounding-box labels, then arrange:
+
+   ```text
+   datasets/team20_yolo/
+     images/train/  images/val/
+     labels/train/  labels/val/
+   ```
+
+3. Create the isolated training environment and fine-tune:
+
+   ```bash
+   python3 -m venv .venv-yolo-training
+   source .venv-yolo-training/bin/activate
+   python -m pip install -r requirements-yolo-training.txt
+   python tools/train_yolo_sim.py \
+     --data datasets/team20_yolo.yaml \
+     --output src/perception/models/yolov8n.onnx
+   ```
+
+4. Change the class mapping in `config/yolo_rgbd.yaml`:
+
+   ```yaml
+   class_count: 2
+   vehicle_class_ids: [0]
+   traffic_light_class_ids: [1]
+   ```
+
+5. Rebuild/install `perception`, run with motion disabled, and inspect
+   `/perception/yolo/debug_image` before enabling vehicle motion.
+
+Include near/far views, partial occlusion, every intersection, both NPC
+events, and red/yellow/green phases in the data. Split sequentially captured
+frames by scene or run rather than randomly, so nearly identical adjacent
+frames do not leak into validation.
+
+The bundled Ultralytics model/code is AGPL-3.0 by default. The vendored ONNX
+Runtime keeps its MIT license and third-party notices in
+`third_party/onnxruntime`.

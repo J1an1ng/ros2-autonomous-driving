@@ -478,7 +478,10 @@ waypoints:
   y: 2.623
   z: 0.824
   yaw_deg: -177.646
-  speed_limit: 3
+  # Keep the far-field route limit above the decision layer's distance-based
+  # traffic-light envelope. A fixed 3 m/s here caused a hard 14 -> 3 m/s
+  # target step as soon as waypoint 59 became current, 44 m before the light.
+  speed_limit: 8
   segment_id: 0
   type: stop_zone
 - id: 60

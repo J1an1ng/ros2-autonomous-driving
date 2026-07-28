@@ -1,0 +1,74 @@
+yolo_rgbd_detector_node:
+  ros__parameters:
+    # COCO YOLOv8n exported as fixed-size ONNX. Replace this model with the
+    # custom two-class checkpoint after fine-tuning and update class IDs below.
+    input_width: 640
+    input_height: 640
+    class_count: 80
+    confidence_threshold: 0.25
+    nms_threshold: 0.45
+    vehicle_class_ids: [2, 5, 7]       # car, bus, truck in COCO
+    traffic_light_class_ids: [9]       # traffic light in COCO
+    # The waypoint-25 target is only about 7x15 px at approach distance.
+    # Keep a separate low traffic-light threshold; the vehicle threshold above
+    # remains unchanged.
+    traffic_light_confidence_threshold: 0.01
+
+    rgb_topic: /OurCar/Sensors/RGBCameraLeft/image_raw
+    rgb_camera_info_topic: /OurCar/Sensors/RGBCameraLeft/camera_info
+    depth_topic: /OurCar/Sensors/DepthCamera/image_raw
+    depth_camera_info_topic: /OurCar/Sensors/DepthCamera/camera_info
+
+    # RGB-left and Depth have a 0.2 m baseline. The node reconstructs every
+    # sampled depth pixel in 3-D, transforms it through TF, and projects it
+    # into the RGB image before testing it against a YOLO box.
+    use_latest_tf: true
+    maximum_depth_age_s: 1.0
+    depth_sample_step: 2
+    minimum_depth_points: 20
+    distance_percentile: 0.20
+    minimum_range_m: 0.5
+    maximum_range_m: 35.0
+    maximum_abs_lateral_m: 2.8
+    bbox_inner_x_ratio: 0.08
+    bbox_top_trim_ratio: 0.08
+    bbox_bottom_trim_ratio: 0.15
+
+    # Only the four assignment intersections may affect traffic-light control.
+    traffic_light_waypoint_ids: [25, 32, 52, 59]
+    traffic_light_activation_distance_m: 20.0
+    # route_manager advances at 3 m, before the car has finished stopping.
+    # Continue observing the same signal through the following waypoint so a
+    # later green can release the decision layer.
+    traffic_light_post_waypoint_hold_count: 1
+    traffic_light_max_y_ratio: 0.60
+    # Per-waypoint perspective profiles. Every array uses the same order as
+    # traffic_light_roi_waypoint_ids.
+    #
+    # WP25: exclude the overhead backs and far-left cross-traffic signal.
+    # WP52: retain the central signal under the bridge and exclude the large
+    #        high-confidence signal at the top-right of the image.
+    # WP59: retain the signal controlling the ego lane and exclude the
+    #        cross-traffic signals at the far left and far right.
+    traffic_light_roi_waypoint_ids: [25, 52, 59]
+    traffic_light_roi_min_x_ratios: [0.30, 0.46, 0.45]
+    traffic_light_roi_max_x_ratios: [0.60, 0.60, 0.67]
+    traffic_light_roi_min_y_ratios: [0.28, 0.25, 0.25]
+    traffic_light_roi_max_y_ratios: [0.43, 0.48, 0.45]
+    traffic_light_roi_max_aspect_ratios: [0.80, 0.80, 0.80]
+    # Expected signal centre at the stop line plus image displacement per
+    # metre of waypoint distance.
+    traffic_light_roi_target_x_at_stop_ratios: [0.40, 0.515, 0.49]
+    traffic_light_roi_target_x_per_meters: [0.014, 0.0, 0.006]
+    traffic_light_roi_target_y_at_stop_ratios: [0.34, 0.30, 0.325]
+    traffic_light_roi_target_y_per_meters: [0.005, 0.010, 0.0]
+    traffic_light_roi_target_radii: [0.10, 0.10, 0.12]
+    traffic_light_roi_target_y_tolerances: [0.06, 0.07, 0.10]
+    traffic_target_x_ratio: 0.50
+    traffic_target_y_ratio: 0.34
+    traffic_center_penalty: 0.50
+    traffic_consecutive_frames: 4
+    traffic_confident_green_frames: 2
+    traffic_confident_green_max_red_score: 4
+    traffic_confident_green_min_score: 20
+    publish_debug_image: true

@@ -1,0 +1,7 @@
+path: team20_yolo
+train: images/train
+val: images/val
+
+names:
+  0: vehicle
+  1: traffic_light

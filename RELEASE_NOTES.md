@@ -1,5 +1,44 @@
 # Release notes
 
+## full-system-v1.7.0
+
+YOLO RGB-D perception release built on `full-system-v1.6.0`.
+
+Improvements:
+
+- Replaces the Unity semantic vehicle and traffic-light detectors with a
+  normal-RGB YOLOv8n ONNX pipeline. The production simulator configuration
+  disables the segmentation camera.
+- Runs inference in a ROS 2 C++ node through Microsoft ONNX Runtime 1.22.0.
+  Vehicle boxes are combined with depth-camera 3-D reconstruction, TF, and
+  RGB reprojection for robust front-vehicle ranging.
+- Adds route-aware traffic-light selection for waypoints 25, 32, 52, and 59,
+  including per-intersection perspective profiles that reject opposing and
+  cross-traffic signals.
+- Handles very small traffic-light boxes that omit the lower green bulb while
+  rejecting large green road signs below the signal. Non-green evidence
+  immediately revokes permission, while an unambiguous green can release
+  without unnecessary delay.
+- Refines Event 2 following and recovery so the ego vehicle can maintain a
+  safe gap or resume smoothly after the lead vehicle moves, without requiring
+  aggressive acceleration.
+- Removes obsolete semantic-camera nodes, one-off YOLO diagnostics, and the
+  perception unit-test sources from the compact submission. Runtime debug
+  topics and model/license documentation remain available.
+
+Validation:
+
+- Built the final production `perception` package successfully after cleanup;
+  it contains the `yolo_rgbd_detector_node` and `occupancy_map_node` targets.
+- Before removing the perception test sources, all 24 YOLO post-processing,
+  model-runtime, route-gate, and traffic-light stability tests passed with no
+  errors, failures, or skips.
+- Completed the waypoint 0--63 Unity route with both NPC events enabled and
+  reached `route_complete`. The route passed the controlled signals after the
+  waypoint 25, 52, and 59 target-selection fixes.
+- The bundled fixed-size 640 x 640 COCO YOLOv8n model has SHA-256
+  `8707bb120b03a6bf8a199e7c35c6d47ad5f83de4fdd233110db270f7d355a3be`.
+
 ## full-system-v1.6.0
 
 Safety backport release built on `full-system-v1.5.0`.

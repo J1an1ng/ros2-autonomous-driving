@@ -14,7 +14,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from decision_making.obstacle_fusion import (
     VehicleObstacleFusion,
     fuse_vehicle_obstacle_distances,
-    semantic_distance_is_plausible,
+    vision_distance_is_plausible,
 )
 from decision_making.path_corridor import (
     in_vehicle_safety_corridor,
@@ -63,22 +63,22 @@ class ObstacleMonitorNode(Node):
         self.declare_parameter("min_z", -0.5)
         self.declare_parameter("max_z", 2.0)
         self.declare_parameter(
-            "semantic_vehicle_detected_topic",
+            "vision_vehicle_detected_topic",
             "/perception/front_vehicle_detected",
         )
         self.declare_parameter(
-            "semantic_vehicle_distance_topic",
+            "vision_vehicle_distance_topic",
             "/perception/front_vehicle_distance",
         )
-        self.declare_parameter("semantic_vehicle_timeout", 1.0)
-        self.declare_parameter("semantic_vehicle_max_abs_range_rate", 6.0)
-        self.declare_parameter("semantic_vehicle_jump_tolerance", 1.5)
+        self.declare_parameter("vision_vehicle_timeout", 1.0)
+        self.declare_parameter("vision_vehicle_max_abs_range_rate", 6.0)
+        self.declare_parameter("vision_vehicle_jump_tolerance", 1.5)
         self.declare_parameter("vehicle_distance_match_tolerance", 2.5)
         self.declare_parameter(
             "vehicle_distance_match_relative_tolerance", 0.2
         )
         self.declare_parameter(
-            "semantic_direct_control_waypoint_ids",
+            "vision_direct_control_waypoint_ids",
             [43, 44, 45, 46, 47, 48],
         )
         self.declare_parameter("unconfirmed_emergency_distance", 0.8)
@@ -131,23 +131,23 @@ class ObstacleMonitorNode(Node):
         )
         self.min_z = float(self.get_parameter("min_z").value)
         self.max_z = float(self.get_parameter("max_z").value)
-        self.semantic_vehicle_timeout = max(
+        self.vision_vehicle_timeout = max(
             0.0,
-            float(self.get_parameter("semantic_vehicle_timeout").value),
+            float(self.get_parameter("vision_vehicle_timeout").value),
         )
-        self.semantic_vehicle_max_abs_range_rate = max(
+        self.vision_vehicle_max_abs_range_rate = max(
             0.0,
             float(
                 self.get_parameter(
-                    "semantic_vehicle_max_abs_range_rate"
+                    "vision_vehicle_max_abs_range_rate"
                 ).value
             ),
         )
-        self.semantic_vehicle_jump_tolerance = max(
+        self.vision_vehicle_jump_tolerance = max(
             0.0,
             float(
                 self.get_parameter(
-                    "semantic_vehicle_jump_tolerance"
+                    "vision_vehicle_jump_tolerance"
                 ).value
             ),
         )
@@ -167,10 +167,10 @@ class ObstacleMonitorNode(Node):
                 ).value
             ),
         )
-        self.semantic_direct_control_waypoint_ids = {
+        self.vision_direct_control_waypoint_ids = {
             int(value)
             for value in self.get_parameter(
-                "semantic_direct_control_waypoint_ids"
+                "vision_direct_control_waypoint_ids"
             ).value
         }
         self.unconfirmed_emergency_distance = max(
@@ -196,11 +196,11 @@ class ObstacleMonitorNode(Node):
         self.raw_safety_receive_time = None
         self.waypoint_id = None
         self.fixed_structure_suppressed = False
-        self.semantic_vehicle_detected = False
-        self.semantic_vehicle_distance = math.inf
-        self.semantic_vehicle_distance_accepted_time = None
-        self.semantic_vehicle_detected_receive_time = None
-        self.semantic_vehicle_distance_receive_time = None
+        self.vision_vehicle_detected = False
+        self.vision_vehicle_distance = math.inf
+        self.vision_vehicle_distance_accepted_time = None
+        self.vision_vehicle_detected_receive_time = None
+        self.vision_vehicle_distance_receive_time = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -238,14 +238,14 @@ class ObstacleMonitorNode(Node):
         )
         self.create_subscription(
             Bool,
-            self.get_parameter("semantic_vehicle_detected_topic").value,
-            self.semantic_vehicle_detected_callback,
+            self.get_parameter("vision_vehicle_detected_topic").value,
+            self.vision_vehicle_detected_callback,
             10,
         )
         self.create_subscription(
             Float32,
-            self.get_parameter("semantic_vehicle_distance_topic").value,
-            self.semantic_vehicle_distance_callback,
+            self.get_parameter("vision_vehicle_distance_topic").value,
+            self.vision_vehicle_distance_callback,
             10,
         )
         self.get_logger().info(
@@ -254,11 +254,11 @@ class ObstacleMonitorNode(Node):
             f"vehicle frame={self.vehicle_frame}"
         )
 
-    def semantic_vehicle_detected_callback(self, msg: Bool) -> None:
-        self.semantic_vehicle_detected = bool(msg.data)
-        self.semantic_vehicle_detected_receive_time = self.get_clock().now()
+    def vision_vehicle_detected_callback(self, msg: Bool) -> None:
+        self.vision_vehicle_detected = bool(msg.data)
+        self.vision_vehicle_detected_receive_time = self.get_clock().now()
 
-    def semantic_vehicle_distance_callback(self, msg: Float32) -> None:
+    def vision_vehicle_distance_callback(self, msg: Float32) -> None:
         now = self.get_clock().now()
         distance = float(msg.data)
         candidate = (
@@ -266,25 +266,25 @@ class ObstacleMonitorNode(Node):
             if math.isfinite(distance) and distance > 0.0
             else math.inf
         )
-        if not self.semantic_vehicle_detected or not math.isfinite(candidate):
-            self.semantic_vehicle_distance = math.inf
-            self.semantic_vehicle_distance_accepted_time = None
+        if not self.vision_vehicle_detected or not math.isfinite(candidate):
+            self.vision_vehicle_distance = math.inf
+            self.vision_vehicle_distance_accepted_time = None
         else:
             elapsed = math.inf
-            if self.semantic_vehicle_distance_accepted_time is not None:
+            if self.vision_vehicle_distance_accepted_time is not None:
                 elapsed = (
-                    now - self.semantic_vehicle_distance_accepted_time
+                    now - self.vision_vehicle_distance_accepted_time
                 ).nanoseconds / 1e9
-            if semantic_distance_is_plausible(
-                self.semantic_vehicle_distance,
+            if vision_distance_is_plausible(
+                self.vision_vehicle_distance,
                 candidate,
                 elapsed,
-                self.semantic_vehicle_max_abs_range_rate,
-                self.semantic_vehicle_jump_tolerance,
+                self.vision_vehicle_max_abs_range_rate,
+                self.vision_vehicle_jump_tolerance,
             ):
-                self.semantic_vehicle_distance = candidate
-                self.semantic_vehicle_distance_accepted_time = now
-        self.semantic_vehicle_distance_receive_time = now
+                self.vision_vehicle_distance = candidate
+                self.vision_vehicle_distance_accepted_time = now
+        self.vision_vehicle_distance_receive_time = now
         self.publish_distances()
 
     def planning_path_callback(self, msg: Path) -> None:
@@ -460,18 +460,18 @@ class ObstacleMonitorNode(Node):
             if self.fixed_structure_suppressed
             else min(path_front_distance, safety_front_distance)
         )
-        semantic_fresh = self.semantic_vehicle_is_fresh()
+        vision_fresh = self.vision_vehicle_is_fresh()
         fusion = fuse_vehicle_obstacle_distances(
             pointcloud_front_distance,
             merge_distance,
-            semantic_fresh and self.semantic_vehicle_detected,
-            self.semantic_vehicle_distance,
+            vision_fresh and self.vision_vehicle_detected,
+            self.vision_vehicle_distance,
             self.vehicle_distance_match_tolerance,
             self.vehicle_distance_match_relative_tolerance,
             self.unconfirmed_emergency_distance,
-            semantic_direct_control=(
+            vision_direct_control=(
                 self.waypoint_id
-                in self.semantic_direct_control_waypoint_ids
+                in self.vision_direct_control_waypoint_ids
             ),
             pointcloud_match_front_distance=path_front_distance,
         )
@@ -489,22 +489,22 @@ class ObstacleMonitorNode(Node):
             merge_msg.data = float(fusion.merge_distance)
             self.merge_pub.publish(merge_msg)
 
-    def semantic_vehicle_is_fresh(self) -> bool:
+    def vision_vehicle_is_fresh(self) -> bool:
         if (
-            self.semantic_vehicle_detected_receive_time is None
-            or self.semantic_vehicle_distance_receive_time is None
+            self.vision_vehicle_detected_receive_time is None
+            or self.vision_vehicle_distance_receive_time is None
         ):
             return False
         now = self.get_clock().now()
         detected_age = (
-            now - self.semantic_vehicle_detected_receive_time
+            now - self.vision_vehicle_detected_receive_time
         ).nanoseconds / 1e9
         distance_age = (
-            now - self.semantic_vehicle_distance_receive_time
+            now - self.vision_vehicle_distance_receive_time
         ).nanoseconds / 1e9
         return (
-            0.0 <= detected_age <= self.semantic_vehicle_timeout
-            and 0.0 <= distance_age <= self.semantic_vehicle_timeout
+            0.0 <= detected_age <= self.vision_vehicle_timeout
+            and 0.0 <= distance_age <= self.vision_vehicle_timeout
         )
 
     def get_vehicle_path(self, cloud_frame, cloud_transform):

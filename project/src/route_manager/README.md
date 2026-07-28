@@ -109,11 +109,14 @@ route_complete
 At `route_complete`, the speed limit is published as zero and the final
 waypoint remains the target.
 
-The initial stop waypoint (ID 0) has a zero route speed. The four dynamic
-traffic-light stop zones (IDs 25, 32, 52, and 59) use a conservative 3 m/s
-approach speed instead: the decision node owns the red/yellow stop. Keeping a
-non-zero planning speed at those waypoints lets the vehicle leave the stop
-zone after a stable green release and prevents a route-progress deadlock.
+The initial stop waypoint (ID 0) has a zero route speed. Dynamic traffic-light
+stop zones 25, 32, and 52 use a conservative 3 m/s route approach speed.
+Waypoint 59 uses an 8 m/s far-field ceiling so the decision node's
+distance-based braking envelope can reduce speed smoothly toward its stop
+boundary instead of applying a 44 m early speed step. The decision node owns
+the red/yellow stop at all four lights. Keeping a non-zero planning speed at
+those waypoints also lets the vehicle leave after a stable green release and
+prevents a route-progress deadlock.
 The waypoint32 T-junction uses the closed-loop-validated waypoint33--35
 geometry with a 3 m/s corner limit. The event-intersection turn retains the
 faster v1.5 waypoint39--42 geometry and speed profile (3, 8, 8, and 14 m/s),

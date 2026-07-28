@@ -56,9 +56,9 @@ Node name:
 
 | Topic | Type | Producer | Purpose |
 | --- | --- | --- | --- |
-| `/perception/traffic_light_state` | `std_msgs/msg/UInt8` | `traffic_light_detector_node` | Stable light state: `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN`. |
+| `/perception/traffic_light_state` | `std_msgs/msg/UInt8` | `yolo_rgbd_detector_node` | Stable light state: `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN`. |
 | `/planning/target_speed` | `std_msgs/msg/Float32` | `trajectory_generator_node` | Target speed selected by planning, in m/s. |
-| `/route/route_state` | `std_msgs/msg/String` | `route_manager_node` | Semantic route state used to enable traffic-light decisions near an intersection. |
+| `/route/route_state` | `std_msgs/msg/String` | `route_manager_node` | Route phase used to enable traffic-light decisions near an intersection. |
 | `/route/current_waypoint_id` | `std_msgs/msg/Int32` | `route_manager_node` | Current target waypoint ID, used for optional waypoint filtering and diagnostics. |
 | `/route/current_waypoint_distance` | `std_msgs/msg/Float32` | `route_manager_node` | Planar distance to the current target; bounds UNKNOWN-light creeping before the stop line. |
 | `/OurCar/INS/twist` | `geometry_msgs/msg/TwistStamped` | simulation bridge | Vehicle velocity used to confirm a complete stop. |
@@ -68,7 +68,7 @@ Node name:
 The `obstacle_monitor_node` subscribes to
 `/perception/pcl/points_preprocessed` (`sensor_msgs/msg/PointCloud2`), transforms the points
 from their source frame into `OurCar/INS`, fuses the path-relative point cloud with the
-semantic vehicle detector, and publishes the two control-facing distances above.
+YOLO/RGB-D vehicle detector, and publishes the two control-facing distances above.
 
 ### Published topics
 
@@ -80,14 +80,14 @@ semantic vehicle detector, and publishes the two control-facing distances above.
 | `/decision/debug` | `std_msgs/msg/String` | diagnostics | Compact description of the current state, reason, route context, light and speed output. |
 
 The two control-facing obstacle distances are vehicle-specific fused outputs. Across the
-route, a fresh semantic vehicle must agree with the planning-path point-cloud corridor
-within the larger of 2.5 m or 20% of semantic range. This rejects semantic cross traffic
+route, a fresh YOLO/RGB-D vehicle must agree with the planning-path point-cloud corridor
+within the larger of 2.5 m or 20% of its RGB-D range. This rejects visual cross traffic
 and point-cloud-only static structures while enabling longitudinal following at every
 waypoint. Point-cloud agreement expires after 0.75 s. Event2 waypoints 43--48 retain a
-validated direct-semantic exception because
-their point-cloud regions measure unrelated road geometry near the NPC. The raw
-vehicle-frame safety cloud is not used for semantic range matching; it remains independent
-as a last-resort generic collision guard below 0.8 m.
+validated direct-vision exception because their point-cloud regions measure unrelated
+road geometry near the NPC. The raw vehicle-frame safety cloud is not used for vision
+range matching; it remains independent as a last-resort generic collision guard below
+0.8 m.
 
 The controller should treat `/decision/target_speed == 0.0` or
 `/decision/stop_required == true` as a request to stop. The exact conversion to throttle
@@ -154,7 +154,7 @@ or by a fresh distance proving that the hard stop boundary is still ahead.
 - A latched merge observation survives ordinary point-cloud gaps. Once it is older than
   `merge_stale_timeout`, the state machine requests a fail-safe stop with reason
   `merge_obstacle_stale_stop`; only a fresh safe observation clears the latch.
-- Front and merge distances maintain independent receive times. Semantic and raw-safety
+- Front and merge distances maintain independent receive times. Vision and raw-safety
   front updates cannot refresh the merge timestamp or publish synthetic merge clearance;
   a new merge observation is emitted only for an actual preprocessed point-cloud sample.
 - Emergency distance is the greater of `emergency_min_distance` and
@@ -181,12 +181,15 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `strict_green_waypoint_ids` | `[25]` | Controlled lights where green evidence must clearly exceed red evidence before release. |
 | `traffic_light_score_timeout` | `0.75` | Maximum age of the paired red/green evidence scores. |
 | `strict_green_over_red_ratio` | `1.05` | Required green-to-red score ratio at strict waypoints. |
-| `strict_green_max_red_score` | `4` | Maximum residual red score allowed when accepting green at a strict waypoint. |
+| `strict_green_max_red_score` | `10` | Maximum residual red score allowed when accepting green at waypoint 25. |
+| `strict_green_min_green_score` | `30` | Minimum green evidence at waypoint 25; rejects the reproduced false-green score `0/22`. |
+| `strict_green_release_delay` | `0.3` | Continuous strong-green duration required at strict waypoints before release; matching the normal response delay keeps true-green reaction prompt. |
 | `treat_yellow_as_red` | `true` | Whether yellow triggers the same stop latch as red. |
 | `require_green_in_controlled_zone` | `true` | Require a fresh green for unrestricted passage at allowlisted intersections. |
 | `waypoint_distance_timeout` | `0.5` | Maximum accepted age of the route waypoint distance, in seconds. |
 | `unknown_light_stop_distance` | `4.0` | Hard stop boundary for an unknown/stale light, measured to the controlled waypoint in metres. This stays outside the 3 m waypoint-advance radius. |
-| `unknown_light_approach_speed` | `1.0` | Maximum approach speed outside that boundary while the light is unknown/stale, in m/s. |
+| `unknown_light_approach_speed` | `8.0` | Far-field ceiling while approaching an unknown/stale or latched red/yellow light. The distance-based braking envelope normally becomes the tighter limit near the controlled waypoint. |
+| `traffic_light_approach_deceleration` | `0.7` | Comfortable deceleration used to derive the signal-approach speed envelope `sqrt(2*a*remaining_distance)`, in m/s². Set to zero to retain the fixed approach-speed behavior. |
 | `traffic_light_stop_distance` | `4.0` | Stop boundary for an associated red/yellow. The colour is latched when first seen, but the car creeps toward this boundary before braking. |
 | `traffic_light_activation_distance` | `20.0` | Maximum distance at which a detected colour is associated with the current controlled waypoint; farther colours are treated as unrelated. |
 | `obstacle_timeout` | `1.0` | Maximum accepted age of obstacle distances. The margin covers the approximately 2.5 Hz Unity depth pipeline without merge-latch oscillation. |
@@ -196,30 +199,36 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `emergency_deceleration` | `0.7` | Conservative available deceleration measured from Event2 full-brake logs, in m/s². |
 | `emergency_release_margin` | `2.0` | Additional clearance beyond the static following gap required before releasing a completed emergency stop, in metres. |
 | `emergency_min_hold_time` | `1.0` | Minimum emergency-brake latch duration after a front hazard is detected. |
-| `emergency_trigger_max_distance` | `10.0` | Near-field ceiling for full emergency activation; farther closing traffic is handled continuously. |
+| `emergency_trigger_max_distance` | `10.0` | Near-field ceiling for full emergency activation; farther closing traffic is handled continuously by adaptive following. |
 | `emergency_follow_release_min_distance` | `5.4` | Minimum measured gap for handing emergency braking back to adaptive following before standstill. |
 | `emergency_follow_release_min_range_rate` | `-0.6` | Minimum filtered gap rate for early handoff, in m/s; the gap may close only slowly. |
+| `emergency_follow_release_min_raw_range_rate` | `0.5` | Fresh unfiltered opening-rate evidence that may bypass the lagging filtered-rate guard while the distance and low-speed guards remain satisfied. |
 | `emergency_follow_release_max_speed` | `2.0` | Maximum ego speed at which early emergency-to-following handoff is permitted, in m/s. |
 | `emergency_follow_release_confirmation` | `0.1` | Time for which early-handoff conditions must remain true, in seconds. |
+| `emergency_follow_recovery_hold_time` | `1.0` | Post-handoff interval during which following may hold or raise the current speed but may not request additional braking; a renewed emergency still overrides immediately. |
+| `emergency_follow_recovery_acceleration` | `1.5` | Gentle target-speed ramp used after the immediate post-emergency handoff, in m/s²; this removes restart delay without demanding hard acceleration. |
 | `merge_trigger_distance` | `12.0` | Right-front obstacle distance that activates early Event2 slowdown before the short-range emergency corridor is needed. |
 | `merge_release_margin` | `2.0` | Additional clearance required to release merge slowdown, in metres. |
 | `merge_target_speed` | `1.5` | Maximum crawl speed while yielding to a merging vehicle, in m/s. |
 | `merge_stale_timeout` | `3.0` | Maximum age of a latched merge observation before a fail-safe stop is requested. A fresh safe observation is required to release it. |
 | `following_enabled` | `true` | Enable continuous adaptive vehicle following. |
-| `following_activation_distance` | `20.0` | Maximum semantic-vehicle distance at which following control is active, in metres. |
+| `following_activation_distance` | `20.0` | Maximum YOLO/RGB-D vehicle distance at which following control is active, in metres. |
 | `following_time_headway` | `2.2` | Time-headway contribution to the desired gap, in seconds. |
 | `following_distance_gain` | `0.10` | Gain converting distance error into target-speed correction. |
 | `following_range_rate_alpha` | `0.5` | Low-pass weight for new gap-rate samples. |
 | `following_range_rate_timeout` | `1.5` | Maximum age of a gap-rate estimate, in seconds. |
 | `following_distance_deadband` | `0.75` | Gap-error band in which stable following holds current speed, in metres. |
 | `following_range_rate_deadband` | `0.2` | Relative-speed band in which the gap is considered stable, in m/s. |
+| `following_min_rolling_speed` | `0.6` | Low-speed following floor used to avoid an unnecessary standstill while a safe surplus gap remains; it never accelerates a closing ego vehicle and is overridden by emergency braking. |
+| `following_min_rolling_clearance` | `2.0` | Clearance required beyond the standstill gap before the rolling-speed floor may apply, in metres. |
+| `following_emergency_closing_speed_margin` | `0.5` | Maximum closing-rate allowance above ego speed while the rolling-clearance boundary is satisfied; suppresses isolated RGB-D range jumps without weakening near-field emergency braking. |
 | `following_target_acceleration` | `1.0` | Maximum upward target-speed slew rate, in m/s². |
 | `following_target_deceleration` | `4.0` | Maximum downward target-speed slew rate, in m/s². |
 | `following_max_abs_range_rate` | `6.0` | Clamp applied to measured gap rate, in m/s. |
 | `vehicle_behavior_global` | `true` | Enable fused longitudinal following and emergency protection at every waypoint. |
 | `vehicle_behavior_waypoint_ids` | unset | Optional longitudinal-vehicle allowlist used only when global behavior is disabled. |
 | `merge_behavior_waypoint_ids` | `43..48` | Waypoint allowlist for Event2-specific right-front merge yielding. |
-| `semantic_direct_control_waypoint_ids` | `43..48` | Validated waypoints where semantic vehicle depth may control without point-cloud range agreement. |
+| `vision_direct_control_waypoint_ids` | `43..48` | Validated waypoints where YOLO/RGB-D vehicle range may control without point-cloud range agreement. |
 | `update_rate` | `20.0` | Decision output rate, in Hz. |
 
 The obstacle monitor transforms `/planning/path` into `OurCar/INS` and projects each cloud
@@ -298,8 +307,8 @@ The tests cover:
 - merge-latch retention, stale fail-safe stopping, and fresh-safe release;
 - independence of front-only updates from merge-source freshness;
 - speed-dependent emergency braking;
-- global semantic/point-cloud-confirmed longitudinal following;
-- rejection of unmatched semantic cross traffic outside validated direct-control waypoints;
+- global vision/point-cloud-confirmed longitudinal following;
+- rejection of unmatched visual cross traffic outside validated direct-control waypoints;
 - separation of path-corridor matching from the raw near-field guard;
 - behavior priority when traffic-light, merge and emergency events overlap;
 - emergency release hysteresis and stale-data fail-safe behavior.
@@ -374,12 +383,12 @@ ros2 launch system_bringup full_system.launch.py \
 - Point-cloud ROI detection measures proximity, not object identity or relative velocity.
   Static roadside objects can therefore cause false positives if the ROI is too wide.
 - Event2-specific merge yielding is intentionally restricted to waypoints 43--48.
-- Global vehicle following requires a fresh semantic/point-cloud range match outside the
+- Global vehicle following requires a fresh vision/point-cloud range match outside the
   validated Event2 direct-control window; a vehicle temporarily hidden from either sensor
   can therefore be released after the configured timeout.
-- The full-route no-event and two-event scenarios have been validated in Unity. Additional
-  vehicle placements, lighting conditions and sensor dropouts remain useful regression
-  cases.
+- Earlier full-route no-event and two-event runs validated the decision behavior. The new
+  YOLO perception path still requires a fresh Unity closed-loop regression after collecting
+  or fine-tuning on representative simulator images.
 
 When decision behaviors are tuned or extended, update the topic tables, priority rules,
 parameters, tests and limitations in this README.

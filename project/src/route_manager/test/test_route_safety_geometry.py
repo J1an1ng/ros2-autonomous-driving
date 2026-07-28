@@ -48,3 +48,10 @@ def test_route_still_contains_all_final_waypoints():
 
     assert sorted(waypoints) == list(range(64))
     assert waypoints[63]['type'] == 'curve_exit'
+
+
+def test_waypoint59_uses_decision_controlled_approach_speed():
+    """Do not restore the far-field 3 m/s step before the final signal."""
+    waypoints = load_waypoints()
+
+    assert_waypoint(waypoints, 59, -49.42, 2.623, -177.646, 8)

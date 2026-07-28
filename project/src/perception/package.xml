@@ -4,11 +4,13 @@
   <version>0.1.0</version>
   <description>Perception nodes for the autonomous driving project.</description>
   <maintainer email="tao@example.com">tao</maintainer>
-  <license>TODO</license>
+  <license>AGPL-3.0-only</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>ament_index_cpp</depend>
   <depend>geometry_msgs</depend>
+  <depend>libopencv-dev</depend>
   <depend>nav_msgs</depend>
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
@@ -20,8 +22,6 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>octomap_server</exec_depend>
   <exec_depend>octomap_rviz_plugins</exec_depend>
-
-  <test_depend>ament_cmake_gtest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
