@@ -88,7 +88,7 @@ private:
     declare_parameter<double>("speed_kd", 0.02);
     declare_parameter<double>("speed_integral_limit", 2.0);
     declare_parameter<double>("speed_error_deadband", 0.05);
-    declare_parameter<double>("maximum_throttle", 0.50);
+    declare_parameter<double>("maximum_throttle", 0.70);
     declare_parameter<double>("maximum_brake", 1.0);
     declare_parameter<double>("safe_stop_brake", 1.0);
     declare_parameter<double>("path_timeout", 1.0);

@@ -191,8 +191,8 @@ def read_run(bag_path: Path, logs_path: Path):
         'max_twist_gap_s': round(max_gap(data['speed']), 4),
         'max_planning_path_gap_s': round(max_gap(data['tracking']), 4),
         'max_decision_speed_gap_s': round(max_gap(data['decision_speed']), 4),
-        'event1_min_merge_m': finite_min([
-            value for value, waypoint in merge if waypoint is not None and 10 <= waypoint <= 14
+        'event1_min_front_m': finite_min([
+            value for value, waypoint in front if waypoint is not None and 17 <= waypoint <= 20
         ]),
         'event2_min_merge_m': finite_min([
             value for value, waypoint in merge if waypoint is not None and 45 <= waypoint <= 49
@@ -214,7 +214,7 @@ def read_run(bag_path: Path, logs_path: Path):
         'safe_stop_reasons': controller_safe_stops,
         'stop_events': stop_events,
     }
-    for key in ('event1_min_merge_m', 'event2_min_merge_m', 'event2_min_front_m'):
+    for key in ('event1_min_front_m', 'event2_min_merge_m', 'event2_min_front_m'):
         if metrics[key] is not None:
             metrics[key] = round(metrics[key], 3)
     return data, metrics

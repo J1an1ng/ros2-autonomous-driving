@@ -61,7 +61,7 @@ TEST(ControlCore, SpeedControllerUsesThrottleBelowTarget)
 {
   controller::SpeedController controller(controller::SpeedControllerConfig{});
   const auto command = controller.update(4.0, 1.0, 0.1);
-  EXPECT_DOUBLE_EQ(command.throttle, 0.5);
+  EXPECT_DOUBLE_EQ(command.throttle, 0.7);
   EXPECT_DOUBLE_EQ(command.brake, 0.0);
 }
 
@@ -71,6 +71,21 @@ TEST(ControlCore, SpeedControllerUsesBrakeAboveTarget)
   const auto command = controller.update(1.0, 4.0, 0.1);
   EXPECT_DOUBLE_EQ(command.throttle, 0.0);
   EXPECT_GT(command.brake, 0.0);
+}
+
+TEST(ControlCore, TargetStepDoesNotCreateDerivativeBrakeKick)
+{
+  controller::SpeedControllerConfig config;
+  config.kp = 0.35;
+  config.ki = 0.0;
+  config.kd = 0.02;
+  controller::SpeedController controller(config);
+
+  controller.update(14.0, 6.4, 0.05);
+  const auto command = controller.update(6.4, 6.4, 0.05);
+
+  EXPECT_DOUBLE_EQ(command.throttle, 0.0);
+  EXPECT_DOUBLE_EQ(command.brake, 0.0);
 }
 
 TEST(ControlCore, SpeedControllerNeverCommandsThrottleAndBrakeTogether)

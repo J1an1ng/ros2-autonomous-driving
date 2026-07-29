@@ -62,6 +62,8 @@ class TrafficLightStateMachine:
         unknown_light_approach_speed: float = 1.0,
         traffic_light_approach_deceleration: float = 0.0,
         traffic_light_stop_distance: float = 4.0,
+        stop_distance_override_waypoint_ids: Sequence[int] = (),
+        stop_distance_overrides: Sequence[float] = (),
         traffic_light_activation_distance: float = 20.0,
         obstacle_timeout: float = 0.5,
         emergency_min_distance: float = 4.0,
@@ -96,6 +98,10 @@ class TrafficLightStateMachine:
         following_target_acceleration: float = 1.0,
         following_target_deceleration: float = 2.0,
         following_max_abs_range_rate: float = 6.0,
+        smooth_following_waypoint_ids: Sequence[int] = (),
+        smooth_following_target_deceleration: float = 2.0,
+        smooth_following_release_margin: float = 0.0,
+        smooth_following_dropout_hold_time: float = 0.0,
         vehicle_behavior_waypoint_ids: Sequence[int] = (),
         merge_behavior_waypoint_ids: Sequence[int] = (),
     ) -> None:
@@ -143,9 +149,24 @@ class TrafficLightStateMachine:
         self.traffic_light_stop_distance = max(
             0.0, float(traffic_light_stop_distance)
         )
+        if len(stop_distance_override_waypoint_ids) != len(
+            stop_distance_overrides
+        ):
+            raise ValueError(
+                "stop-distance waypoint IDs and overrides must have equal length"
+            )
+        self.stop_distance_overrides = {
+            int(waypoint_id): max(0.0, float(distance))
+            for waypoint_id, distance in zip(
+                stop_distance_override_waypoint_ids,
+                stop_distance_overrides,
+            )
+        }
+        self.active_stop_distance = self.unknown_light_stop_distance
         self.traffic_light_activation_distance = max(
             self.unknown_light_stop_distance,
             self.traffic_light_stop_distance,
+            max(self.stop_distance_overrides.values(), default=0.0),
             float(traffic_light_activation_distance),
         )
         self.obstacle_timeout = max(0.0, float(obstacle_timeout))
@@ -229,6 +250,18 @@ class TrafficLightStateMachine:
         self.following_max_abs_range_rate = max(
             0.0, float(following_max_abs_range_rate)
         )
+        self.smooth_following_waypoint_ids = {
+            int(waypoint_id) for waypoint_id in smooth_following_waypoint_ids
+        }
+        self.smooth_following_target_deceleration = max(
+            0.0, float(smooth_following_target_deceleration)
+        )
+        self.smooth_following_release_margin = max(
+            0.0, float(smooth_following_release_margin)
+        )
+        self.smooth_following_dropout_hold_time = max(
+            0.0, float(smooth_following_dropout_hold_time)
+        )
         self.vehicle_behavior_waypoint_ids = {
             int(waypoint_id) for waypoint_id in vehicle_behavior_waypoint_ids
         }
@@ -272,6 +305,8 @@ class TrafficLightStateMachine:
         self.following_target_speed = 0.0
         self._following_command_speed: Optional[float] = None
         self._following_command_time: Optional[float] = None
+        self._following_last_observation_time: Optional[float] = None
+        self._following_last_distance = math.inf
         self.emergency_distance = self.emergency_min_distance
         self.emergency_closing_speed = 0.0
         self.emergency_latched = False
@@ -415,6 +450,24 @@ class TrafficLightStateMachine:
             if self.latched_waypoint_id is not None
             else self.waypoint_id
         )
+        stop_distance_override = self.stop_distance_overrides.get(
+            associated_waypoint_id
+        )
+        signal_stop_distance = (
+            stop_distance_override
+            if stop_distance_override is not None
+            else self.traffic_light_stop_distance
+        )
+        unknown_stop_distance = (
+            stop_distance_override
+            if stop_distance_override is not None
+            else self.unknown_light_stop_distance
+        )
+        self.active_stop_distance = (
+            signal_stop_distance
+            if self.signal_stop_pending
+            else unknown_stop_distance
+        )
         strict_green_required = (
             associated_waypoint_id in self.strict_green_waypoint_ids
         )
@@ -452,7 +505,7 @@ class TrafficLightStateMachine:
             controlled_zone
             and self.signal_stop_pending
             and waypoint_distance_fresh
-            and self.waypoint_distance > self.traffic_light_stop_distance
+            and self.waypoint_distance > signal_stop_distance
         )
         unknown_light_approach = (
             controlled_zone
@@ -461,7 +514,7 @@ class TrafficLightStateMachine:
             and not stop_signal
             and not green_signal
             and waypoint_distance_fresh
-            and self.waypoint_distance > self.unknown_light_stop_distance
+            and self.waypoint_distance > unknown_stop_distance
         )
         # Unknown/stale light data may only creep toward a controlled waypoint
         # while a fresh distance proves that the hard stop boundary is ahead.
@@ -721,9 +774,9 @@ class TrafficLightStateMachine:
             approach_speed_limit = self.unknown_light_approach_speed
             if self.traffic_light_approach_deceleration > 0.0:
                 stop_distance = (
-                    self.traffic_light_stop_distance
+                    signal_stop_distance
                     if signal_light_approach
-                    else self.unknown_light_stop_distance
+                    else unknown_stop_distance
                 )
                 remaining_braking_distance = max(
                     0.0, self.waypoint_distance - stop_distance
@@ -739,22 +792,68 @@ class TrafficLightStateMachine:
             permitted_speed = min(
                 permitted_speed, approach_speed_limit
             )
-        following_active = (
+        following_candidate = (
             self.following_enabled
             and vehicle_behavior_allowed
             and front_obstacle_fresh
             and math.isfinite(self.front_obstacle_distance)
-            and self.front_obstacle_distance
-            <= self.following_activation_distance
             and planning_fresh
         )
+        smooth_following = (
+            self.waypoint_id in self.smooth_following_waypoint_ids
+        )
+        following_observed = (
+            following_candidate
+            and self.front_obstacle_distance
+            <= self.following_activation_distance
+        )
+        following_release_observed = (
+            following_candidate
+            and smooth_following
+            and self._following_command_speed is not None
+            and self.front_obstacle_distance
+            <= (
+                self.following_activation_distance
+                + self.smooth_following_release_margin
+            )
+        )
+        if following_observed or following_release_observed:
+            self._following_last_observation_time = now
+            self._following_last_distance = self.front_obstacle_distance
+        following_dropout_held = (
+            not following_observed
+            and not following_release_observed
+            and smooth_following
+            and vehicle_behavior_allowed
+            and planning_fresh
+            and self._following_command_speed is not None
+            and self._following_last_observation_time is not None
+            and 0.0
+            <= now - self._following_last_observation_time
+            <= self.smooth_following_dropout_hold_time
+        )
+        following_active = (
+            following_observed
+            or following_release_observed
+            or following_dropout_held
+        )
         if following_active:
+            following_distance = (
+                self._following_last_distance
+                if following_dropout_held
+                else self.front_obstacle_distance
+            )
+            following_deceleration = (
+                self.smooth_following_target_deceleration
+                if smooth_following
+                else self.following_target_deceleration
+            )
             self.following_distance_target = (
                 self.emergency_standstill_distance
                 + self.following_time_headway * current_speed
             )
             distance_error = (
-                self.front_obstacle_distance
+                following_distance
                 - self.following_distance_target
             )
             if (
@@ -789,7 +888,7 @@ class TrafficLightStateMachine:
             rolling_speed_floor_available = (
                 not self.emergency_latched
                 and current_speed > self.stopped_speed_threshold
-                and self.front_obstacle_distance
+                and following_distance
                 >= (
                     self.emergency_standstill_distance
                     + self.following_min_rolling_clearance
@@ -834,6 +933,9 @@ class TrafficLightStateMachine:
                     current_speed,
                     now,
                     acceleration=self.emergency_follow_recovery_acceleration,
+                    deceleration=following_deceleration,
+                    maximum_target=permitted_speed,
+                    seed_from_current=smooth_following,
                 )
             else:
                 self.emergency_follow_recovery_until = None
@@ -841,11 +943,16 @@ class TrafficLightStateMachine:
                     self.following_raw_target_speed,
                     current_speed,
                     now,
+                    deceleration=following_deceleration,
+                    maximum_target=permitted_speed,
+                    seed_from_current=smooth_following,
                 )
             self.following_target_speed = following_target
         else:
             self._following_command_speed = None
             self._following_command_time = None
+            self._following_last_observation_time = None
+            self._following_last_distance = math.inf
             self.following_raw_target_speed = permitted_speed
             self.following_target_speed = permitted_speed
 
@@ -877,7 +984,11 @@ class TrafficLightStateMachine:
             target_speed = following_target
             output_state = DecisionState.FOLLOWING_VEHICLE
             stop_required = False
-            reason = "adaptive_vehicle_following"
+            reason = (
+                "adaptive_vehicle_following_hold"
+                if following_dropout_held
+                else "adaptive_vehicle_following"
+            )
         elif self.merge_latched and planning_fresh:
             target_speed = min(permitted_speed, self.merge_target_speed)
             output_state = DecisionState.SLOWING_FOR_MERGE
@@ -908,29 +1019,48 @@ class TrafficLightStateMachine:
         current_speed: float,
         now: float,
         acceleration: Optional[float] = None,
+        deceleration: Optional[float] = None,
+        maximum_target: float = math.inf,
+        seed_from_current: bool = False,
     ) -> float:
         acceleration_limit = (
             self.following_target_acceleration
             if acceleration is None
             else max(0.0, float(acceleration))
         )
+        deceleration_limit = (
+            self.following_target_deceleration
+            if deceleration is None
+            else max(0.0, float(deceleration))
+        )
         if (
             self._following_command_speed is None
             or self._following_command_time is None
         ):
-            command = min(float(raw_target), max(0.0, float(current_speed)))
+            if seed_from_current:
+                # In smooth-following route windows, a newly associated,
+                # still-far lead vehicle must not cause an instantaneous
+                # target-speed step. Near-field risk bypasses this path through
+                # the independent emergency latch above.
+                command = max(0.0, float(current_speed))
+            else:
+                command = min(
+                    float(raw_target), max(0.0, float(current_speed))
+                )
         else:
             dt = max(0.0, float(now) - self._following_command_time)
             lower = (
                 self._following_command_speed
-                - self.following_target_deceleration * dt
+                - deceleration_limit * dt
             )
             upper = (
                 self._following_command_speed
                 + acceleration_limit * dt
             )
             command = max(lower, min(upper, float(raw_target)))
-        self._following_command_speed = max(0.0, command)
+        self._following_command_speed = max(
+            0.0, min(float(maximum_target), command)
+        )
         self._following_command_time = float(now)
         return self._following_command_speed
 

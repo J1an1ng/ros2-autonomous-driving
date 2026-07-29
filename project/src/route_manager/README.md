@@ -69,6 +69,11 @@ Near the end of the route, fewer than five waypoints may be published.
 
 This topic provides the trajectory planner with information about the road geometry ahead, especially at curves and intersections.
 
+Waypoint types describe route semantics and do not automatically reduce speed
+at an intersection. The recorder gives intersection types the same default
+speed as a normal waypoint. Add an explicit curve or slow-zone limit only where
+the recorded path geometry requires it.
+
 /route/speed_limit
 
 Type: std_msgs/msg/Float32
@@ -110,18 +115,26 @@ At `route_complete`, the speed limit is published as zero and the final
 waypoint remains the target.
 
 The initial stop waypoint (ID 0) has a zero route speed. Dynamic traffic-light
-stop zones 25, 32, and 52 use a conservative 3 m/s route approach speed.
-Waypoint 59 uses an 8 m/s far-field ceiling so the decision node's
-distance-based braking envelope can reduce speed smoothly toward its stop
-boundary instead of applying a 44 m early speed step. The decision node owns
-the red/yellow stop at all four lights. Keeping a non-zero planning speed at
-those waypoints also lets the vehicle leave after a stable green release and
-prevents a route-progress deadlock.
+waypoints 25, 32, 52, and 59 use an 8 m/s far-field ceiling so the decision
+node's distance-based
+braking envelope can reduce speed smoothly toward each stop boundary instead
+of applying an early 14 -> 3 m/s speed step. The decision node owns the
+red/yellow stop at all four lights. Keeping a non-zero planning speed at those
+waypoints also lets the vehicle leave after a stable green release and prevents
+a route-progress deadlock. Waypoint25 overrides the global 3 m route reach
+radius with 1.5 m, keeping its distance reference active through the requested
+2 m stop boundary.
 The waypoint32 T-junction uses the closed-loop-validated waypoint33--35
 geometry with a 3 m/s corner limit. The event-intersection turn retains the
 faster v1.5 waypoint39--42 geometry and speed profile (3, 8, 8, and 14 m/s),
 and the road-end turn uses the updated waypoint47--50 samples to keep the local
 path aligned with the recorded route through all bends.
+
+The straight-through intersections at waypoints9--10 and 16--18 retain the
+surrounding 14 m/s road limit. Their semantic `intersection` labels are used
+for route context only and must not create a 14 -> 3 -> 14 m/s target-speed
+step. Explicit lower speeds remain only where route geometry or dynamic
+decision behavior requires them.
 
 Waypoints60--63 extend the route beyond the final traffic-light stop at
 waypoint59 and complete the turn back toward the starting area. The route map

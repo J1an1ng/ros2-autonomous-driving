@@ -78,7 +78,8 @@ waypoints:
   y: 51.44
   z: 0.822
   yaw_deg: 0.898
-  speed_limit: 8
+  # Straight-through intersection: route semantics do not impose a slowdown.
+  speed_limit: 14
   segment_id: 0
   type: intersection_approach
 - id: 10
@@ -86,7 +87,7 @@ waypoints:
   y: 51.558
   z: 0.822
   yaw_deg: -0.846
-  speed_limit: 3
+  speed_limit: 14
   segment_id: 0
   type: intersection
 - id: 11
@@ -134,7 +135,8 @@ waypoints:
   y: 52.926
   z: 0.822
   yaw_deg: 1.027
-  speed_limit: 8
+  # Straight-through intersection: preserve the surrounding road speed.
+  speed_limit: 14
   segment_id: 0
   type: intersection_approach
 - id: 17
@@ -142,7 +144,7 @@ waypoints:
   y: 52.961
   z: 0.826
   yaw_deg: -1.246
-  speed_limit: 8
+  speed_limit: 14
   segment_id: 0
   type: intersection
 - id: 18
@@ -150,7 +152,7 @@ waypoints:
   y: 52.321
   z: 0.823
   yaw_deg: -4.434
-  speed_limit: 3
+  speed_limit: 14
   segment_id: 0
   type: intersection
 - id: 19
@@ -206,7 +208,11 @@ waypoints:
   y: 15.711
   z: 0.822
   yaw_deg: -91.195
-  speed_limit: 3
+  # Keep waypoint25 active through its 2 m traffic-light stop boundary, then
+  # advance normally after green. Its 8 m/s route ceiling lets decision_making
+  # apply the same continuous braking envelope as the later signals.
+  speed_limit: 8
+  reach_distance: 1.5
   segment_id: 0
   type: stop_zone
 - id: 26
@@ -262,7 +268,10 @@ waypoints:
   y: 4.231
   z: 0.823
   yaw_deg: 177.671
-  speed_limit: 3
+  # Keep the far-field route limit above the decision layer's distance-based
+  # traffic-light envelope. The following waypoint33--35 corner samples retain
+  # their 3 m/s turn limit; this only removes the 45 m early 14 -> 3 m/s step.
+  speed_limit: 8
   segment_id: 0
   type: stop_zone
 - id: 33
@@ -422,7 +431,9 @@ waypoints:
   y: 15.284
   z: 0.822
   yaw_deg: -90.926
-  speed_limit: 3
+  # Let decision_making apply its distance-based traffic-light envelope rather
+  # than forcing an immediate 14 -> 3 m/s step when waypoint52 becomes active.
+  speed_limit: 8
   segment_id: 0
   type: stop_zone
 - id: 53
@@ -563,12 +574,12 @@ zones:
   type: intersection_approach
   related_waypoint: 9
   radius: 5.0
-  speed_limit: 1.0
+  speed_limit: 14
 - id: intersection_approach_16
   type: intersection_approach
   related_waypoint: 16
   radius: 5.0
-  speed_limit: 1.0
+  speed_limit: 14
 - id: curve_zone_22
   type: curve
   related_waypoint: 22
@@ -633,7 +644,7 @@ zones:
   type: intersection_approach
   related_waypoint: 38
   radius: 5.0
-  speed_limit: 1.0
+  speed_limit: 8
 - id: curve_zone_40
   type: curve
   related_waypoint: 40

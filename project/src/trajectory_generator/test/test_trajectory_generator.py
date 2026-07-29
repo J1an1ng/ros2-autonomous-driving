@@ -15,7 +15,6 @@ def make_generator():
             min_target_distance=0.5,
             default_speed=2.0,
             max_speed=8.0,
-            slow_speed=2.0,
             stop_speed=0.0,
         )
     )
@@ -27,9 +26,22 @@ def test_stop_zone_preserves_nonzero_route_speed_for_decision_layer():
         speed_limit=3.0,
         default_speed=2.0,
         max_speed=8.0,
-        slow_speed=2.0,
         stop_speed=0.0,
     ) == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize(
+    "route_state",
+    ["intersection_approach", "intersection", "intersection_exit"],
+)
+def test_intersection_state_does_not_impose_generic_slowdown(route_state):
+    assert select_target_speed(
+        route_state=route_state,
+        speed_limit=6.0,
+        default_speed=2.0,
+        max_speed=8.0,
+        stop_speed=0.0,
+    ) == pytest.approx(6.0)
 
 
 def test_route_complete_remains_stopped():
@@ -38,7 +50,6 @@ def test_route_complete_remains_stopped():
         speed_limit=3.0,
         default_speed=2.0,
         max_speed=8.0,
-        slow_speed=2.0,
         stop_speed=0.0,
     ) == pytest.approx(0.0)
 
@@ -288,7 +299,6 @@ def test_rejects_invalid_configuration(field, value):
         "min_target_distance": 0.5,
         "default_speed": 2.0,
         "max_speed": 8.0,
-        "slow_speed": 2.0,
         "stop_speed": 0.0,
     }
     values[field] = value

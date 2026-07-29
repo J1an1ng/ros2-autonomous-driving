@@ -59,6 +59,21 @@ def vision_distance_is_plausible(
     return abs(candidate_distance - previous_distance) <= maximum_change
 
 
+def vision_detection_is_held(
+    detected: bool,
+    last_positive_age: float,
+    hold_time: float,
+) -> bool:
+    """Bridge a short detector dropout after a confirmed positive frame."""
+
+    if detected:
+        return True
+    return (
+        math.isfinite(last_positive_age)
+        and 0.0 <= last_positive_age <= max(0.0, float(hold_time))
+    )
+
+
 def fuse_vehicle_obstacle_distances(
     pointcloud_front_distance: float,
     pointcloud_merge_distance: float,
@@ -74,8 +89,8 @@ def fuse_vehicle_obstacle_distances(
 
     Across the route, a vision vehicle controls the car only when its range
     agrees with the point-cloud front or merge corridor. Selected, validated
-    waypoints may enable direct vision control because Event2 runtime data
-    showed that its point cloud measures unrelated road geometry near the NPC.
+    waypoints may enable direct vision control because runtime data showed that
+    their point cloud measures unrelated road geometry near the NPC.
 
     The tiny unconfirmed point-cloud front range remains as a last-resort
     generic collision guard when no vision vehicle is present.
@@ -107,7 +122,17 @@ def fuse_vehicle_obstacle_distances(
     front_confirmed = vision_valid and (direct_control or front_matched)
     merge_confirmed = vision_valid and (direct_control or merge_matched)
 
-    if front_confirmed:
+    if front_matched:
+        # Classification comes from YOLO/RGB-D, while the path-relative cloud
+        # confirms that the same object occupies the driving corridor. Average
+        # the two already-tolerance-checked ranges so a one-sided depth error
+        # cannot create an abrupt following-distance step.
+        front_distance = 0.5 * (
+            float(vision_vehicle_distance) + float(match_front_distance)
+        )
+    elif front_confirmed:
+        # Selected event windows retain RGB-D fallback when the sparse path
+        # cloud temporarily misses a real lead vehicle.
         front_distance = float(vision_vehicle_distance)
     elif (
         math.isfinite(pointcloud_front_distance)

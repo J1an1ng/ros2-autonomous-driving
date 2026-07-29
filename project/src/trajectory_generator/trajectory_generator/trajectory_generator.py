@@ -16,7 +16,6 @@ class TrajectoryGeneratorConfig:
     min_target_distance: float
     default_speed: float
     max_speed: float
-    slow_speed: float
     stop_speed: float
     smoothing_strength: float = 0.25
     max_curvature: float = 2.0
@@ -34,7 +33,6 @@ class TrajectoryGeneratorConfig:
             "min_target_distance": self.min_target_distance,
             "default_speed": self.default_speed,
             "max_speed": self.max_speed,
-            "slow_speed": self.slow_speed,
             "stop_speed": self.stop_speed,
             "smoothing_strength": self.smoothing_strength,
             "max_curvature": self.max_curvature,
@@ -153,7 +151,6 @@ class TrajectoryGenerator:
             speed_limit=speed_limit,
             default_speed=self.config.default_speed,
             max_speed=self.config.max_speed,
-            slow_speed=self.config.slow_speed,
             stop_speed=self.config.stop_speed,
         )
         return GeneratedTrajectory(

@@ -51,8 +51,7 @@ Configured by `config/trajectory_generator.yaml`.
 | `continuity_candidate_weight` | `0.5` | Initial weight of the new path in the continuity blend; clamped to `[0, 1]`. |
 | `max_continuity_deviation` | `2.0` | Maximum corresponding-point difference over the blend window. Larger path jumps or branch changes are used without blending. |
 | `default_speed` | `2.0` | Speed used before `/route/speed_limit` is received. |
-| `max_speed` | `14.0` | Maximum normal target speed (50.4 km/h); lower route limits still take priority at corners and intersections. |
-| `slow_speed` | `2.0` | Maximum commanded target speed in intersection states. |
+| `max_speed` | `14.0` | Maximum nominal target speed (50.4 km/h); lower route waypoint limits still take priority where required by path geometry. |
 | `stop_speed` | `0.0` | Terminal target speed for `route_complete`. |
 
 ## Speed Logic
@@ -61,14 +60,16 @@ Configured by `config/trajectory_generator.yaml`.
 - A `stop_zone` remains a nominal route state and uses its speed limit. Dynamic
   traffic-light stops are owned by the decision node, so a stable green can
   release the vehicle without a second planning-layer zero-speed latch.
-- If `route_state` contains `intersection`, target speed is
-  `min(speed_limit, slow_speed)`.
-- Otherwise target speed is `min(speed_limit, max_speed)`.
+- For every non-terminal route state, including intersection states, target
+  speed is `min(speed_limit, max_speed)`. Route semantics do not add a generic
+  intersection slowdown; geometry-specific waypoint limits remain effective.
 - If no speed limit has been received, `default_speed` is used.
 
 This speed is nominal planning output. Traffic-light and obstacle decisions are
 applied downstream by `decision_making`, which publishes the final target speed
-and stop requirement.
+and stop requirement. Red/yellow/unknown-light approach braking and both
+optional vehicle events therefore retain authority over the higher nominal
+intersection speed.
 
 ## Path Processing
 

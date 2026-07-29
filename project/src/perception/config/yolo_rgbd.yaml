@@ -29,6 +29,8 @@ yolo_rgbd_detector_node:
     distance_percentile: 0.20
     minimum_range_m: 0.5
     maximum_range_m: 35.0
+    # Accept only vehicles already close to the ego lane. Route-specific
+    # widening caused unrelated roadside vehicles to trigger early braking.
     maximum_abs_lateral_m: 2.8
     bbox_inner_x_ratio: 0.08
     bbox_top_trim_ratio: 0.08
@@ -67,6 +69,16 @@ yolo_rgbd_detector_node:
     traffic_target_x_ratio: 0.50
     traffic_target_y_ratio: 0.34
     traffic_center_penalty: 0.50
+    # At waypoint 25 the COCO detector intermittently loses the roughly
+    # 10x20 px signal for the whole green phase. After route_manager advances
+    # past the stop waypoint, inspect a tightly calibrated crop around the
+    # expected signal as a green-only fallback. Red/yellow/unknown remain
+    # fail-safe, and the normal multi-frame filter still gates release.
+    traffic_post_hold_fallback_waypoint_ids: [25]
+    traffic_post_hold_fallback_width_ratio: 0.035
+    traffic_post_hold_fallback_height_ratio: 0.095
+    traffic_post_hold_fallback_x_offset_ratio: 0.003
+    traffic_post_hold_fallback_y_offset_ratio: 0.010
     traffic_consecutive_frames: 4
     traffic_confident_green_frames: 2
     traffic_confident_green_max_red_score: 4

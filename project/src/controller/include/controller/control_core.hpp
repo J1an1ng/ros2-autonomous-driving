@@ -34,7 +34,7 @@ struct SpeedControllerConfig
   double kd{0.02};
   double integral_limit{2.0};
   double error_deadband{0.05};
-  double maximum_throttle{0.50};
+  double maximum_throttle{0.70};
   double maximum_brake{1.0};
 };
 
@@ -74,8 +74,8 @@ public:
 private:
   SpeedControllerConfig config_;
   double integral_{0.0};
-  double previous_error_{0.0};
-  bool has_previous_error_{false};
+  double previous_speed_{0.0};
+  bool has_previous_speed_{false};
 };
 
 }  // namespace controller

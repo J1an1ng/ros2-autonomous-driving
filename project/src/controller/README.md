@@ -209,8 +209,8 @@ Defaults are stored in `config/controller.yaml`.
 | `steering_sign` | `-1.0` | Measured convention: positive Unity steering turns right, so Pure Pursuit is inverted. |
 | `maximum_steering_angle` | `0.52` | Model steering-angle limit in radians. |
 | `maximum_steering_rate` | `2.0` | Normalized steering change per second. |
-| `speed_kp`, `speed_ki`, `speed_kd` | `0.35`, `0.05`, `0.02` | Longitudinal PID gains. |
-| `maximum_throttle` | `0.50` | Maximum acceleration command; raised to reach event sections at the intended pace while speed limits remain authoritative. |
+| `speed_kp`, `speed_ki`, `speed_kd` | `0.35`, `0.05`, `0.02` | Longitudinal PID gains. The derivative term acts on measured speed, preventing a target-speed transition from creating a one-cycle throttle/brake kick. |
+| `maximum_throttle` | `0.70` | Maximum acceleration command. Half throttle plateaued near 4.56 m/s in Unity; the moderate increase improves straight-line speed while route and decision limits remain authoritative. |
 | `maximum_brake` | `1.0` | PID brake ceiling. |
 | `safe_stop_brake` | `1.0` | Brake used for missing data and stop requests. |
 | `path_timeout` | `1.0` | Maximum path age in seconds. |

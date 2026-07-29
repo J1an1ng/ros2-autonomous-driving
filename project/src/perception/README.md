@@ -66,13 +66,19 @@ The launch file starts:
 The vehicle classes are COCO `car`, `bus`, and `truck`. A measurement is
 accepted only when enough reprojected depth samples lie inside the trimmed
 box, its robust range is valid, and its lateral offset is within the configured
-front corridor. The decision node then checks YOLO/RGB-D range against the
-planning-path point cloud except at the validated Event2 waypoints.
+2.8 m front corridor. The decision node then checks YOLO/RGB-D range against
+the planning-path point cloud except in route-gated direct-control windows.
 
 Traffic-light detections can affect control only at waypoints 25, 32, 52 and
 59 and within 20 m of the waypoint. The candidate nearest the configured
 target point is classified from HSV pixels inside its box and passed through
-the existing temporal stability filter. Missing images, TF, camera
+the existing temporal stability filter. At waypoint 25, the COCO detector can
+intermittently lose the roughly 10x20-pixel signal for an entire green phase.
+After the route manager has advanced past that stop waypoint, a tightly
+calibrated predicted ROI therefore provides green-only fallback evidence. It
+accepts only a compact, bright, saturated lower bulb and still requires the
+normal temporal and strict-green decision checks. It cannot override a
+red/yellow observation elsewhere on the route. Missing images, TF, camera
 calibration, model, or inference errors publish fail-safe `UNKNOWN`,
 `detected=false`, and `distance=inf`.
 

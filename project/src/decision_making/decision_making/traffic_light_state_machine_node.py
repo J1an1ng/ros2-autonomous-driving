@@ -43,6 +43,14 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("unknown_light_approach_speed", 1.0)
         self.declare_parameter("traffic_light_approach_deceleration", 0.0)
         self.declare_parameter("traffic_light_stop_distance", 4.0)
+        self.declare_parameter(
+            "stop_distance_override_waypoint_ids",
+            Parameter.Type.INTEGER_ARRAY,
+        )
+        self.declare_parameter(
+            "stop_distance_overrides",
+            Parameter.Type.DOUBLE_ARRAY,
+        )
         self.declare_parameter("traffic_light_activation_distance", 20.0)
         self.declare_parameter("obstacle_timeout", 0.5)
         self.declare_parameter("emergency_min_distance", 4.0)
@@ -82,6 +90,12 @@ class TrafficLightStateMachineNode(Node):
         self.declare_parameter("following_target_deceleration", 2.0)
         self.declare_parameter("following_max_abs_range_rate", 6.0)
         self.declare_parameter(
+            "smooth_following_waypoint_ids", Parameter.Type.INTEGER_ARRAY
+        )
+        self.declare_parameter("smooth_following_target_deceleration", 2.0)
+        self.declare_parameter("smooth_following_release_margin", 0.0)
+        self.declare_parameter("smooth_following_dropout_hold_time", 0.0)
+        self.declare_parameter(
             "vehicle_behavior_waypoint_ids", Parameter.Type.INTEGER_ARRAY
         )
         self.declare_parameter("vehicle_behavior_global", False)
@@ -118,6 +132,30 @@ class TrafficLightStateMachineNode(Node):
             Parameter(
                 "merge_behavior_waypoint_ids",
                 Parameter.Type.INTEGER_ARRAY,
+                [],
+            ),
+        ).value
+        smooth_following_waypoint_ids = self.get_parameter_or(
+            "smooth_following_waypoint_ids",
+            Parameter(
+                "smooth_following_waypoint_ids",
+                Parameter.Type.INTEGER_ARRAY,
+                [],
+            ),
+        ).value
+        stop_distance_override_waypoint_ids = self.get_parameter_or(
+            "stop_distance_override_waypoint_ids",
+            Parameter(
+                "stop_distance_override_waypoint_ids",
+                Parameter.Type.INTEGER_ARRAY,
+                [],
+            ),
+        ).value
+        stop_distance_overrides = self.get_parameter_or(
+            "stop_distance_overrides",
+            Parameter(
+                "stop_distance_overrides",
+                Parameter.Type.DOUBLE_ARRAY,
                 [],
             ),
         ).value
@@ -164,6 +202,10 @@ class TrafficLightStateMachineNode(Node):
             traffic_light_stop_distance=self.get_parameter(
                 "traffic_light_stop_distance"
             ).value,
+            stop_distance_override_waypoint_ids=(
+                stop_distance_override_waypoint_ids
+            ),
+            stop_distance_overrides=stop_distance_overrides,
             traffic_light_activation_distance=self.get_parameter(
                 "traffic_light_activation_distance"
             ).value,
@@ -245,6 +287,16 @@ class TrafficLightStateMachineNode(Node):
             ).value,
             following_max_abs_range_rate=self.get_parameter(
                 "following_max_abs_range_rate"
+            ).value,
+            smooth_following_waypoint_ids=smooth_following_waypoint_ids,
+            smooth_following_target_deceleration=self.get_parameter(
+                "smooth_following_target_deceleration"
+            ).value,
+            smooth_following_release_margin=self.get_parameter(
+                "smooth_following_release_margin"
+            ).value,
+            smooth_following_dropout_hold_time=self.get_parameter(
+                "smooth_following_dropout_hold_time"
             ).value,
             vehicle_behavior_waypoint_ids=vehicle_behavior_waypoint_ids,
             merge_behavior_waypoint_ids=merge_behavior_waypoint_ids,
@@ -407,6 +459,7 @@ class TrafficLightStateMachineNode(Node):
             f"state={output.state.name} reason={output.reason} "
             f"route_state={self.machine.route_state} waypoint_id={self.machine.waypoint_id} "
             f"waypoint_distance={self.machine.waypoint_distance} "
+            f"active_stop_distance={self.machine.active_stop_distance:.3f} "
             f"light={self.machine.traffic_light.name} "
             f"light_scores={self.machine.traffic_light_red_score}/"
             f"{self.machine.traffic_light_green_score} "

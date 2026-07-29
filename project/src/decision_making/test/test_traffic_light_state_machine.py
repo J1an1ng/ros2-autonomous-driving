@@ -366,14 +366,22 @@ def test_unknown_light_creeps_outside_hard_stop_boundary():
     assert output.reason == "unknown_light_controlled_approach"
 
 
-def test_unknown_light_uses_distance_based_braking_envelope():
+@pytest.mark.parametrize(
+    "waypoint_id, stop_distance",
+    [(25, 2.0), (32, 4.0), (52, 3.4), (59, 4.0)],
+)
+def test_unknown_light_uses_distance_based_braking_envelope(
+    waypoint_id, stop_distance
+):
     machine = make_machine(
-        traffic_light_waypoint_ids=[59],
+        traffic_light_waypoint_ids=[25, 32, 52, 59],
         unknown_light_stop_distance=4.0,
         unknown_light_approach_speed=8.0,
         traffic_light_approach_deceleration=0.7,
+        stop_distance_override_waypoint_ids=[25, 52],
+        stop_distance_overrides=[2.0, 3.4],
     )
-    machine.update_route("stop_zone", 59)
+    machine.update_route("stop_zone", waypoint_id)
     machine.update_waypoint_distance(44.0, 0.0)
     machine.update_planning_speed(14.0, 0.0)
     machine.update_vehicle_speed(4.4, 0.0)
@@ -381,7 +389,9 @@ def test_unknown_light_uses_distance_based_braking_envelope():
 
     far_output = machine.evaluate(0.1)
     assert far_output.state == DecisionState.APPROACHING_INTERSECTION
-    assert far_output.target_speed == pytest.approx(math.sqrt(2.0 * 0.7 * 40.0))
+    assert far_output.target_speed == pytest.approx(
+        math.sqrt(2.0 * 0.7 * (44.0 - stop_distance))
+    )
     assert far_output.target_speed > 4.4
     assert not far_output.stop_required
 
@@ -390,7 +400,9 @@ def test_unknown_light_uses_distance_based_braking_envelope():
     machine.update_vehicle_speed(5.0, 0.2)
     near_output = machine.evaluate(0.2)
 
-    assert near_output.target_speed == pytest.approx(math.sqrt(2.0 * 0.7 * 16.0))
+    assert near_output.target_speed == pytest.approx(
+        math.sqrt(2.0 * 0.7 * (20.0 - stop_distance))
+    )
     assert near_output.target_speed < far_output.target_speed
 
 
@@ -418,6 +430,76 @@ def test_distance_based_approach_envelope_reaches_zero_at_stop_boundary():
     assert stopped.state == DecisionState.STOPPING_FOR_LIGHT
     assert stopped.target_speed == 0.0
     assert stopped.stop_required
+
+
+@pytest.mark.parametrize(
+    "waypoint_id, stop_distance",
+    [(25, 2.0), (52, 3.4)],
+)
+def test_waypoint_stop_distance_override_moves_selected_intersections(
+    waypoint_id, stop_distance
+):
+    override_parameters = dict(
+        traffic_light_waypoint_ids=[25, 52, 59],
+        unknown_light_stop_distance=4.0,
+        traffic_light_stop_distance=4.0,
+        stop_distance_override_waypoint_ids=[25, 52],
+        stop_distance_overrides=[2.0, 3.4],
+        traffic_light_approach_deceleration=0.7,
+    )
+    machine = make_machine(**override_parameters)
+    machine.update_route("stop_zone", waypoint_id)
+    machine.update_waypoint_distance(stop_distance + 0.2, 0.0)
+    machine.update_planning_speed(3.0, 0.0)
+    machine.update_vehicle_speed(1.0, 0.0)
+    machine.update_traffic_light(TrafficLight.RED, 0.0)
+
+    still_approaching = machine.evaluate(0.1)
+
+    assert still_approaching.state == DecisionState.APPROACHING_INTERSECTION
+    assert still_approaching.target_speed == pytest.approx(
+        math.sqrt(2.0 * 0.7 * 0.2)
+    )
+    assert not still_approaching.stop_required
+
+    machine.update_waypoint_distance(stop_distance, 0.2)
+    machine.update_planning_speed(3.0, 0.2)
+    machine.update_vehicle_speed(0.8, 0.2)
+    machine.update_traffic_light(TrafficLight.UNKNOWN, 0.2)
+    selected_stop = machine.evaluate(0.2)
+
+    assert selected_stop.state == DecisionState.STOPPING_FOR_LIGHT
+    assert selected_stop.target_speed == 0.0
+    assert selected_stop.stop_required
+
+
+def test_non_overridden_waypoint_retains_default_stop_distance():
+    machine = make_machine(
+        traffic_light_waypoint_ids=[25, 52, 59],
+        unknown_light_stop_distance=4.0,
+        traffic_light_stop_distance=4.0,
+        stop_distance_override_waypoint_ids=[25, 52],
+        stop_distance_overrides=[2.0, 3.4],
+    )
+    machine.update_route("stop_zone", 59)
+    machine.update_waypoint_distance(3.6, 0.0)
+    machine.update_planning_speed(8.0, 0.0)
+    machine.update_vehicle_speed(1.0, 0.0)
+    machine.update_traffic_light(TrafficLight.UNKNOWN, 0.0)
+
+    default_stop = machine.evaluate(0.1)
+
+    assert default_stop.state == DecisionState.STOPPING_FOR_LIGHT
+    assert default_stop.target_speed == 0.0
+    assert default_stop.stop_required
+
+
+def test_stop_distance_override_arrays_must_have_equal_length():
+    with pytest.raises(ValueError):
+        make_machine(
+            stop_distance_override_waypoint_ids=[25],
+            stop_distance_overrides=[],
+        )
 
 
 def test_unknown_light_stops_at_hard_stop_boundary():
@@ -1306,6 +1388,146 @@ def test_adaptive_following_reduces_target_when_gap_is_closing():
     assert closing.state == DecisionState.FOLLOWING_VEHICLE
     assert 0.0 < closing.target_speed < initial.target_speed
     assert machine.front_obstacle_range_rate == pytest.approx(-2.0)
+
+
+def test_event1_following_uses_comfortable_route_specific_deceleration():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_range_rate_alpha=1.0,
+        following_target_deceleration=4.0,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+    )
+    machine.update_route("normal", 17)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(6.4, 0.0)
+    machine.update_obstacle_distances(19.5, math.inf, 0.0)
+    initial = machine.evaluate(0.0)
+
+    machine.update_route("normal", 18)
+    machine.update_planning_speed(14.0, 1.0)
+    machine.update_vehicle_speed(6.4, 1.0)
+    machine.update_obstacle_distances(16.4, math.inf, 1.0)
+    slowing = machine.evaluate(1.0)
+
+    assert initial.target_speed == pytest.approx(6.4)
+    assert slowing.state == DecisionState.FOLLOWING_VEHICLE
+    assert slowing.target_speed == pytest.approx(4.4)
+    assert not slowing.stop_required
+    assert not machine.emergency_latched
+
+
+def test_new_far_field_following_association_has_no_instant_target_step():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_target_deceleration=4.0,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+    )
+    machine.update_route("normal", 17)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(6.4, 0.0)
+    machine.update_obstacle_distances(15.0, math.inf, 0.0)
+
+    output = machine.evaluate(0.0)
+
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert machine.following_raw_target_speed < 6.4
+    assert output.target_speed == pytest.approx(6.4)
+    assert not machine.emergency_latched
+
+
+def test_event1_following_holds_across_short_detection_dropout():
+    machine = make_machine(
+        obstacle_timeout=1.0,
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+        smooth_following_release_margin=2.0,
+        smooth_following_dropout_hold_time=1.3,
+    )
+    machine.update_route("normal", 18)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(6.4, 0.0)
+    machine.update_obstacle_distances(19.0, math.inf, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(14.0, 0.5)
+    machine.update_vehicle_speed(6.2, 0.5)
+    machine.update_obstacle_distances(math.inf, math.inf, 0.5)
+    held = machine.evaluate(0.5)
+
+    assert held.state == DecisionState.FOLLOWING_VEHICLE
+    assert held.reason == "adaptive_vehicle_following_hold"
+    assert held.target_speed < 14.0
+    assert not held.stop_required
+
+    machine.update_planning_speed(14.0, 1.4)
+    machine.update_vehicle_speed(6.0, 1.4)
+    machine.update_obstacle_distances(math.inf, math.inf, 1.4)
+    released = machine.evaluate(1.4)
+
+    assert released.state == DecisionState.CRUISE
+    assert released.target_speed == pytest.approx(14.0)
+
+
+def test_event1_following_release_margin_prevents_twenty_metre_chatter():
+    machine = make_machine(
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+        smooth_following_release_margin=2.0,
+    )
+    machine.update_route("normal", 20)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(4.0, 0.0)
+    machine.update_obstacle_distances(19.9, math.inf, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(14.0, 0.5)
+    machine.update_vehicle_speed(4.0, 0.5)
+    machine.update_obstacle_distances(20.1, math.inf, 0.5)
+    output = machine.evaluate(0.5)
+
+    assert output.state == DecisionState.FOLLOWING_VEHICLE
+    assert output.target_speed <= 4.5
+    assert not output.stop_required
+
+
+def test_event1_continuity_never_blocks_near_field_emergency():
+    machine = make_machine(
+        emergency_min_distance=4.0,
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        emergency_deceleration=0.7,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_dropout_hold_time=1.3,
+    )
+    machine.update_route("normal", 18)
+    machine.update_planning_speed(14.0, 0.0)
+    machine.update_vehicle_speed(4.0, 0.0)
+    machine.update_obstacle_distances(19.0, math.inf, 0.0)
+    machine.evaluate(0.0)
+
+    machine.update_planning_speed(14.0, 0.5)
+    machine.update_vehicle_speed(4.0, 0.5)
+    machine.update_obstacle_distances(8.0, math.inf, 0.5)
+    emergency = machine.evaluate(0.5)
+
+    assert emergency.state == DecisionState.EMERGENCY_BRAKING
+    assert emergency.target_speed == 0.0
+    assert emergency.stop_required
 
 
 def test_t_junction_cross_traffic_is_ignored_before_conflict_waypoints():

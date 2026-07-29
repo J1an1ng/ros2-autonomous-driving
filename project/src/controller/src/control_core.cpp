@@ -143,7 +143,13 @@ LongitudinalCommand SpeedController::update(
 
   const double candidate_integral = clamp_value(
     integral_ + error * dt, -config_.integral_limit, config_.integral_limit);
-  const double derivative = has_previous_error_ ? (error - previous_error_) / dt : 0.0;
+  // Differentiate the measured speed instead of the tracking error. This is
+  // the standard derivative-on-measurement form: it retains damping while
+  // preventing a target-speed change (for example CRUISE -> FOLLOWING) from
+  // producing a one-cycle full-brake "derivative kick".
+  const double sanitized_speed = std::max(current_speed, 0.0);
+  const double derivative =
+    has_previous_speed_ ? -(sanitized_speed - previous_speed_) / dt : 0.0;
   const double unsaturated =
     config_.kp * error + config_.ki * candidate_integral + config_.kd * derivative;
   const double saturated = clamp_value(
@@ -157,8 +163,8 @@ LongitudinalCommand SpeedController::update(
     integral_ = candidate_integral;
   }
 
-  previous_error_ = error;
-  has_previous_error_ = true;
+  previous_speed_ = sanitized_speed;
+  has_previous_speed_ = true;
 
   if (saturated >= 0.0) {
     return LongitudinalCommand{saturated, 0.0};
@@ -169,8 +175,8 @@ LongitudinalCommand SpeedController::update(
 void SpeedController::reset()
 {
   integral_ = 0.0;
-  previous_error_ = 0.0;
-  has_previous_error_ = false;
+  previous_speed_ = 0.0;
+  has_previous_speed_ = false;
 }
 
 }  // namespace controller

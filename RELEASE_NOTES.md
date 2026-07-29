@@ -1,5 +1,45 @@
 # Release notes
 
+## full-system-v1.8.0
+
+Event1 detection, speed-profile, and braking update built on
+`full-system-v1.7.0`.
+
+Improvements:
+
+- Extends route-gated YOLO/RGB-D direct vehicle control to Event1 waypoints
+  17--20. A 1.3 s association/dropout hold and a 2 m release margin prevent
+  brief detector gaps or activation-boundary chatter from returning the
+  vehicle to 14 m/s cruise.
+- Adds a smooth Event1 following profile with a 2.0 m/s² downward target slew
+  while retaining the independent near-field emergency brake.
+- Removes unnecessary semantic intersection caps from the trajectory layer
+  and restores the surrounding road speed at straight-through intersections.
+- Raises traffic-light waypoints 25, 32, 52, and 59 to an 8 m/s far-field
+  ceiling. The decision layer now reduces speed continuously with a
+  distance-based `sqrt(2*a*d)` envelope instead of applying an early fixed
+  3 m/s step.
+- Calibrates stop boundaries to 2.0 m at waypoint 25, 3.4 m at waypoint 52,
+  and 4.0 m at waypoints 32 and 59. Waypoint 25 uses a local 1.5 m route reach
+  radius so its 2 m stop reference cannot switch prematurely to waypoint 26.
+- Changes the longitudinal controller to derivative-on-measurement, avoiding
+  a one-cycle braking kick when target speed changes, and raises the validated
+  throttle ceiling to 0.70.
+- Adds focused green-lamp ROI regressions and expands decision, route,
+  controller, trajectory, and Event1 fusion tests.
+
+Validation:
+
+- Rebuilt the affected perception, controller, decision-making, trajectory,
+  and route-manager packages successfully.
+- Passed all 165 selected release tests: 4 focused perception ROI tests,
+  11 controller tests, 98 decision-making tests, 37 trajectory-generator
+  tests, and 15 route-manager functional tests. Three repository-wide
+  route-manager linter checks were intentionally excluded.
+- The 2026-07-27 production baseline completed waypoint 0--63 with both NPC
+  events. A new full closed-loop Unity run remains required for the v1.8.0
+  Event1 and stop-line calibration changes.
+
 ## full-system-v1.7.0
 
 YOLO RGB-D perception release built on `full-system-v1.6.0`.

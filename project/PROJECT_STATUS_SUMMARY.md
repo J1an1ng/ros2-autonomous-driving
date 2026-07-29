@@ -1,9 +1,10 @@
-# 项目状态：YOLO 非语义相机方案
+# 项目状态：YOLO 感知、Event1 跟车与路口制动优化
 
-更新日期：2026-07-27
+更新日期：2026-07-29
 
-> 本文只记录本项目的 YOLO 感知更新及其直接依赖，不讨论规划、决策、控制和
-> Unity 仿真框架的整体代码归属。
+> 本文记录本项目的 YOLO 感知更新，以及与其直接相关的 Event1 前车检测/跟车、
+> 红绿灯路口速度规划和停车制动更新。规划、决策与控制的完整代码归属仍不在本文
+> 范围内；第 4 节的第三方归属说明只针对 YOLO 集成。
 
 ## 1. 当前结论
 
@@ -20,13 +21,23 @@
 - 从检测框内的 HSV 颜色、灯泡上下布局和多帧结果判断红、黄、绿灯；
 - 对 waypoint 25 的“小检测框没有完整框住下方绿灯灯泡”问题进行补充识别，
   同时拒绝交通灯下方的大块绿色路牌；
+- 在 Event1 的 waypoint 17--20 窗口内稳定关联 YOLO/RGB-D 前车，允许经过路线
+  门控的视觉距离在点云暂时无法匹配时继续参与纵向控制；
+- 跨越短时 YOLO 漏检保留前车关联和安全跟车目标，避免目标速度在跟车速度与
+  14 m/s 巡航速度之间跳变；
+- 取消 waypoint 25、32、52、59 红绿灯前固定 3 m/s 的远场限速，改用统一的
+  距离制动包络逐渐减速；
+- 分别在 waypoint 25/32/52/59 前约 2.0/4.0/3.4/4.0 m 命令停车，并通过
+  waypoint 25 的局部路线到达半径保证 2 m 停车线的距离参考不会提前切换；
 - 在检测、模型、TF 或深度数据异常时发布保守的安全状态。
 
-本轮动态联调中，车辆完成了 waypoint 0--63 全路线并进入 `route_complete`。
+此前动态联调中，车辆完成了 waypoint 0--63 全路线并进入 `route_complete`。
 waypoint 25、52、59 的本车道交通灯均在同一次完整路线中通过。waypoint 25
-真实绿灯的补充绿色证据约为 90--103，高于严格放行阈值 30。
+真实绿灯的补充绿色证据约为 90--103，高于严格放行阈值 30。2026-07-29 新增的
+Event1 连续跟车、路口平滑减速和停车线调整已通过相关自动化测试；仍应再执行一次
+完整路线动态复验并保存日志。
 
-## 2. YOLO 感知链路
+## 2. 感知与纵向行为链路
 
 ```text
 普通左 RGB 图像
@@ -80,7 +91,47 @@ YOLO 的小交通灯框有时只包含红灯和外壳，未完整包含最下方
 绿色路牌不会成为放行证据。相应单元测试已经覆盖“绿灯框被裁短”“扩展碰到图像
 边界”和“下方大块绿色路牌”三种情况。
 
-## 3. 关键 YOLO 文件
+### 2.4 Event1 前车检测与连续跟车
+
+Event1 车辆在 waypoint 17--20 内位于本车道相机走廊，但预处理点云可能暂时无法
+提供一致的路径距离。当前障碍物融合和决策逻辑作了以下更新：
+
+- `vision_direct_control_waypoint_ids` 包含 waypoint 17--20；在这个经过验证的
+  窗口内，稳定且位于走廊内的 YOLO/RGB-D 车辆距离可以直接参与前车控制；
+- `vision_vehicle_detection_hold_time=1.3 s`，短时检测缺帧时保留最后一次可信
+  关联，避免回到全速巡航后又重新刹车；
+- 跟车在 20 m 内激活，并使用 2.2 s 时距、距离误差和滤波后的距离变化率连续
+  计算目标速度；
+- Event1 的目标速度下降斜率限制为 `2.0 m/s²`，从当前车速开始平滑减小；
+- 20 m 激活边界外保留 2 m 释放滞回，减少边界附近反复进入/退出跟车；
+- waypoint 20 后停止 Event1 的视觉直接控制，因为前车开始驶向路边，避免产生
+  第二次不必要制动；
+- 独立的近场紧急制动仍保留，不会被平滑跟车逻辑削弱。
+
+### 2.5 红绿灯限速与渐进刹车
+
+waypoint 25、32、52、59 的路线远场速度上限均为 `8 m/s`。这消除了切换到
+`stop_zone` 时由路线层直接产生的 `14 -> 3 m/s` 目标速度阶跃。红灯、黄灯或
+UNKNOWN 状态下，决策层按以下包络限制目标速度：
+
+```text
+v_target = min(planning_speed, 8.0, sqrt(2 * 0.7 * remaining_distance))
+remaining_distance = waypoint_distance - active_stop_distance
+```
+
+因此车辆会随停车余量连续减速，而不是一进入路口 waypoint 就全力制动。当前停车
+边界如下：
+
+| 受控 waypoint | 路线远场上限 | 停车边界 | 说明 |
+| ---: | ---: | ---: | --- |
+| 25 | 8 m/s | 2.0 m | 局部 `reach_distance=1.5 m`，防止全局 3 m 到达半径提前切换到 waypoint 26 |
+| 32 | 8 m/s | 4.0 m | waypoint 33--35 的 3 m/s 转弯限速保持不变 |
+| 52 | 8 m/s | 3.4 m | 停车线较默认值前移 0.6 m |
+| 59 | 8 m/s | 4.0 m | 最初验证距离制动包络的末端红绿灯 |
+
+绿灯确认后解除交通灯制动限制，后续弯道 waypoint 自身的速度限制仍然有效。
+
+## 3. 关键文件
 
 ```text
 src/perception/src/yolo_rgbd_detector_node.cpp
@@ -97,6 +148,16 @@ tools/train_yolo_sim.py
 datasets/team20_yolo.yaml
 datasets/team20_yolo/README.md
 requirements-yolo-training.txt
+
+# Event1、路口速度与制动
+src/decision_making/decision_making/traffic_light_state_machine.py
+src/decision_making/decision_making/obstacle_monitor_node.py
+src/decision_making/config/traffic_light_state_machine.yaml
+src/decision_making/test/test_traffic_light_state_machine.py
+src/route_manager/route_manager/route_progress.py
+src/route_manager/config/route_map.yaml
+src/route_manager/test/test_route_progress.py
+src/route_manager/test/test_route_safety_geometry.py
 ```
 
 ## 4. Which code is our own, and which code is reused?
@@ -198,6 +259,23 @@ runtime: Microsoft ONNX Runtime 1.22.0 CPU
 /perception/yolo/debug_image
 ```
 
+Event1 跟车和路口制动还使用以下控制链路接口：
+
+```text
+/route/speed_limit
+/planning/target_speed
+/decision/front_obstacle_distance
+/decision/merge_obstacle_distance
+/decision/target_speed
+/decision/state
+/decision/stop_required
+/decision/debug
+```
+
+控制器应使用 `/decision/target_speed`，而不是直接使用
+`/planning/target_speed`。这样 Event1 跟车、交通灯距离制动和紧急制动才能按优先级
+合成到同一个最终目标速度。
+
 安全降级值为：
 
 ```text
@@ -207,6 +285,40 @@ traffic_light_state = UNKNOWN
 ```
 
 ## 6. 验证状态
+
+2026-07-29 对当前源码执行了路线管理与红绿灯/车辆决策的非 linter 自动化测试：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+pytest -q -m 'not linter' \
+  src/route_manager/test \
+  src/decision_making/test/test_traffic_light_state_machine.py
+```
+
+结果为 `87 passed, 3 deselected`。相关测试覆盖：
+
+- waypoint 17--20 的 Event1 视觉直接控制窗口；
+- Event1 距离边界滞回、短时检测丢失保持和目标速度平滑下降；
+- 前车跟车与独立近场紧急制动的优先级；
+- waypoint 25、32、52、59 的距离制动包络；
+- waypoint 25 的 2.0 m、waypoint 52 的 3.4 m 局部停车边界；
+- waypoint 25 的 1.5 m 局部路线到达半径；
+- 四个动态红绿灯 waypoint 的 8 m/s 路线远场上限，以及后续弯道限速不变。
+
+上述结果验证了状态转换、速度计算、路线配置和 waypoint 推进逻辑，但不能代替
+Unity 中的闭环制动距离测试。
+
+发布前又通过 `colcon` 重新构建并测试了 5 个受影响的包：
+
+| 当前测试组 | 用例数 | 结果 |
+| --- | ---: | --- |
+| Perception focused YOLO ROI | 4 | 全部通过 |
+| Controller | 11 | 全部通过 |
+| Decision making | 98 | 全部通过 |
+| Trajectory generator | 37 | 全部通过 |
+| Route manager functional | 15 | 全部通过，另有 3 个 linter 用例按命令排除 |
+| 合计 | 165 | 全部通过 |
 
 删除测试源码前，2026-07-27 最后一次执行 perception 测试的结果为：
 
@@ -229,16 +341,26 @@ traffic_light_state = UNKNOWN
 - 明确绿灯快速确认、模糊状态延迟确认、非绿灯立即撤销；
 - 通过 vendored ONNX Runtime 对仓库内真实模型执行 forward 并解析输出。
 
-为精简提交代码，以上四组测试源码、CMake 测试目标及
-`ament_cmake_gtest` 依赖现已删除。本表仅作为删除前的历史验证记录，当前精简版本
-不能再执行这 24 项单元测试。
+本表保留为 2026-07-27 的历史验证记录。当前版本已重新加入一个聚焦的
+`test_yolo_postprocess` 目标及 `ament_cmake_gtest` 依赖，其中 4 个用例覆盖
+预测 ROI 的紧凑绿色灯泡、红灯拒绝、裁剪边界拒绝和大型绿色路牌拒绝。原先其余
+route-gate、稳定器和真实模型运行测试源码仍未恢复，因此当前不能直接重跑表中的
+完整 24 项历史测试。
 
-动态结果：
+此前版本的动态结果：
 
 - waypoint 0--63 完整路线通过并到达 `route_complete`；
 - waypoint 25 修复后真实绿灯补充分数约为 90--103，严格阈值为 30；
 - waypoint 25、52、59 均选择了画面中控制本车道的信号灯并通过；
 - 最终测试结束后停止了临时单独启动的 YOLO 节点，没有遗留重复进程。
+
+2026-07-29 的 Event1 连续跟车、四路口平滑减速和最新停车线配置是在上述完整路线
+之后完成的。下一次动态测试应重点确认：
+
+- Event1 首次检测前车时不产生急刹，短时漏检时不恢复到 14 m/s；
+- waypoint 25 在约 2.0 m 处停车，且不会提前切换到 waypoint 26；
+- waypoint 32、52、59 在进入 `stop_zone` 后不再立即跳到固定 3 m/s；
+- 红灯停车、绿灯释放和后续弯道限速均能连续衔接。
 
 曾发现两个同名 YOLO 节点同时发布灯色，造成 RED/GREEN 结果互相覆盖。运行时必须
 保证 `/perception/traffic_light_state` 和其他 perception 输出只有一个 YOLO
@@ -248,7 +370,9 @@ publisher。该问题属于启动/进程重复，不是模型分类问题。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select perception --symlink-install
+colcon build --packages-select \
+  perception decision_making route_manager \
+  --symlink-install
 
 # 首次启动先禁止运动，检查框、距离和灯色
 ros2 launch system_bringup full_system.launch.py \
@@ -275,6 +399,9 @@ ros2 launch system_bringup full_system.launch.py \
 - 交通灯很小，因此依赖低 YOLO 阈值、路线门控和分路口 ROI。全路线已经跑通，
   但换相机参数、分辨率、路线或地图后必须重新标定 ROI。
 - 目前的完整路线结果来自现场联调记录。为了让最终报告可复现，建议保留一次最终
-  版本 rosbag、完整日志、四个路口的 debug 截图和模型校验值。
+  版本 rosbag、完整日志、Event1 跟车曲线、四个路口的目标速度/停车距离、debug
+  截图和模型校验值。
+- 最新停车线和减速包络已经通过自动化测试，但尚未在本文中记录一次修改后的
+  waypoint 0--63 完整闭环路线；发布前必须补做该测试。
 - 最终文档应分别写清楚“Team 20 的 YOLO 集成贡献”和“复用的 YOLOv8n/COCO/
   ONNX Runtime/OpenCV/ROS 2”，不要笼统写成“YOLO was developed by us”。

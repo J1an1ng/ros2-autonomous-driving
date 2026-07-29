@@ -24,9 +24,10 @@ controller_node:
     speed_kd: 0.02
     speed_integral_limit: 2.0
     speed_error_deadband: 0.05
-    # Increased from 0.35 so the car reaches event sections at the intended
-    # pace; route, decision, and controller speed limits still cap velocity.
-    maximum_throttle: 0.50
+    # Half throttle plateaued near 4.56 m/s even with a 14 m/s target. Use a
+    # moderate increase while route, decision, and controller limits retain
+    # authority over traffic-light and event speeds.
+    maximum_throttle: 0.70
     maximum_brake: 1.0
     safe_stop_brake: 1.0
 

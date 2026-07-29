@@ -15,13 +15,17 @@ def waypoint_reached_or_passed(
 ):
     """Return how forward route progress satisfies the current waypoint."""
     waypoint = waypoints[index]
+    effective_reach_distance = max(
+        0.0,
+        float(waypoint.get("reach_distance", reach_distance)),
+    )
     distance = distance_2d(
         ego_x,
         ego_y,
         float(waypoint["x"]),
         float(waypoint["y"]),
     )
-    if distance <= reach_distance:
+    if distance <= effective_reach_distance:
         return "reached"
     if index == 0:
         return ""

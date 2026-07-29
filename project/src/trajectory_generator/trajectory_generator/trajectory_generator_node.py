@@ -40,7 +40,6 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter("max_continuity_deviation", 2.0)
         self.declare_parameter("default_speed", 2.0)
         self.declare_parameter("max_speed", 14.0)
-        self.declare_parameter("slow_speed", 3.0)
         self.declare_parameter("stop_speed", 0.0)
 
         self.map_frame = self.get_parameter("map_frame").value
@@ -75,7 +74,6 @@ class TrajectoryGeneratorNode(Node):
             ),
             default_speed=float(self.get_parameter("default_speed").value),
             max_speed=float(self.get_parameter("max_speed").value),
-            slow_speed=float(self.get_parameter("slow_speed").value),
             stop_speed=float(self.get_parameter("stop_speed").value),
         )
         self.trajectory_generator = TrajectoryGenerator(config)

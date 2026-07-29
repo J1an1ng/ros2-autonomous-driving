@@ -386,6 +386,37 @@ inline int SupplementalGreenLampScore(
       static_cast<double>(original_box_area))));
 }
 
+inline int PredictedRoiGreenLampScore(const cv::Mat & bgr_crop)
+{
+  if (bgr_crop.empty() || bgr_crop.channels() != 3) {
+    return 0;
+  }
+
+  cv::Mat hsv;
+  cv::cvtColor(bgr_crop, hsv, cv::COLOR_BGR2HSV);
+  const int raw_score = LowerGreenLampScore(hsv);
+  const int maximum_lamp_area = std::max(
+    12, static_cast<int>(std::round(
+      0.04 * static_cast<double>(bgr_crop.rows * bgr_crop.cols))));
+  if (raw_score <= 0 || raw_score > maximum_lamp_area) {
+    return 0;
+  }
+
+  // The route-predicted crop is deliberately larger than a YOLO box so it
+  // still contains the signal when the tiny green-phase detection disappears.
+  // Normalize the compact bulb back to the approximate area of the detector's
+  // original (unexpanded) box so downstream strict-green thresholds retain
+  // the same meaning.
+  const int nominal_detection_area = std::max(
+    1, static_cast<int>(std::round(
+      static_cast<double>(bgr_crop.rows * bgr_crop.cols) / 6.0)));
+  return std::max(
+    raw_score,
+    static_cast<int>(std::round(
+      1000.0 * static_cast<double>(raw_score) /
+      static_cast<double>(nominal_detection_area))));
+}
+
 inline bool ClassifyVerticalTrafficLightLayout(
   const cv::Mat & hsv,
   TrafficLightScores & result)

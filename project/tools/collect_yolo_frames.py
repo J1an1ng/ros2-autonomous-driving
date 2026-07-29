@@ -8,7 +8,9 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
+from std_msgs.msg import Int32
 
 
 def parse_args():
@@ -24,6 +26,16 @@ def parse_args():
     )
     parser.add_argument("--every-n", type=int, default=10)
     parser.add_argument("--max-images", type=int, default=0)
+    parser.add_argument(
+        "--start-waypoint",
+        type=int,
+        default=None,
+        help="Save only after /route/current_waypoint_id reaches this value.",
+    )
+    parser.add_argument(
+        "--waypoint-topic",
+        default="/route/current_waypoint_id",
+    )
     return parser.parse_args()
 
 
@@ -61,12 +73,30 @@ class FrameCollector(Node):
         self.args.output_dir.mkdir(parents=True, exist_ok=True)
         self.received = 0
         self.saved = 0
-        self.create_subscription(Image, args.topic, self.on_image, 5)
+        self.current_waypoint = None
+        self.create_subscription(
+            Image, args.topic, self.on_image, qos_profile_sensor_data
+        )
+        if args.start_waypoint is not None:
+            self.create_subscription(
+                Int32, args.waypoint_topic, self.on_waypoint, 5
+            )
         self.get_logger().info(
             f"Collecting {args.topic} into {args.output_dir.resolve()}"
         )
 
+    def on_waypoint(self, message):
+        self.current_waypoint = int(message.data)
+
     def on_image(self, message):
+        if (
+            self.args.start_waypoint is not None
+            and (
+                self.current_waypoint is None
+                or self.current_waypoint < self.args.start_waypoint
+            )
+        ):
+            return
         self.received += 1
         if (self.received - 1) % max(1, self.args.every_n):
             return

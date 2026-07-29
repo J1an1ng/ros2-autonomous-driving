@@ -85,9 +85,12 @@ within the larger of 2.5 m or 20% of its RGB-D range. This rejects visual cross 
 and point-cloud-only static structures while enabling longitudinal following at every
 waypoint. Point-cloud agreement expires after 0.75 s. Event2 waypoints 43--48 retain a
 validated direct-vision exception because their point-cloud regions measure unrelated
-road geometry near the NPC. The raw vehicle-frame safety cloud is not used for vision
-range matching; it remains independent as a last-resort generic collision guard below
-0.8 m.
+road geometry near the NPC; Event1 waypoints 17--20 use the same fallback after the
+point-cloud-only implementation missed the lead vehicle. When path-cloud and RGB-D
+ranges match, their distances are averaged for control. Direct RGB-D is used only when
+that path-cloud match is temporarily unavailable. The raw vehicle-frame safety cloud is
+not used for vision range matching; it remains independent as a last-resort generic
+collision guard below 0.8 m.
 
 The controller should treat `/decision/target_speed == 0.0` or
 `/decision/stop_required == true` as a request to stop. The exact conversion to throttle
@@ -104,7 +107,7 @@ and brake remains the controller's responsibility.
 | `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
 | `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. A latch older than `merge_stale_timeout` commands a full stop. | Release only after a fresh obstacle observation exceeds the trigger distance plus its hysteresis margin. |
 | `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Complete a full ego stop, satisfy the minimum hold time, and release only after the front distance exceeds the static following gap plus its hysteresis margin. |
-| `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Hold current speed inside the desired-gap deadband. | Return to planning speed after the lead vehicle leaves the activation range. |
+| `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Hold current speed inside the desired-gap deadband; Event1 also retains the last safe command across a short sensor gap. | Return to planning speed after the lead vehicle exceeds the release margin or the Event1 dropout hold expires. |
 
 The vehicle-related states are output behaviors. The underlying traffic-light state
 remains active, so following or emergency control cannot clear a red-light stop latch.
@@ -191,6 +194,8 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `unknown_light_approach_speed` | `8.0` | Far-field ceiling while approaching an unknown/stale or latched red/yellow light. The distance-based braking envelope normally becomes the tighter limit near the controlled waypoint. |
 | `traffic_light_approach_deceleration` | `0.7` | Comfortable deceleration used to derive the signal-approach speed envelope `sqrt(2*a*remaining_distance)`, in m/s². Set to zero to retain the fixed approach-speed behavior. |
 | `traffic_light_stop_distance` | `4.0` | Stop boundary for an associated red/yellow. The colour is latched when first seen, but the car creeps toward this boundary before braking. |
+| `stop_distance_override_waypoint_ids` | `[25, 52]` | Controlled waypoints with a locally calibrated stop boundary. |
+| `stop_distance_overrides` | `[2.0, 3.4]` | Stop boundaries paired with the override waypoint IDs. WP25 stops at 2.0 m using its local 1.5 m route reach radius; WP52 stops at 3.4 m. Other intersections remain at 4.0 m. |
 | `traffic_light_activation_distance` | `20.0` | Maximum distance at which a detected colour is associated with the current controlled waypoint; farther colours are treated as unrelated. |
 | `obstacle_timeout` | `1.0` | Maximum accepted age of obstacle distances. The margin covers the approximately 2.5 Hz Unity depth pipeline without merge-latch oscillation. |
 | `emergency_min_distance` | `4.0` | Minimum front-obstacle emergency distance, in metres. |
@@ -225,10 +230,15 @@ Defaults are stored in `config/traffic_light_state_machine.yaml`.
 | `following_target_acceleration` | `1.0` | Maximum upward target-speed slew rate, in m/s². |
 | `following_target_deceleration` | `4.0` | Maximum downward target-speed slew rate, in m/s². |
 | `following_max_abs_range_rate` | `6.0` | Clamp applied to measured gap rate, in m/s. |
+| `smooth_following_waypoint_ids` | `17..20` | Event1 route window using a gentler normal-following target reduction. |
+| `smooth_following_target_deceleration` | `2.0` | Maximum Event1 downward target-speed slew rate, in m/s². Near-field emergency braking is independent and unchanged. |
+| `smooth_following_release_margin` | `2.0` | Event1 distance hysteresis above the 20 m activation boundary, preventing threshold chatter. |
+| `smooth_following_dropout_hold_time` | `1.3` | Maximum Event1 hold across a short sensor/callback gap; the last safe following command is retained instead of returning to full-speed cruise. |
 | `vehicle_behavior_global` | `true` | Enable fused longitudinal following and emergency protection at every waypoint. |
 | `vehicle_behavior_waypoint_ids` | unset | Optional longitudinal-vehicle allowlist used only when global behavior is disabled. |
-| `merge_behavior_waypoint_ids` | `43..48` | Waypoint allowlist for Event2-specific right-front merge yielding. |
-| `vision_direct_control_waypoint_ids` | `43..48` | Validated waypoints where YOLO/RGB-D vehicle range may control without point-cloud range agreement. |
+| `merge_behavior_waypoint_ids` | `43..48` | Route window for the validated later cross-traffic/merge behavior. |
+| `vision_direct_control_waypoint_ids` | `17..20, 43..48` | Route-gated windows where stable, in-corridor YOLO/RGB-D vehicle range may control without point-cloud range agreement. Event1 direct control ends as its vehicle starts pulling roadside after waypoint 20. |
+| `vision_vehicle_detection_hold_time` | `1.3` | Hold the last associated vision range across a short detector dropout to prevent unsafe cruise pulses. A finite distance also counts as positive evidence, avoiding cross-topic callback-order loss. |
 | `update_rate` | `20.0` | Decision output rate, in Hz. |
 
 The obstacle monitor transforms `/planning/path` into `OurCar/INS` and projects each cloud
@@ -382,7 +392,8 @@ ros2 launch system_bringup full_system.launch.py \
 - It does not modify `/planning/path`.
 - Point-cloud ROI detection measures proximity, not object identity or relative velocity.
   Static roadside objects can therefore cause false positives if the ROI is too wide.
-- Event2-specific merge yielding is intentionally restricted to waypoints 43--48.
+- Event1 longitudinal following is restricted to waypoints 17--20; the
+  validated later cross-traffic/merge window remains waypoints 43--48.
 - Global vehicle following requires a fresh vision/point-cloud range match outside the
   validated Event2 direct-control window; a vehicle temporarily hidden from either sensor
   can therefore be released after the configured timeout.

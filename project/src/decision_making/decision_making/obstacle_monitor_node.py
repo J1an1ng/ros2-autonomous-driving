@@ -14,6 +14,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from decision_making.obstacle_fusion import (
     VehicleObstacleFusion,
     fuse_vehicle_obstacle_distances,
+    vision_detection_is_held,
     vision_distance_is_plausible,
 )
 from decision_making.path_corridor import (
@@ -71,6 +72,7 @@ class ObstacleMonitorNode(Node):
             "/perception/front_vehicle_distance",
         )
         self.declare_parameter("vision_vehicle_timeout", 1.0)
+        self.declare_parameter("vision_vehicle_detection_hold_time", 0.6)
         self.declare_parameter("vision_vehicle_max_abs_range_rate", 6.0)
         self.declare_parameter("vision_vehicle_jump_tolerance", 1.5)
         self.declare_parameter("vehicle_distance_match_tolerance", 2.5)
@@ -79,7 +81,7 @@ class ObstacleMonitorNode(Node):
         )
         self.declare_parameter(
             "vision_direct_control_waypoint_ids",
-            [43, 44, 45, 46, 47, 48],
+            [17, 18, 19, 20, 43, 44, 45, 46, 47, 48],
         )
         self.declare_parameter("unconfirmed_emergency_distance", 0.8)
 
@@ -134,6 +136,14 @@ class ObstacleMonitorNode(Node):
         self.vision_vehicle_timeout = max(
             0.0,
             float(self.get_parameter("vision_vehicle_timeout").value),
+        )
+        self.vision_vehicle_detection_hold_time = max(
+            0.0,
+            float(
+                self.get_parameter(
+                    "vision_vehicle_detection_hold_time"
+                ).value
+            ),
         )
         self.vision_vehicle_max_abs_range_rate = max(
             0.0,
@@ -197,6 +207,7 @@ class ObstacleMonitorNode(Node):
         self.waypoint_id = None
         self.fixed_structure_suppressed = False
         self.vision_vehicle_detected = False
+        self.vision_vehicle_last_positive_time = None
         self.vision_vehicle_distance = math.inf
         self.vision_vehicle_distance_accepted_time = None
         self.vision_vehicle_detected_receive_time = None
@@ -256,7 +267,10 @@ class ObstacleMonitorNode(Node):
 
     def vision_vehicle_detected_callback(self, msg: Bool) -> None:
         self.vision_vehicle_detected = bool(msg.data)
-        self.vision_vehicle_detected_receive_time = self.get_clock().now()
+        now = self.get_clock().now()
+        if self.vision_vehicle_detected:
+            self.vision_vehicle_last_positive_time = now
+        self.vision_vehicle_detected_receive_time = now
 
     def vision_vehicle_distance_callback(self, msg: Float32) -> None:
         now = self.get_clock().now()
@@ -266,10 +280,19 @@ class ObstacleMonitorNode(Node):
             if math.isfinite(distance) and distance > 0.0
             else math.inf
         )
-        if not self.vision_vehicle_detected or not math.isfinite(candidate):
+        if math.isfinite(candidate):
+            # The detector publishes Bool and Float32 on separate ROS topics,
+            # whose callbacks are not guaranteed to arrive in publisher order.
+            # A finite range is itself produced only for an accepted vehicle,
+            # so treat it as positive evidence instead of discarding it when
+            # the matching Bool callback is delayed.
+            self.vision_vehicle_detected = True
+            self.vision_vehicle_last_positive_time = now
+        detection_held = self.vision_vehicle_detection_held(now)
+        if not detection_held:
             self.vision_vehicle_distance = math.inf
             self.vision_vehicle_distance_accepted_time = None
-        else:
+        elif math.isfinite(candidate):
             elapsed = math.inf
             if self.vision_vehicle_distance_accepted_time is not None:
                 elapsed = (
@@ -295,6 +318,16 @@ class ObstacleMonitorNode(Node):
         waypoint_id = int(msg.data)
         if waypoint_id != self.waypoint_id:
             self.fixed_structure_suppressed = False
+            leaving_direct_window = (
+                self.waypoint_id in self.vision_direct_control_waypoint_ids
+                and waypoint_id
+                not in self.vision_direct_control_waypoint_ids
+            )
+            if leaving_direct_window:
+                self.vision_vehicle_detected = False
+                self.vision_vehicle_last_positive_time = None
+                self.vision_vehicle_distance = math.inf
+                self.vision_vehicle_distance_accepted_time = None
         self.waypoint_id = waypoint_id
 
     def pointcloud_callback(self, msg: PointCloud2) -> None:
@@ -464,7 +497,7 @@ class ObstacleMonitorNode(Node):
         fusion = fuse_vehicle_obstacle_distances(
             pointcloud_front_distance,
             merge_distance,
-            vision_fresh and self.vision_vehicle_detected,
+            vision_fresh,
             self.vision_vehicle_distance,
             self.vehicle_distance_match_tolerance,
             self.vehicle_distance_match_relative_tolerance,
@@ -490,21 +523,27 @@ class ObstacleMonitorNode(Node):
             self.merge_pub.publish(merge_msg)
 
     def vision_vehicle_is_fresh(self) -> bool:
-        if (
-            self.vision_vehicle_detected_receive_time is None
-            or self.vision_vehicle_distance_receive_time is None
-        ):
+        if self.vision_vehicle_distance_accepted_time is None:
             return False
         now = self.get_clock().now()
-        detected_age = (
-            now - self.vision_vehicle_detected_receive_time
-        ).nanoseconds / 1e9
         distance_age = (
-            now - self.vision_vehicle_distance_receive_time
+            now - self.vision_vehicle_distance_accepted_time
         ).nanoseconds / 1e9
         return (
-            0.0 <= detected_age <= self.vision_vehicle_timeout
+            self.vision_vehicle_detection_held(now)
             and 0.0 <= distance_age <= self.vision_vehicle_timeout
+        )
+
+    def vision_vehicle_detection_held(self, now) -> bool:
+        last_positive_age = math.inf
+        if self.vision_vehicle_last_positive_time is not None:
+            last_positive_age = (
+                now - self.vision_vehicle_last_positive_time
+            ).nanoseconds / 1e9
+        return vision_detection_is_held(
+            self.vision_vehicle_detected,
+            last_positive_age,
+            self.vision_vehicle_detection_hold_time,
         )
 
     def get_vehicle_path(self, cloud_frame, cloud_transform):

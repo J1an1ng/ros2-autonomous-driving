@@ -5,6 +5,7 @@ import pytest
 from decision_making.obstacle_fusion import (
     distances_match,
     fuse_vehicle_obstacle_distances,
+    vision_detection_is_held,
     vision_distance_is_plausible,
 )
 
@@ -50,10 +51,10 @@ def test_event2_matching_merge_and_vision_ranges_enable_slowdown():
     assert result.merge_matched
 
 
-def test_matching_front_range_uses_vision_vehicle_distance():
+def test_matching_front_range_fuses_vision_and_path_cloud_distance():
     result = fuse(12.83, 7.85, True, 12.28, direct=False)
 
-    assert result.front_distance == pytest.approx(12.28)
+    assert result.front_distance == pytest.approx((12.83 + 12.28) / 2.0)
     assert math.isinf(result.merge_distance)
     assert result.confirmed
     assert result.front_matched
@@ -92,7 +93,7 @@ def test_global_front_match_uses_path_corridor_not_near_safety_return():
         pointcloud_match_front_distance=11.5,
     )
 
-    assert result.front_distance == pytest.approx(12.0)
+    assert result.front_distance == pytest.approx((11.5 + 12.0) / 2.0)
     assert result.front_matched
     assert result.confirmed
 
@@ -123,3 +124,10 @@ def test_vision_distance_filter_rejects_single_frame_range_jump():
     assert not vision_distance_is_plausible(23.35, 9.97, 1.0, 6.0, 1.5)
     assert vision_distance_is_plausible(11.75, 7.20, 1.0, 6.0, 1.5)
     assert vision_distance_is_plausible(math.inf, 19.0, math.inf, 6.0, 1.5)
+
+
+def test_vision_detection_hold_bridges_only_short_dropouts():
+    assert vision_detection_is_held(True, math.inf, 0.6)
+    assert vision_detection_is_held(False, 0.4, 0.6)
+    assert not vision_detection_is_held(False, 0.7, 0.6)
+    assert not vision_detection_is_held(False, math.inf, 0.6)

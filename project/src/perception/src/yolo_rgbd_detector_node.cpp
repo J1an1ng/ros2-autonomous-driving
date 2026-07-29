@@ -434,6 +434,25 @@ public:
       0.0, 1.0);
     traffic_center_penalty_ = std::max(
       0.0, declare_parameter<double>("traffic_center_penalty", 0.50));
+    traffic_post_hold_fallback_waypoint_ids_ = ToIntSet(
+      declare_parameter<std::vector<std::int64_t>>(
+        "traffic_post_hold_fallback_waypoint_ids", {25}));
+    traffic_post_hold_fallback_width_ratio_ = std::clamp(
+      declare_parameter<double>(
+        "traffic_post_hold_fallback_width_ratio", 0.035),
+      0.005, 0.20);
+    traffic_post_hold_fallback_height_ratio_ = std::clamp(
+      declare_parameter<double>(
+        "traffic_post_hold_fallback_height_ratio", 0.095),
+      0.01, 0.30);
+    traffic_post_hold_fallback_x_offset_ratio_ = std::clamp(
+      declare_parameter<double>(
+        "traffic_post_hold_fallback_x_offset_ratio", 0.003),
+      -0.10, 0.10);
+    traffic_post_hold_fallback_y_offset_ratio_ = std::clamp(
+      declare_parameter<double>(
+        "traffic_post_hold_fallback_y_offset_ratio", 0.010),
+      -0.10, 0.10);
     const int consecutive_frames = std::max(
       1, static_cast<int>(
         declare_parameter<int>("traffic_consecutive_frames", 4)));
@@ -750,6 +769,7 @@ private:
     measurement.distance_m = ranges[index].first;
     measurement.lateral_m = ranges[index].second;
     measurement.accepted =
+      std::isfinite(measurement.lateral_m) &&
       std::abs(measurement.lateral_m) <= maximum_abs_lateral_m_;
     return measurement;
   }
@@ -848,6 +868,48 @@ private:
       current_waypoint_distance_m_, traffic_light_activation_distance_m_);
   }
 
+  std::optional<cv::Rect> PostHoldFallbackRoi(
+    const cv::Size & image_size) const
+  {
+    const int controlled_waypoint = traffic_route_gate_->activeWaypointId();
+    if (
+      !traffic_route_gate_->isPostWaypointHold() ||
+      traffic_post_hold_fallback_waypoint_ids_.count(controlled_waypoint) == 0)
+    {
+      return std::nullopt;
+    }
+    const auto profile = traffic_light_roi_profiles_.find(controlled_waypoint);
+    if (profile == traffic_light_roi_profiles_.end()) {
+      return std::nullopt;
+    }
+
+    const int width = std::max(
+      3, static_cast<int>(std::round(
+        traffic_post_hold_fallback_width_ratio_ * image_size.width)));
+    const int height = std::max(
+      9, static_cast<int>(std::round(
+        traffic_post_hold_fallback_height_ratio_ * image_size.height)));
+    const double center_x_ratio =
+      profile->second.target_x_at_stop_ratio +
+      traffic_post_hold_fallback_x_offset_ratio_;
+    const double center_y_ratio =
+      profile->second.target_y_at_stop_ratio +
+      traffic_post_hold_fallback_y_offset_ratio_;
+    const int center_x = static_cast<int>(std::round(
+      center_x_ratio * static_cast<double>(image_size.width)));
+    const int center_y = static_cast<int>(std::round(
+      center_y_ratio * static_cast<double>(image_size.height)));
+    const int left = std::clamp(
+      center_x - width / 2, 0, std::max(0, image_size.width - 1));
+    const int top = std::clamp(
+      center_y - height / 2, 0, std::max(0, image_size.height - 1));
+    const int right = std::clamp(
+      left + width, left + 1, std::max(left + 1, image_size.width));
+    const int bottom = std::clamp(
+      top + height, top + 1, std::max(top + 1, image_size.height));
+    return cv::Rect(left, top, right - left, bottom - top);
+  }
+
   void PublishVehicle(
     const std::vector<VehicleMeasurement> & measurements,
     const std::string & depth_status,
@@ -939,6 +1001,7 @@ private:
     perception::yolo::TrafficLightScores & scores)
   {
     const bool active = TrafficControlActive();
+    bool fallback_used = false;
     if (active) {
       selected_detection = SelectTrafficLight(detections, image.size());
       if (selected_detection) {
@@ -963,6 +1026,24 @@ private:
           }
         }
         selected_detection->box = colour_box;
+      }
+      const auto fallback_roi = PostHoldFallbackRoi(image.size());
+      if (fallback_roi && scores.state != perception::yolo::kGreen) {
+        const int fallback_green_score =
+          perception::yolo::PredictedRoiGreenLampScore(
+          image(*fallback_roi));
+        if (fallback_green_score > 0) {
+          scores.red = 0;
+          scores.yellow = 0;
+          scores.green = fallback_green_score;
+          scores.state = perception::yolo::kGreen;
+          perception::yolo::Detection fallback_detection;
+          fallback_detection.class_id = -1;
+          fallback_detection.confidence = 0.0F;
+          fallback_detection.box = *fallback_roi;
+          selected_detection = fallback_detection;
+          fallback_used = true;
+        }
       }
     }
     const std::uint8_t stable_state = traffic_filter_->update(
@@ -995,6 +1076,7 @@ private:
           << (traffic_light_roi_profiles_.count(
           traffic_route_gate_->activeWaypointId()) > 0 ? "true" : "false")
           << " candidate=" << (selected_detection ? "true" : "false")
+          << " fallback=" << (fallback_used ? "true" : "false")
           << " raw=" << StateName(scores.state)
           << " stable=" << StateName(stable_state)
           << " red_score=" << scores.red
@@ -1252,6 +1334,11 @@ private:
   double traffic_target_x_ratio_{0.50};
   double traffic_target_y_ratio_{0.34};
   double traffic_center_penalty_{0.50};
+  std::set<int> traffic_post_hold_fallback_waypoint_ids_;
+  double traffic_post_hold_fallback_width_ratio_{0.035};
+  double traffic_post_hold_fallback_height_ratio_{0.095};
+  double traffic_post_hold_fallback_x_offset_ratio_{0.003};
+  double traffic_post_hold_fallback_y_offset_ratio_{0.010};
   std::unique_ptr<perception::TrafficLightStabilityFilter> traffic_filter_;
   bool publish_debug_image_{true};
   int current_waypoint_id_{-1};

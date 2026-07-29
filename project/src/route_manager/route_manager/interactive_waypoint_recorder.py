@@ -10,19 +10,21 @@ from rclpy.node import Node
 from tf2_ros import Buffer, TransformListener, TransformException
 
 
+DEFAULT_WAYPOINT_SPEED = 2.0
+
 TYPE_CONFIG = {
-    "": ("normal", 2.0),
-    "n": ("normal", 2.0),
+    "": ("normal", DEFAULT_WAYPOINT_SPEED),
+    "n": ("normal", DEFAULT_WAYPOINT_SPEED),
 
     "ca": ("curve_approach", 1.5),
     "ce": ("curve_entry", 1.2),
     "c": ("curve_mid", 1.0),
     "cx": ("curve_exit", 1.3),
 
-    "ia": ("intersection_approach", 1.0),
+    "ia": ("intersection_approach", DEFAULT_WAYPOINT_SPEED),
     "s": ("stop_zone", 0.0),
-    "i": ("intersection", 1.0),
-    "ix": ("intersection_exit", 1.5),
+    "i": ("intersection", DEFAULT_WAYPOINT_SPEED),
+    "ix": ("intersection_exit", DEFAULT_WAYPOINT_SPEED),
 
     "slow": ("slow_zone", 1.0),
 }
@@ -67,10 +69,10 @@ class InteractiveWaypointRecorder(Node):
         print("  ce          -> curve_entry, speed 1.2")
         print("  c           -> curve_mid, speed 1.0")
         print("  cx          -> curve_exit, speed 1.3")
-        print("  ia          -> intersection_approach, speed 1.0")
+        print("  ia          -> intersection_approach, normal speed 2.0")
         print("  s           -> stop_zone, speed 0.0")
-        print("  i           -> intersection, speed 1.0")
-        print("  ix          -> intersection_exit, speed 1.5")
+        print("  i           -> intersection, normal speed 2.0")
+        print("  ix          -> intersection_exit, normal speed 2.0")
         print("  slow        -> slow_zone, speed 1.0")
         print("  seg <id>    -> change segment id, e.g. seg 2")
         print("  undo        -> remove last waypoint")
@@ -216,7 +218,7 @@ class InteractiveWaypointRecorder(Node):
                     "type": "intersection_approach",
                     "related_waypoint": wp["id"],
                     "radius": 5.0,
-                    "speed_limit": 1.0,
+                    "speed_limit": wp["speed_limit"],
                 })
 
             elif wp["type"] in ["curve_approach", "curve_entry", "curve_mid", "curve_exit"]:
