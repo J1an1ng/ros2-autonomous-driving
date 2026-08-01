@@ -113,6 +113,11 @@ vary slightly between simulator runs.
 The following numbers are evidence from the most recent retained run, not fixed behavior
 or guaranteed constants of the system.
 
+The validation machine ran Ubuntu 24.04.3 LTS under WSL2 on a 13th Gen Intel Core
+i7-13700H, with 8 logical processors and approximately 12 GiB of memory available to
+WSL2. Unity used the hardware-accelerated D3D12 renderer on an NVIDIA GeForce RTX 4060
+Laptop GPU.
+
 The recorded 2026-08-01 production run completed waypoint 0--63 in **211.065 s** from the
 first forward control command to `route_complete`. Its 68,355 serialized trajectory
 points passed the steering-derived curvature and lateral/longitudinal acceleration
