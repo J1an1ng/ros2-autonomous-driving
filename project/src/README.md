@@ -1,319 +1,375 @@
-# Introduction to ROS 2 – Course Project Autonomous Driving
+# Team 20 Autonomous Driving System — ROS 2 Jazzy
 
 ## Overview
 
-This repository is part of the "Introduction to ROS" course project **Autonomous Driving**. It contains a Unity-based driving simulation package and a dummy controller to demonstrate how to control the vehicle from ROS 2.
+This directory contains the ROS 2 packages for Team 20's course-project autonomous
+driving stack. The system runs with the bundled Unity simulator and provides a complete
+pipeline from simulated sensors to vehicle commands:
 
-The repository contains the following ROS 2 packages:
+```text
+Unity RGB, depth, pose, and velocity
+                  |
+                  v
+      perception and occupancy mapping
+                  |
+                  v
+route_manager -> trajectory_generator -> decision_making -> controller
+                                                          |
+                                                          v
+                                                    /car_command
+                                                          |
+                                                          v
+                                                   Unity vehicle
+```
 
-- `simulation/`
-  - Unity bridge and simulation integration package.
-  - Receives sensor data from Unity over TCP.
-  - Publishes camera, depth, IMU, and state information as ROS 2 topics.
-  - Provides the custom message type `simulation/msg/VehicleControl`.
+Production perception uses the left RGB camera, metric depth, camera calibration, and TF.
+The Unity semantic/segmentation camera is disabled and is not required to run the project.
 
-- `dummy_controller/`
-  - A simple ROS 2 node that publishes vehicle control commands.
-  - Publishes `simulation/msg/VehicleControl` messages to `/car_command`.
+## What the project can do
 
-- `perception/`
-  - Detects traffic lights.
-  - Converts depth images into point clouds and filters obstacle points.
-  - Starts OctoMap server to publish a 3D OctoMap and a projected occupancy grid.
+- Start the Ubuntu Unity simulator and ROS bridge from one launch command.
+- Receive RGB, depth, camera calibration, IMU, vehicle pose, and vehicle velocity data.
+- Detect traffic lights and vehicles with a YOLOv8 ONNX RGB-D pipeline.
+- Estimate vehicle range by projecting depth-camera points into RGB detections.
+- Generate filtered obstacle point clouds, a 3-D OctoMap, and a projected occupancy map.
+- Load and follow a predefined 64-waypoint route from waypoint 0 through waypoint 63.
+- Publish route phase, current waypoint, waypoint distance, local path, and speed limits.
+- Smooth the local route and publish a controller-ready trajectory and nominal speed.
+- Stop for red, yellow, unknown, or stale traffic-light observations near controlled
+  intersections and continue only after a confirmed green signal.
+- Follow a slower vehicle with an adaptive speed command.
+- Slow down for a vehicle merging from the right and apply emergency braking when needed.
+- Track the path with Pure Pursuit steering and regulate speed with PID control.
+- Fail safely when required paths, transforms, sensor data, or decision messages are
+  missing or stale.
+- Visualize the route, trajectory, perception results, decision state, and telemetry in
+  RViz.
 
-- `route_manager/`
-  - Loads the predefined route and publishes local route context and speed limits.
+The controlled traffic lights are associated with route waypoints 25, 32, 52, and 59.
+The right-side merge scenario is handled around waypoints 43–48.
 
-- `trajectory_generator/`
-  - Produces the smoothed `/planning/path` and nominal target speed.
+## Package structure
 
-- `decision_making/`
-  - Applies traffic-light, merge, and emergency-stop behavior.
+| Package | Responsibility |
+| --- | --- |
+| `simulation` | Unity TCP sensor receiver, UDP command transmitter, sensor messages, static TF, and simulator launch files. |
+| `perception` | YOLO RGB-D traffic-light and vehicle detection, point-cloud filtering, OctoMap, and occupancy maps. |
+| `route_manager` | Route loading, waypoint progress, local route context, route state, and speed-limit publication. |
+| `trajectory_generator` | Local-route validation and smoothing, trajectory generation, and nominal target speed. |
+| `decision_making` | Traffic-light state machine, adaptive following, merge handling, obstacle monitoring, and emergency stop. |
+| `controller` | Pure Pursuit lateral control, PID speed control, safety checks, and `/car_command` publication. |
+| `system_bringup` | Single launch entry point for the complete system and RViz visualizations. |
+| `dummy_controller` | Project-supplied example controller; not part of Team 20's production control pipeline. |
 
-- `controller/`
-  - Tracks the path with Pure Pursuit and regulates speed with PID.
+Package-specific interface and parameter details are documented in each package's
+`README.md`.
 
-- `system_bringup/`
-  - Provides the single staged/full-system launch entry point.
+## System requirements
 
-## System Requirements
+The recommended environment is:
 
-- **Operating System**: Ubuntu 24.04 recommended for ROS 2 Jazzy.
-  - Ubuntu 22.04/WSL/Docker may also work if ROS 2 Jazzy is installed correctly, but the recommended platform for Jazzy is Ubuntu 24.04.
-- **ROS Version**: ROS 2 Jazzy Jalisco.
-- **Required Tools**:
-  - `colcon`
-  - Git
-  - Git LFS, required for Unity binaries and large assets
+- Ubuntu 24.04;
+- ROS 2 Jazzy Jalisco desktop installation;
+- a graphical Linux session with working OpenGL support for the bundled Unity build;
+- Git and Git LFS;
+- `colcon`, `rosdep`, and standard ROS build tools;
+- enough memory and CPU capacity to run Unity, RViz, YOLO inference, and the ROS nodes.
 
-Install Git LFS with:
+Ubuntu 22.04, WSL, containers, and remote-display setups are not the assessed platform and
+may require additional configuration. The included simulator executable is a Linux build.
+
+Install the basic tools if they are not already available:
 
 ```bash
 sudo apt update
-sudo apt install git-lfs
+sudo apt install git git-lfs python3-colcon-common-extensions python3-rosdep
 git lfs install
 ```
 
-Install common ROS 2 build tools and dependencies:
+Install ROS 2 Jazzy by following the official ROS documentation before continuing. If
+`rosdep` has never been initialized on the machine, initialize it once:
 
 ```bash
-sudo apt update
-sudo apt install \
-  python3-colcon-common-extensions \
-  ros-jazzy-rclcpp \
-  ros-jazzy-std-msgs \
-  ros-jazzy-sensor-msgs \
-  ros-jazzy-geometry-msgs \
-  ros-jazzy-nav-msgs \
-  ros-jazzy-tf2-ros \
-  ros-jazzy-octomap-server \
-  ros-jazzy-octomap-ros \
-  ros-jazzy-octomap-msgs \
-  ros-jazzy-octomap-rviz-plugins \
-  ros-jazzy-rosidl-default-generators \
-  ros-jazzy-ament-index-cpp \
-  ros-jazzy-rviz2
+sudo rosdep init
+rosdep update
 ```
 
-## Repository Structure
+If `rosdep init` reports that its sources already exist, do not run it again; use only
+`rosdep update`.
 
-Your ROS 2 workspace should look like this:
+## Get the latest project release
 
-```text
-your_ros2_workspace/
-└── src/
-    ├── simulation/
-    ├── dummy_controller/
-    ├── perception/
-    ├── route_manager/
-    ├── trajectory_generator/
-    ├── decision_making/
-    ├── controller/
-    ├── system_bringup/
-    ├── setup_script.sh
-    └── README.md
-```
+### New clone
 
-A top-level `CMakeLists.txt` file is not required for ROS 2 workspaces. ROS 2 uses `colcon` to discover packages inside `src/`.
-
-## Getting Started
-
-### 1. Clone or copy the repository into your workspace
+The repository is hosted on LRZ GitLab. After adding your SSH key and obtaining course
+repository access, clone the release directly:
 
 ```bash
-mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws/src
-# clone or copy simulation/ and dummy_controller/ here
+git lfs install
+git clone --branch release/full-system-v1.8.0 --single-branch \
+  git@gitlab.lrz.de:00000000014c3605/i2ros-project-ss26-team20.git \
+  introduction-to-ros-2026
+cd introduction-to-ros-2026
+git lfs pull
 ```
 
-### 2. Run the setup script
+### Existing clone
 
-The setup script marks Unity and helper scripts as executable when they exist:
+From the repository root:
 
 ```bash
-bash setup_script.sh
+git fetch origin
+git switch release/full-system-v1.8.0
+git pull --ff-only origin release/full-system-v1.8.0
+git lfs pull
 ```
 
-If the script is located in the workspace root instead of `src/`, run:
+Do not copy individual packages into another branch: the release contains matching
+interfaces, parameters, route data, model files, simulator configuration, and launch
+files that must be used together.
+
+## Install dependencies and prepare Unity
+
+All commands below assume the repository root is the current directory:
 
 ```bash
+cd project
+source /opt/ros/jazzy/setup.bash
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
 bash src/setup_script.sh
 ```
 
-### 3. Build the workspace
+The setup script marks the Unity executable and simulator helper scripts as executable.
+Runtime YOLO inference uses the ONNX model and ONNX Runtime included in the perception
+package; Python Ultralytics is needed only for optional model training/export, not for a
+normal project run.
+
+## Build the workspace
+
+Run from the `project/` directory:
 
 ```bash
-cd ~/ros2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build
+colcon build --symlink-install
 source install/setup.bash
 ```
 
-To build only the project packages:
+Source both ROS and the workspace in every new terminal:
 
 ```bash
-colcon build --packages-select \
-  simulation perception route_manager trajectory_generator \
-  decision_making controller system_bringup
+source /opt/ros/jazzy/setup.bash
+source <repository-path>/project/install/setup.bash
+```
+
+Replace `<repository-path>` with the absolute path to the cloned repository.
+
+## Run the automated checks
+
+Before driving the simulated vehicle, run the same static and functional checks used for
+integration:
+
+```bash
+cd project
+source /opt/ros/jazzy/setup.bash
 source install/setup.bash
+bash tools/check_code_quality.sh
+colcon test
+colcon test-result --verbose
 ```
 
-## Running the complete system
+The final command must report zero failures and zero errors. The code-quality command
+checks Team 20 Python and C++ code, the simulator launch/test Python, and the simulator
+bridge C++. The project-supplied `dummy_controller` and vendored third-party sources are
+excluded; simulator C++ is checked with documented copyright/include-path exemptions.
 
-The assignment stack has one integration entry point. By default it starts all modules
-and Unity but keeps controller motion disabled:
+## Run the complete system
+
+### 1. Safe startup with motion disabled
+
+Start the complete pipeline first without allowing the controller to move the vehicle:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py
+cd project
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=false \
+  enable_visualization:=true
 ```
 
-After completing the readiness checklist in `project/INTEGRATION_README.md`, motion can be
-enabled explicitly:
+This starts Unity, the TCP/UDP bridge, sensor TF publishers, perception, occupancy mapping,
+route management, trajectory generation, decision making, the real controller, and two
+RViz views. The controller publishes a safe brake command while motion is disabled.
 
-```bash
-ros2 launch system_bringup full_system.launch.py enable_motion:=true
-```
+Wait until the terminal shows that:
 
-For a headless Stage 0 startup check:
+- Unity has connected to the ROS sensor receiver;
+- 64 route waypoints have been loaded;
+- the YOLO ONNX model has loaded successfully;
+- RGB and depth messages are being received;
+- TF `world -> OurCar/INS` is available;
+- the planning, decision, and controller nodes are active.
+
+Stop the safe startup with `Ctrl+C` before starting the moving run.
+
+### 2. Full drive from waypoint 0
+
+Run the same launch with motion explicitly enabled:
 
 ```bash
 ros2 launch system_bringup full_system.launch.py \
-  start_unity:=false \
-  enable_motion:=false
+  route_initial_waypoint_index:=0 \
+  enable_motion:=true \
+  enable_visualization:=true
 ```
 
-The launch also accepts `enable_perception`, `enable_octomap`, `enable_route`,
-`enable_trajectory`, `enable_decision`, and `enable_controller` boolean arguments for the
-staged tests described in the integration plan. Do not run `dummy_controller` together
-with the real controller.
-
-## Running the Simulation
-
-Start the Unity bridge and simulation integration package:
+For better performance on a machine where RViz is not needed, keep Unity running but
+disable the RViz windows:
 
 ```bash
-source ~/ros2_ws/install/setup.bash
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=true \
+  enable_visualization:=false
+```
+
+A successful complete run progresses from waypoint 0 to waypoint 63 and logs:
+
+```text
+Route completed at waypoint 63
+```
+
+At the endpoint, the decision and controller layers command a safe stop. Use `Ctrl+C` to
+shut down the launch; all ROS nodes and Unity should exit cleanly.
+
+## Validate a live run
+
+In a second terminal, source ROS and the workspace before running these commands:
+
+```bash
+ros2 node list
+ros2 topic hz /OurCar/INS/twist
+ros2 topic hz /planning/path
+ros2 topic echo /route/current_waypoint_id
+ros2 topic echo /decision/state
+ros2 topic echo /perception/traffic_light_state
+ros2 topic info /car_command
+```
+
+Expected behavior includes:
+
+- exactly one publisher on `/car_command`, named `controller_node`;
+- continuous pose, velocity, RGB, depth, route, and planning updates;
+- `FOLLOWING_VEHICLE` when a lead vehicle constrains speed;
+- `STOPPING_FOR_LIGHT` or `WAITING_FOR_GREEN` at a red light;
+- `RELEASED` followed by `CRUISE` after a confirmed green light;
+- `SLOWING_FOR_MERGE` during the right-side merge event;
+- a final safe stop after `Route completed at waypoint 63`.
+
+Initial warnings about missing TF, path, or velocity can occur while Unity is opening and
+the first sensor messages are arriving. Motion must remain stopped during this period.
+Warnings that continue after Unity has connected should be investigated.
+
+## Important launch arguments
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `start_unity` | `true` | Start the bundled Unity simulator. Set to `false` when Unity is already running elsewhere. |
+| `sensor_bind_host` | `127.0.0.1` | Address used by the TCP sensor receiver. Use `0.0.0.0` only when intentionally accepting a remote Unity connection. |
+| `enable_motion` | `false` | Permit the real controller to move the vehicle. Must be explicitly enabled for a full drive. |
+| `enable_visualization` | `true` | Start the live visualization node and RViz views. |
+| `route_initial_waypoint_index` | `0` | Select the initial route waypoint. Use `0` for a complete run. |
+| `enable_perception` | `true` | Start YOLO RGB-D perception and mapping. |
+| `enable_octomap` | `true` | Start OctoMap within the perception pipeline. |
+| `enable_route` | `true` | Start route management. |
+| `enable_trajectory` | `true` | Start trajectory generation. |
+| `enable_decision` | `true` | Start decision making and obstacle monitoring. |
+| `enable_controller` | `true` | Start the production controller. |
+
+The launch also accepts custom `simulation_config`, `yolo_model`, and `route_file` paths.
+The defaults point to the matching files installed with this release.
+
+## Run individual subsystems
+
+The full-system launch is the recommended integration entry point. For focused debugging,
+the main subsystems can also be launched separately after sourcing the workspace:
+
+```bash
 ros2 launch simulation simulation.launch.py
-```
-
-This starts both the ROS bridge and the included Ubuntu Unity simulation window.
-To additionally open RViz and the static sensor transforms, run:
-
-```bash
-ros2 launch simulation simulation_demo.launch.py
-```
-
-To run only the ROS bridge without opening Unity:
-
-```bash
-ros2 launch simulation simulation_no_Unity.launch.py
-```
-
-Start the perception pipeline in another terminal after sourcing the workspace:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/ros2_ws/install/setup.bash
 ros2 launch perception perception.launch.py
+ros2 launch trajectory_generator trajectory_generator.launch.py
+ros2 launch decision_making decision_making.launch.py
+ros2 launch controller controller.launch.py
 ```
 
-The occupancy mapping pipeline publishes:
+See the package READMEs for required inputs and standalone route-manager parameters. Do not
+start the real controller and `dummy_controller` at the same time.
 
-```text
-/perception/pcl/points
-/perception/pcl/points_preprocessed
-/perception/octomap/octomap_binary
-/perception/octomap/projected_map
-/perception/extended_map
-```
+## Troubleshooting
 
-If your launch file accepts a config file argument, you can pass it explicitly:
+### Unity executable is missing or does not start
+
+Make sure Git LFS assets were downloaded and executable permissions were prepared:
 
 ```bash
-ros2 launch simulation simulation.launch.py \
-  config_file:=/path/to/simulation_config.json
+git lfs pull
+cd project
+bash src/setup_script.sh
 ```
 
-Unlike ROS 1, ROS 2 does not require a separate `roscore` process.
+The bundled Unity build needs a graphical Linux session. On a remote machine, either
+configure display forwarding or run Unity on another supported machine and launch with
+`start_unity:=false` and the appropriate `sensor_bind_host`.
 
-## Running the Dummy Controller Node
+### Packages or launch files are not found
 
-In another terminal:
+Source ROS before building and source the workspace after building:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/project/install/setup.bash
-ros2 launch dummy_controller dummy_controller.launch.py
+colcon build --symlink-install
+source install/setup.bash
 ```
 
-Alternatively, run the node directly:
+Repeat the two `source` commands in every new terminal.
 
-```bash
-ros2 run dummy_controller dummy_controller_node
-```
+### The vehicle does not move
 
-The dummy controller publishes vehicle commands to:
+Check that `enable_motion:=true` was passed, Unity is connected, and controller inputs are
+fresh. The controller intentionally brakes if TF, vehicle velocity, planning path, target
+speed, or decision state is unavailable.
 
-```text
-/car_command
-```
+### Conflicting vehicle commands
 
-with message type:
-
-```text
-simulation/msg/VehicleControl
-```
-
-You can inspect the command topic with:
-
-```bash
-ros2 topic echo /car_command
-ros2 topic hz /car_command
-```
-
-## Useful ROS 2 Debug Commands
-
-List topics:
-
-```bash
-ros2 topic list
-```
-
-Inspect a topic type:
+Check the command topic:
 
 ```bash
 ros2 topic info /car_command
 ```
 
-Show the custom message definition:
+There must be exactly one publisher. Stop `dummy_controller` or any manual command
+publisher before starting the production controller.
 
-```bash
-ros2 interface show simulation/msg/VehicleControl
-```
+### YOLO model or simulator data is missing
 
-View image topics:
+Run `git lfs pull`, rebuild, and source the workspace again. The default model must be
+installed as `share/perception/models/yolov8n.onnx`.
 
-```bash
-ros2 run rqt_image_view rqt_image_view
-```
+## Further documentation
 
-## Unity TCP Notes
-
-The Unity simulation sends sensor data to the ROS 2 bridge over TCP. The Unity-side `TCPServer.cs` acts as a TCP client for sensor transmission, so the ROS 2 bridge must be running and listening before Unity can connect.
-
-For local native Ubuntu usage, `127.0.0.1:9998` is usually correct.
-
-For Unity on Windows and ROS 2 in WSL2, do not use `localhost` inside Unity. Use the WSL2 IP address shown by:
-
-```bash
-hostname -I
-```
-
-For Unity and ROS 2 on different machines, use the ROS 2 machine's LAN IP address and make sure the ROS 2 bridge listens on `0.0.0.0`.
-
-## Customizing the Simulation
-
-The simulation package provides configurable parameters such as sensor setup, socket ports, and launch options. See the README inside the `simulation/` package for package-specific configuration details.
-
-## Notes for Students
-
-The original ROS 1 version used:
-
-```bash
-catkin build
-roscore
-roslaunch
-rosrun
-source devel/setup.bash
-```
-
-The ROS 2 Jazzy version uses:
-
-```bash
-colcon build
-ros2 launch
-ros2 run
-source install/setup.bash
-```
-
-There is no `roscore` in ROS 2.
+- [`../INTEGRATION_README.md`](../INTEGRATION_README.md): staged readiness and scenario
+  validation gates.
+- [`perception/README.md`](perception/README.md): RGB-D projection, traffic-light
+  detection, model replacement, and optional training.
+- [`route_manager/README.md`](route_manager/README.md): route format, states, parameters,
+  and topics.
+- [`trajectory_generator/README.md`](trajectory_generator/README.md): smoothing and path
+  validation.
+- [`decision_making/README.md`](decision_making/README.md): state machine, obstacle fusion,
+  safety, and tuning.
+- [`controller/README.md`](controller/README.md): Pure Pursuit, PID, timeouts, and control
+  parameters.
+- [`simulation/README.md`](simulation/README.md): Unity bridge, sensor topics, networking,
+  and simulator configuration.
