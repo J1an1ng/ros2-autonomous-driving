@@ -127,5 +127,3 @@ than stopping and restarting. The route-stage availability audit also required n
 trajectory evidence and bounded empty-publication fraction/duration; see the results linked
 above for the exact timing definition, traffic-light record, fallback classification,
 and teardown evidence.
-
-<!-- Temporary final-version refresh marker. -->
