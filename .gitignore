@@ -12,3 +12,5 @@ project/validation_evidence/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Temporary final-version refresh marker.

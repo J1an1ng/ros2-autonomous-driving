@@ -369,3 +369,5 @@ To inspect the new release tag directly:
 ```bash
 git switch --detach full-system-v1.1.0
 ```
+
+<!-- Temporary final-version refresh marker. -->
