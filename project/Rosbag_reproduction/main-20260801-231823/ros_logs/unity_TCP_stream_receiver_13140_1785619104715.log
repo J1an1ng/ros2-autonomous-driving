@@ -1,0 +1,8 @@
+[INFO] [1785619104.811180536] [Unity_ROS_message_Rx]: Waiting for Unity TCP connection on 127.0.0.1:9998
+[INFO] [1785619110.670459716] [Unity_ROS_message_Rx]: Got a Unity TCP connection
+[INFO] [1785619110.691183157] [Unity_ROS_message_Rx]: Unity-ROS timeSync: time_offset = 0.013652325 s
+[INFO] [1785619110.694324055] [Unity_ROS_message_Rx]: Publishing true state 'OurCar/CoM' as 'OurCar/INS'
+[INFO] [1785619112.664406172] [Unity_ROS_message_Rx]: Publishing camera 'OurCar/Sensors/RGBCameraLeft'
+[INFO] [1785619112.678018755] [Unity_ROS_message_Rx]: Publishing camera 'OurCar/Sensors/DepthCamera'
+[INFO] [1785619112.691524568] [Unity_ROS_message_Rx]: Publishing camera 'OurCar/Sensors/RGBCameraRight'
+[INFO] [1785619322.227858512] [rclcpp]: signal_handler(SIGINT/SIGTERM)

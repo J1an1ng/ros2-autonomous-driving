@@ -1,0 +1,4 @@
+[INFO] [1785619105.550631869] [octomap_server]: Publishing non-latched (topics are only prepared as needed, will only be re-published on map change
+[WARN] [1785619105.648407368] [octomap_server]: Nothing to publish, octree is empty
+[WARN] [1785619105.648470812] [octomap_server]: Could not open file 
+[INFO] [1785619322.227896348] [rclcpp]: signal_handler(SIGINT/SIGTERM)

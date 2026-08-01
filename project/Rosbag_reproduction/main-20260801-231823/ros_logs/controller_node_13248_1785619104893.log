@@ -1,0 +1,214 @@
+[INFO] [1785619104.993378174] [controller_node]: Controller ready: trajectory=/planning/trajectory speed=/decision/target_speed stop=/decision/stop_required twist=/OurCar/INS/twist output=/car_command
+[INFO] [1785619104.994137316] [controller_node]: Frames: world -> OurCar/INS; motion=enabled
+[WARN] [1785619105.046808765] [controller_node]: Safe stop: trajectory missing or stale
+[WARN] [1785619107.093780915] [controller_node]: Safe stop: trajectory missing or stale
+[WARN] [1785619109.143973113] [controller_node]: Safe stop: trajectory missing or stale
+[INFO] [1785619110.843773362] [controller_node]: v=0.00 decision=4.47 profile=4.00 target=4.00 lookahead=3.00 steering=0.023 throttle=0.70 brake=0.00
+[INFO] [1785619111.893797888] [controller_node]: v=0.20 decision=4.48 profile=4.00 target=4.00 lookahead=3.10 steering=0.023 throttle=0.70 brake=0.00
+[WARN] [1785619112.201319414] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619112.901201187] [controller_node]: v=0.17 decision=4.47 profile=4.00 target=4.00 lookahead=3.09 steering=0.024 throttle=0.70 brake=0.00
+[INFO] [1785619113.952422428] [controller_node]: v=1.29 decision=4.64 profile=4.19 target=4.19 lookahead=3.65 steering=0.214 throttle=0.70 brake=0.00
+[INFO] [1785619115.002776768] [controller_node]: v=2.27 decision=4.97 profile=4.97 target=4.97 lookahead=4.13 steering=0.093 throttle=0.70 brake=0.00
+[INFO] [1785619116.051280689] [controller_node]: v=3.00 decision=5.28 profile=5.28 target=5.28 lookahead=4.50 steering=0.040 throttle=0.70 brake=0.00
+[INFO] [1785619117.054336217] [controller_node]: v=3.61 decision=5.72 profile=5.72 target=5.72 lookahead=4.80 steering=0.012 throttle=0.70 brake=0.00
+[INFO] [1785619118.101225789] [controller_node]: v=4.12 decision=6.05 profile=6.40 target=6.05 lookahead=5.06 steering=-0.007 throttle=0.69 brake=0.00
+[INFO] [1785619119.101283844] [controller_node]: v=4.50 decision=6.32 profile=6.65 target=6.32 lookahead=5.25 steering=-0.010 throttle=0.70 brake=0.00
+[INFO] [1785619120.104571931] [controller_node]: v=4.83 decision=6.56 profile=6.86 target=6.56 lookahead=5.42 steering=-0.009 throttle=0.70 brake=0.00
+[INFO] [1785619121.157233930] [controller_node]: v=5.20 decision=6.78 profile=7.06 target=6.78 lookahead=5.60 steering=0.006 throttle=0.59 brake=0.00
+[INFO] [1785619122.205074099] [controller_node]: v=5.24 decision=6.87 profile=7.16 target=6.87 lookahead=5.62 steering=-0.051 throttle=0.67 brake=0.00
+[INFO] [1785619123.253741845] [controller_node]: v=5.20 decision=6.04 profile=5.15 target=5.15 lookahead=5.60 steering=0.113 throttle=0.10 brake=0.00
+[INFO] [1785619124.301330023] [controller_node]: v=4.20 decision=6.00 profile=6.20 target=6.00 lookahead=5.10 steering=0.318 throttle=0.70 brake=0.00
+[INFO] [1785619125.301547190] [controller_node]: v=4.48 decision=6.30 profile=6.64 target=6.30 lookahead=5.24 steering=0.386 throttle=0.70 brake=0.00
+[INFO] [1785619126.351562427] [controller_node]: v=4.72 decision=6.32 profile=6.63 target=6.32 lookahead=5.36 steering=0.507 throttle=0.66 brake=0.00
+[INFO] [1785619127.402444033] [controller_node]: v=4.66 decision=5.48 profile=4.71 target=4.71 lookahead=5.33 steering=0.191 throttle=0.11 brake=0.00
+[INFO] [1785619128.451603003] [controller_node]: v=4.49 decision=6.08 profile=6.35 target=6.08 lookahead=5.25 steering=0.228 throttle=0.65 brake=0.00
+[INFO] [1785619129.452256403] [controller_node]: v=4.69 decision=6.48 profile=6.78 target=6.48 lookahead=5.34 steering=0.243 throttle=0.70 brake=0.00
+[INFO] [1785619130.504581389] [controller_node]: v=4.91 decision=6.33 profile=6.94 target=6.33 lookahead=5.46 steering=0.097 throttle=0.59 brake=0.00
+[INFO] [1785619131.551278889] [controller_node]: v=5.00 decision=6.73 profile=7.02 target=6.73 lookahead=5.50 steering=0.098 throttle=0.70 brake=0.00
+[INFO] [1785619132.551369116] [controller_node]: v=5.30 decision=6.87 profile=7.43 target=6.87 lookahead=5.65 steering=0.009 throttle=0.60 brake=0.00
+[INFO] [1785619133.602222108] [controller_node]: v=5.43 decision=7.07 profile=7.31 target=7.07 lookahead=5.71 steering=-0.008 throttle=0.67 brake=0.00
+[INFO] [1785619134.651872910] [controller_node]: v=5.53 decision=6.83 profile=7.40 target=6.83 lookahead=5.77 steering=0.085 throttle=0.53 brake=0.00
+[INFO] [1785619135.702284073] [controller_node]: v=5.53 decision=6.83 profile=7.39 target=6.83 lookahead=5.76 steering=0.079 throttle=0.56 brake=0.00
+[INFO] [1785619136.752209175] [controller_node]: v=5.54 decision=6.83 profile=7.40 target=6.83 lookahead=5.77 steering=0.106 throttle=0.55 brake=0.00
+[INFO] [1785619137.801396848] [controller_node]: v=5.47 decision=6.98 profile=7.53 target=6.98 lookahead=5.73 steering=-0.003 throttle=0.63 brake=0.00
+[INFO] [1785619138.805651500] [controller_node]: v=5.48 decision=7.13 profile=7.40 target=7.13 lookahead=5.74 steering=-0.018 throttle=0.67 brake=0.00
+[INFO] [1785619139.852811988] [controller_node]: v=5.54 decision=7.09 profile=7.37 target=7.09 lookahead=5.77 steering=-0.001 throttle=0.64 brake=0.00
+[INFO] [1785619140.901319925] [controller_node]: v=5.65 decision=7.17 profile=7.48 target=7.17 lookahead=5.82 steering=-0.005 throttle=0.60 brake=0.00
+[INFO] [1785619141.902485793] [controller_node]: v=5.61 decision=7.14 profile=7.45 target=7.14 lookahead=5.80 steering=-0.002 throttle=0.64 brake=0.00
+[INFO] [1785619142.959131076] [controller_node]: v=5.58 decision=7.23 profile=7.50 target=7.23 lookahead=5.79 steering=-0.006 throttle=0.70 brake=0.00
+[WARN] [1785619143.430136667] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619143.982473489] [controller_node]: v=5.71 decision=7.25 profile=7.52 target=7.25 lookahead=5.86 steering=0.037 throttle=0.56 brake=0.00
+[INFO] [1785619145.030074281] [controller_node]: v=5.64 decision=7.20 profile=7.47 target=7.20 lookahead=5.82 steering=0.009 throttle=0.64 brake=0.00
+[INFO] [1785619146.032039182] [controller_node]: v=5.63 decision=7.25 profile=7.51 target=7.25 lookahead=5.82 steering=0.009 throttle=0.69 brake=0.00
+[INFO] [1785619147.083261532] [controller_node]: v=5.66 decision=6.93 profile=7.48 target=6.93 lookahead=5.83 steering=0.013 throttle=0.54 brake=0.00
+[INFO] [1785619148.130084488] [controller_node]: v=5.62 decision=7.20 profile=7.45 target=7.20 lookahead=5.81 steering=-0.018 throttle=0.65 brake=0.00
+[INFO] [1785619149.130522297] [controller_node]: v=5.63 decision=7.19 profile=7.46 target=7.19 lookahead=5.82 steering=-0.050 throttle=0.65 brake=0.00
+[INFO] [1785619150.182350121] [controller_node]: v=5.58 decision=7.19 profile=7.73 target=7.19 lookahead=5.79 steering=-0.018 throttle=0.66 brake=0.00
+[INFO] [1785619151.231765650] [controller_node]: v=5.66 decision=7.24 profile=7.50 target=7.24 lookahead=5.83 steering=-0.003 throttle=0.66 brake=0.00
+[INFO] [1785619152.280446367] [controller_node]: v=5.66 decision=7.25 profile=7.52 target=7.25 lookahead=5.83 steering=-0.006 throttle=0.68 brake=0.00
+[INFO] [1785619153.284425498] [controller_node]: v=5.70 decision=7.25 profile=7.52 target=7.25 lookahead=5.85 steering=0.009 throttle=0.64 brake=0.00
+[INFO] [1785619154.331880417] [controller_node]: v=5.73 decision=7.21 profile=7.78 target=7.21 lookahead=5.87 steering=0.000 throttle=0.61 brake=0.00
+[INFO] [1785619155.380385049] [controller_node]: v=5.75 decision=7.28 profile=7.55 target=7.28 lookahead=5.87 steering=0.008 throttle=0.64 brake=0.00
+[INFO] [1785619156.430308715] [controller_node]: v=5.71 decision=7.31 profile=7.53 target=7.31 lookahead=5.86 steering=0.017 throttle=0.66 brake=0.00
+[INFO] [1785619157.430826327] [controller_node]: v=5.74 decision=7.23 profile=7.57 target=7.23 lookahead=5.87 steering=0.026 throttle=0.63 brake=0.00
+[INFO] [1785619158.480135123] [controller_node]: v=5.65 decision=7.19 profile=7.46 target=7.19 lookahead=5.82 steering=0.033 throttle=0.63 brake=0.00
+[INFO] [1785619159.530061217] [controller_node]: v=5.71 decision=7.31 profile=7.80 target=7.31 lookahead=5.86 steering=0.048 throttle=0.70 brake=0.00
+[INFO] [1785619160.530349984] [controller_node]: v=4.70 decision=4.42 profile=6.79 target=4.42 lookahead=5.35 steering=-0.007 throttle=0.00 brake=0.00
+[INFO] [1785619161.530677522] [controller_node]: v=3.85 decision=3.00 profile=5.93 target=3.00 lookahead=4.93 steering=-0.037 throttle=0.00 brake=0.23
+[INFO] [1785619162.531206490] [controller_node]: v=3.22 decision=2.23 profile=5.51 target=2.23 lookahead=4.61 steering=-0.023 throttle=0.00 brake=0.35
+[INFO] [1785619163.582697202] [controller_node]: v=2.61 decision=2.16 profile=5.21 target=2.16 lookahead=4.30 steering=-0.020 throttle=0.00 brake=0.16
+[INFO] [1785619164.630141587] [controller_node]: v=2.12 decision=2.16 profile=4.97 target=2.16 lookahead=4.06 steering=-0.028 throttle=0.00 brake=0.03
+[INFO] [1785619165.630279643] [controller_node]: v=2.00 decision=2.96 profile=4.47 target=2.96 lookahead=4.00 steering=-0.065 throttle=0.31 brake=0.00
+[INFO] [1785619166.630295151] [controller_node]: v=2.28 decision=3.40 profile=5.01 target=3.40 lookahead=4.14 steering=-0.031 throttle=0.42 brake=0.00
+[INFO] [1785619167.680268076] [controller_node]: v=2.38 decision=3.01 profile=5.06 target=3.01 lookahead=4.19 steering=-0.013 throttle=0.29 brake=0.00
+[INFO] [1785619168.680339975] [controller_node]: v=2.73 decision=5.21 profile=5.21 target=5.21 lookahead=4.36 steering=-0.004 throttle=0.70 brake=0.00
+[INFO] [1785619169.730137047] [controller_node]: v=3.41 decision=5.58 profile=5.63 target=5.58 lookahead=4.71 steering=0.003 throttle=0.70 brake=0.00
+[INFO] [1785619170.731158693] [controller_node]: v=3.93 decision=5.93 profile=5.96 target=5.93 lookahead=4.97 steering=0.005 throttle=0.70 brake=0.00
+[INFO] [1785619171.733906611] [controller_node]: v=4.36 decision=6.22 profile=6.56 target=6.22 lookahead=5.18 steering=0.009 throttle=0.70 brake=0.00
+[INFO] [1785619172.780258252] [controller_node]: v=4.74 decision=6.47 profile=7.08 target=6.47 lookahead=5.37 steering=0.059 throttle=0.68 brake=0.00
+[INFO] [1785619173.781594016] [controller_node]: v=4.96 decision=6.67 profile=6.96 target=6.67 lookahead=5.48 steering=0.013 throttle=0.70 brake=0.00
+[INFO] [1785619174.831306571] [controller_node]: v=5.13 decision=6.85 profile=7.09 target=6.85 lookahead=5.56 steering=-0.037 throttle=0.70 brake=0.00
+[WARN] [1785619174.487263985] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619175.837198818] [controller_node]: v=5.12 decision=6.69 profile=7.27 target=6.69 lookahead=5.56 steering=0.228 throttle=0.64 brake=0.00
+[INFO] [1785619176.838376652] [controller_node]: v=5.33 decision=6.93 profile=7.21 target=6.93 lookahead=5.67 steering=-0.019 throttle=0.64 brake=0.00
+[INFO] [1785619177.886362293] [controller_node]: v=5.34 decision=6.93 profile=7.49 target=6.93 lookahead=5.67 steering=-0.057 throttle=0.69 brake=0.00
+[INFO] [1785619178.936309144] [controller_node]: v=5.58 decision=6.86 profile=7.42 target=6.86 lookahead=5.79 steering=0.090 throttle=0.55 brake=0.00
+[INFO] [1785619179.937762672] [controller_node]: v=5.55 decision=6.98 profile=7.53 target=6.98 lookahead=5.78 steering=0.046 throttle=0.57 brake=0.00
+[INFO] [1785619180.938180600] [controller_node]: v=5.55 decision=7.27 profile=7.67 target=7.27 lookahead=5.78 steering=0.029 throttle=0.70 brake=0.00
+[INFO] [1785619181.986383517] [controller_node]: v=5.36 decision=5.95 profile=5.84 target=5.84 lookahead=5.68 steering=0.189 throttle=0.25 brake=0.00
+[INFO] [1785619182.994469142] [controller_node]: v=4.78 decision=6.59 profile=7.17 target=6.59 lookahead=5.39 steering=0.778 throttle=0.70 brake=0.00
+[INFO] [1785619184.036624134] [controller_node]: v=4.72 decision=5.54 profile=4.97 target=4.97 lookahead=5.36 steering=0.416 throttle=0.20 brake=0.00
+[INFO] [1785619185.038026194] [controller_node]: v=4.09 decision=6.00 profile=6.00 target=6.00 lookahead=5.05 steering=0.330 throttle=0.70 brake=0.00
+[INFO] [1785619186.087681568] [controller_node]: v=3.85 decision=3.74 profile=6.17 target=3.74 lookahead=4.93 steering=0.269 throttle=0.07 brake=0.00
+[INFO] [1785619187.089636295] [controller_node]: v=3.29 decision=3.04 profile=5.53 target=3.04 lookahead=4.64 steering=0.138 throttle=0.00 brake=0.00
+[INFO] [1785619188.092440302] [controller_node]: v=2.70 decision=2.23 profile=5.26 target=2.23 lookahead=4.35 steering=0.071 throttle=0.00 brake=0.08
+[INFO] [1785619189.138202651] [controller_node]: v=2.24 decision=1.29 profile=4.21 target=1.29 lookahead=4.12 steering=0.062 throttle=0.00 brake=0.29
+[WARN] [1785619189.786386780] [controller_node]: Safe stop: stop requested by decision layer
+[INFO] [1785619190.187526912] [controller_node]: v=2.02 decision=4.75 profile=4.75 target=4.75 lookahead=4.01 steering=0.074 throttle=0.70 brake=0.00
+[INFO] [1785619191.237096774] [controller_node]: v=2.80 decision=4.94 profile=5.27 target=4.94 lookahead=4.40 steering=0.041 throttle=0.70 brake=0.00
+[INFO] [1785619192.239988729] [controller_node]: v=3.31 decision=5.35 profile=5.67 target=5.35 lookahead=4.66 steering=0.452 throttle=0.70 brake=0.00
+[INFO] [1785619193.287575871] [controller_node]: v=3.83 decision=5.49 profile=5.49 target=5.49 lookahead=4.91 steering=0.403 throttle=0.65 brake=0.00
+[INFO] [1785619194.336510169] [controller_node]: v=3.96 decision=5.88 profile=5.88 target=5.88 lookahead=4.98 steering=1.000 throttle=0.70 brake=0.00
+[INFO] [1785619195.336573999] [controller_node]: v=4.14 decision=6.04 profile=6.41 target=6.04 lookahead=5.07 steering=0.664 throttle=0.70 brake=0.00
+[INFO] [1785619196.336770326] [controller_node]: v=4.39 decision=6.06 profile=6.38 target=6.06 lookahead=5.20 steering=0.642 throttle=0.68 brake=0.00
+[INFO] [1785619197.387053294] [controller_node]: v=4.72 decision=6.48 profile=6.78 target=6.48 lookahead=5.36 steering=0.181 throttle=0.70 brake=0.00
+[INFO] [1785619198.436313774] [controller_node]: v=5.04 decision=6.69 profile=7.27 target=6.69 lookahead=5.52 steering=-0.069 throttle=0.66 brake=0.00
+[INFO] [1785619199.437767890] [controller_node]: v=5.17 decision=6.82 profile=7.11 target=6.82 lookahead=5.58 steering=-0.114 throttle=0.68 brake=0.00
+[INFO] [1785619200.486666481] [controller_node]: v=5.29 decision=6.87 profile=7.43 target=6.87 lookahead=5.64 steering=-0.031 throttle=0.65 brake=0.00
+[INFO] [1785619201.490454059] [controller_node]: v=5.44 decision=6.93 profile=7.45 target=6.93 lookahead=5.72 steering=-0.009 throttle=0.62 brake=0.00
+[INFO] [1785619202.495559140] [controller_node]: v=5.43 decision=7.04 profile=7.31 target=7.04 lookahead=5.72 steering=-0.003 throttle=0.68 brake=0.00
+[INFO] [1785619203.538387908] [controller_node]: v=5.43 decision=7.03 profile=7.30 target=7.03 lookahead=5.72 steering=-0.005 throttle=0.66 brake=0.00
+[INFO] [1785619204.586242919] [controller_node]: v=5.48 decision=6.86 profile=7.48 target=6.86 lookahead=5.74 steering=-0.004 throttle=0.66 brake=0.00
+[INFO] [1785619205.588796297] [controller_node]: v=5.33 decision=6.24 profile=7.52 target=6.24 lookahead=5.67 steering=-0.001 throttle=0.44 brake=0.00
+[WARN] [1785619205.705542439] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619206.607064164] [controller_node]: v=4.19 decision=5.08 profile=6.76 target=5.08 lookahead=5.10 steering=-0.023 throttle=0.34 brake=0.00
+[INFO] [1785619207.656368877] [controller_node]: v=3.94 decision=4.47 profile=6.21 target=4.47 lookahead=4.97 steering=-0.011 throttle=0.25 brake=0.00
+[INFO] [1785619208.705368690] [controller_node]: v=3.60 decision=3.81 profile=5.99 target=3.81 lookahead=4.80 steering=-0.006 throttle=0.16 brake=0.00
+[INFO] [1785619209.706480177] [controller_node]: v=3.16 decision=3.12 profile=5.47 target=3.12 lookahead=4.58 steering=-0.004 throttle=0.11 brake=0.00
+[INFO] [1785619210.754681936] [controller_node]: v=2.68 decision=2.44 profile=5.00 target=2.44 lookahead=4.34 steering=-0.002 throttle=0.00 brake=0.00
+[INFO] [1785619211.758634934] [controller_node]: v=2.24 decision=1.58 profile=4.93 target=1.58 lookahead=4.12 steering=-0.001 throttle=0.00 brake=0.17
+[WARN] [1785619212.604996306] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619214.655691151] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619216.704954449] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619218.755022206] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619220.804635304] [controller_node]: Safe stop: stop requested by decision layer
+[INFO] [1785619222.554588566] [controller_node]: v=0.00 decision=3.00 profile=3.00 target=3.00 lookahead=3.00 steering=-0.100 throttle=0.70 brake=0.00
+[INFO] [1785619223.554794577] [controller_node]: v=1.14 decision=3.00 profile=3.00 target=3.00 lookahead=3.57 steering=-0.116 throttle=0.63 brake=0.00
+[INFO] [1785619224.554997896] [controller_node]: v=1.87 decision=3.00 profile=3.00 target=3.00 lookahead=3.94 steering=-0.065 throttle=0.46 brake=0.00
+[INFO] [1785619225.556428843] [controller_node]: v=2.22 decision=3.00 profile=3.00 target=3.00 lookahead=4.11 steering=-0.043 throttle=0.37 brake=0.00
+[INFO] [1785619226.604660465] [controller_node]: v=2.39 decision=3.00 profile=3.00 target=3.00 lookahead=4.20 steering=-0.032 throttle=0.31 brake=0.00
+[INFO] [1785619227.604733990] [controller_node]: v=2.45 decision=3.00 profile=3.00 target=3.00 lookahead=4.23 steering=0.076 throttle=0.29 brake=0.00
+[INFO] [1785619228.655380141] [controller_node]: v=2.48 decision=3.00 profile=3.00 target=3.00 lookahead=4.24 steering=0.072 throttle=0.28 brake=0.00
+[INFO] [1785619229.658773209] [controller_node]: v=2.41 decision=3.00 profile=3.00 target=3.00 lookahead=4.21 steering=1.000 throttle=0.31 brake=0.00
+[INFO] [1785619230.705591898] [controller_node]: v=2.41 decision=3.00 profile=3.00 target=3.00 lookahead=4.21 steering=1.000 throttle=0.31 brake=0.00
+[INFO] [1785619231.758013916] [controller_node]: v=2.58 decision=5.16 profile=5.16 target=5.16 lookahead=4.29 steering=0.911 throttle=0.70 brake=0.00
+[INFO] [1785619232.804893481] [controller_node]: v=3.20 decision=5.46 profile=5.49 target=5.46 lookahead=4.60 steering=1.000 throttle=0.70 brake=0.00
+[INFO] [1785619233.806462513] [controller_node]: v=3.73 decision=5.60 profile=5.97 target=5.60 lookahead=4.86 steering=0.425 throttle=0.70 brake=0.00
+[INFO] [1785619234.854764400] [controller_node]: v=4.22 decision=6.13 profile=6.45 target=6.13 lookahead=5.11 steering=0.034 throttle=0.70 brake=0.00
+[INFO] [1785619235.860334208] [controller_node]: v=4.60 decision=6.40 profile=6.70 target=6.40 lookahead=5.30 steering=-0.111 throttle=0.70 brake=0.00
+[INFO] [1785619236.904621448] [controller_node]: v=4.92 decision=6.52 profile=6.86 target=6.52 lookahead=5.46 steering=-0.102 throttle=0.65 brake=0.00
+[INFO] [1785619237.905847503] [controller_node]: v=5.10 decision=6.24 profile=6.10 target=6.10 lookahead=5.55 steering=-0.096 throttle=0.44 brake=0.00
+[INFO] [1785619238.956117537] [controller_node]: v=5.14 decision=6.54 profile=6.54 target=6.54 lookahead=5.57 steering=0.004 throttle=0.61 brake=0.00
+[WARN] [1785619239.205119813] [controller_node]: Safe stop: trajectory missing or stale
+[INFO] [1785619240.005466522] [controller_node]: v=2.08 decision=3.00 profile=3.00 target=3.00 lookahead=4.04 steering=0.066 throttle=0.32 brake=0.00
+[INFO] [1785619241.010266239] [controller_node]: v=2.23 decision=3.00 profile=3.00 target=3.00 lookahead=4.12 steering=0.047 throttle=0.32 brake=0.00
+[INFO] [1785619242.061228819] [controller_node]: v=2.43 decision=4.96 profile=4.96 target=4.96 lookahead=4.21 steering=-0.759 throttle=0.70 brake=0.00
+[INFO] [1785619243.107538442] [controller_node]: v=2.99 decision=4.81 profile=4.03 target=4.03 lookahead=4.49 steering=-0.679 throttle=0.45 brake=0.00
+[INFO] [1785619244.154905247] [controller_node]: v=3.48 decision=5.02 profile=5.02 target=5.02 lookahead=4.74 steering=-0.647 throttle=0.63 brake=0.00
+[INFO] [1785619245.156155273] [controller_node]: v=3.81 decision=5.62 profile=5.62 target=5.62 lookahead=4.90 steering=-0.987 throttle=0.70 brake=0.00
+[INFO] [1785619246.204777396] [controller_node]: v=4.23 decision=6.10 profile=6.45 target=6.10 lookahead=5.11 steering=-0.508 throttle=0.70 brake=0.00
+[INFO] [1785619247.254703437] [controller_node]: v=4.59 decision=6.39 profile=6.70 target=6.39 lookahead=5.30 steering=-0.159 throttle=0.70 brake=0.00
+[INFO] [1785619248.255019031] [controller_node]: v=4.85 decision=4.24 profile=6.91 target=4.24 lookahead=5.42 steering=0.056 throttle=0.00 brake=0.11
+[INFO] [1785619249.304700276] [controller_node]: v=4.02 decision=2.06 profile=6.43 target=2.06 lookahead=5.01 steering=0.098 throttle=0.00 brake=0.61
+[INFO] [1785619250.304743085] [controller_node]: v=3.29 decision=1.10 profile=5.58 target=1.10 lookahead=4.64 steering=0.077 throttle=0.00 brake=0.81
+[INFO] [1785619251.305294298] [controller_node]: v=2.75 decision=1.54 profile=5.27 target=1.54 lookahead=4.38 steering=0.044 throttle=0.00 brake=0.53
+[INFO] [1785619252.354625795] [controller_node]: v=2.24 decision=1.62 profile=4.94 target=1.62 lookahead=4.12 steering=0.028 throttle=0.00 brake=0.30
+[WARN] [1785619251.815557152] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619253.367357978] [controller_node]: v=0.47 decision=1.35 profile=3.99 target=1.35 lookahead=3.23 steering=0.006 throttle=0.32 brake=0.00
+[INFO] [1785619254.415752590] [controller_node]: v=1.11 decision=2.39 profile=4.30 target=2.39 lookahead=3.55 steering=0.005 throttle=0.52 brake=0.00
+[INFO] [1785619255.465650940] [controller_node]: v=1.88 decision=3.44 profile=4.68 target=3.44 lookahead=3.94 steering=0.003 throttle=0.62 brake=0.00
+[INFO] [1785619256.468359161] [controller_node]: v=2.62 decision=4.35 profile=5.09 target=4.35 lookahead=4.31 steering=0.025 throttle=0.68 brake=0.00
+[INFO] [1785619257.516209119] [controller_node]: v=2.97 decision=3.57 profile=5.29 target=3.57 lookahead=4.48 steering=0.013 throttle=0.30 brake=0.00
+[INFO] [1785619258.517777809] [controller_node]: v=2.70 decision=2.75 profile=5.19 target=2.75 lookahead=4.35 steering=0.007 throttle=0.11 brake=0.00
+[INFO] [1785619259.565390387] [controller_node]: v=2.57 decision=1.90 profile=5.02 target=1.90 lookahead=4.29 steering=0.005 throttle=0.00 brake=0.14
+[INFO] [1785619260.565393156] [controller_node]: v=2.12 decision=0.66 profile=4.89 target=0.66 lookahead=4.06 steering=0.003 throttle=0.00 brake=0.49
+[INFO] [1785619261.573564140] [controller_node]: v=1.73 decision=1.35 profile=4.36 target=1.35 lookahead=3.87 steering=0.004 throttle=0.00 brake=0.16
+[INFO] [1785619262.615499721] [controller_node]: v=1.41 decision=2.41 profile=4.42 target=2.41 lookahead=3.70 steering=0.003 throttle=0.33 brake=0.00
+[INFO] [1785619263.616409270] [controller_node]: v=1.85 decision=3.34 profile=4.38 target=3.34 lookahead=3.93 steering=-0.286 throttle=0.58 brake=0.00
+[INFO] [1785619264.617187345] [controller_node]: v=2.54 decision=3.84 profile=5.10 target=3.84 lookahead=4.27 steering=-0.132 throttle=0.56 brake=0.00
+[INFO] [1785619265.665262258] [controller_node]: v=3.02 decision=3.66 profile=5.36 target=3.66 lookahead=4.51 steering=-0.061 throttle=0.32 brake=0.00
+[INFO] [1785619266.665493757] [controller_node]: v=2.71 decision=3.02 profile=5.10 target=3.02 lookahead=4.35 steering=-0.032 throttle=0.21 brake=0.00
+[INFO] [1785619267.665614722] [controller_node]: v=2.78 decision=3.65 profile=5.13 target=3.65 lookahead=4.39 steering=-0.018 throttle=0.41 brake=0.00
+[INFO] [1785619268.669352452] [controller_node]: v=2.96 decision=3.91 profile=5.26 target=3.91 lookahead=4.48 steering=-0.011 throttle=0.42 brake=0.00
+[INFO] [1785619269.669392462] [controller_node]: v=3.12 decision=4.17 profile=5.25 target=4.17 lookahead=4.56 steering=-0.222 throttle=0.47 brake=0.00
+[INFO] [1785619270.715933325] [controller_node]: v=3.46 decision=5.45 profile=5.68 target=5.45 lookahead=4.73 steering=-1.000 throttle=0.70 brake=0.00
+[INFO] [1785619271.765754598] [controller_node]: v=3.84 decision=5.80 profile=6.12 target=5.80 lookahead=4.92 steering=-0.932 throttle=0.70 brake=0.00
+[INFO] [1785619272.770941911] [controller_node]: v=4.22 decision=6.10 profile=6.42 target=6.10 lookahead=5.11 steering=-0.534 throttle=0.70 brake=0.00
+[INFO] [1785619273.820617386] [controller_node]: v=4.56 decision=6.20 profile=6.09 target=6.09 lookahead=5.28 steering=-0.370 throttle=0.63 brake=0.00
+[INFO] [1785619274.865385450] [controller_node]: v=4.39 decision=4.95 profile=6.58 target=4.95 lookahead=5.20 steering=0.062 throttle=0.29 brake=0.00
+[INFO] [1785619275.869095522] [controller_node]: v=3.99 decision=4.28 profile=6.30 target=4.28 lookahead=5.00 steering=0.024 throttle=0.22 brake=0.00
+[INFO] [1785619276.916140997] [controller_node]: v=3.51 decision=3.55 profile=5.62 target=3.55 lookahead=4.76 steering=0.012 throttle=0.11 brake=0.00
+[INFO] [1785619277.965389070] [controller_node]: v=3.05 decision=2.85 profile=5.29 target=2.85 lookahead=4.52 steering=0.006 throttle=0.03 brake=0.00
+[INFO] [1785619278.965456952] [controller_node]: v=2.87 decision=2.05 profile=5.18 target=2.05 lookahead=4.43 steering=0.004 throttle=0.00 brake=0.21
+[INFO] [1785619279.965490075] [controller_node]: v=2.36 decision=0.66 profile=4.53 target=0.66 lookahead=4.18 steering=0.003 throttle=0.00 brake=0.56
+[WARN] [1785619280.115436082] [controller_node]: Safe stop: stop requested by decision layer
+[INFO] [1785619280.965561532] [controller_node]: v=2.83 decision=5.07 profile=5.07 target=5.07 lookahead=4.41 steering=0.278 throttle=0.70 brake=0.00
+[INFO] [1785619281.965728962] [controller_node]: v=3.43 decision=5.35 profile=5.35 target=5.35 lookahead=4.71 steering=0.158 throttle=0.70 brake=0.00
+[INFO] [1785619283.020685070] [controller_node]: v=3.85 decision=5.53 profile=5.44 target=5.44 lookahead=4.93 steering=0.687 throttle=0.62 brake=0.00
+[WARN] [1785619283.315497269] [controller_node]: Safe stop: trajectory missing or stale
+[INFO] [1785619284.061745074] [controller_node]: v=3.30 decision=5.41 profile=5.76 target=5.41 lookahead=4.65 steering=1.000 throttle=0.70 brake=0.00
+[INFO] [1785619285.065633579] [controller_node]: v=3.76 decision=5.82 profile=5.82 target=5.82 lookahead=4.88 steering=0.853 throttle=0.70 brake=0.00
+[INFO] [1785619286.114168922] [controller_node]: v=4.17 decision=5.92 profile=6.25 target=5.92 lookahead=5.09 steering=0.219 throttle=0.66 brake=0.00
+[INFO] [1785619287.158736561] [controller_node]: v=4.53 decision=6.35 profile=6.66 target=6.35 lookahead=5.27 steering=-0.108 throttle=0.70 brake=0.00
+[INFO] [1785619288.208481669] [controller_node]: v=4.78 decision=6.49 profile=6.79 target=6.49 lookahead=5.39 steering=-0.169 throttle=0.69 brake=0.00
+[INFO] [1785619289.209200257] [controller_node]: v=5.03 decision=6.61 profile=6.97 target=6.61 lookahead=5.51 steering=-0.068 throttle=0.65 brake=0.00
+[INFO] [1785619290.258285126] [controller_node]: v=5.16 decision=6.82 profile=7.11 target=6.82 lookahead=5.58 steering=-0.014 throttle=0.68 brake=0.00
+[INFO] [1785619291.258865560] [controller_node]: v=5.33 decision=6.96 profile=7.24 target=6.96 lookahead=5.67 steering=0.004 throttle=0.67 brake=0.00
+[INFO] [1785619292.308400607] [controller_node]: v=5.42 decision=6.98 profile=7.30 target=6.98 lookahead=5.71 steering=-0.088 throttle=0.65 brake=0.00
+[INFO] [1785619293.308405766] [controller_node]: v=5.45 decision=7.11 profile=7.22 target=7.11 lookahead=5.73 steering=-0.041 throttle=0.68 brake=0.00
+[INFO] [1785619294.313618765] [controller_node]: v=5.28 decision=7.00 profile=7.20 target=7.00 lookahead=5.64 steering=0.117 throttle=0.70 brake=0.00
+[INFO] [1785619295.358784481] [controller_node]: v=5.33 decision=6.70 profile=7.28 target=6.70 lookahead=5.66 steering=0.137 throttle=0.60 brake=0.00
+[INFO] [1785619296.409963353] [controller_node]: v=5.29 decision=6.32 profile=7.20 target=6.32 lookahead=5.65 steering=0.027 throttle=0.46 brake=0.00
+[INFO] [1785619297.460106764] [controller_node]: v=4.95 decision=5.72 profile=7.01 target=5.72 lookahead=5.48 steering=-0.016 throttle=0.39 brake=0.00
+[INFO] [1785619298.460781988] [controller_node]: v=4.68 decision=5.13 profile=6.71 target=5.13 lookahead=5.34 steering=-0.016 throttle=0.25 brake=0.00
+[INFO] [1785619299.508348679] [controller_node]: v=4.22 decision=4.43 profile=6.47 target=4.43 lookahead=5.11 steering=-0.008 throttle=0.17 brake=0.00
+[INFO] [1785619300.558301386] [controller_node]: v=3.71 decision=3.77 profile=5.84 target=3.77 lookahead=4.86 steering=-0.008 throttle=0.14 brake=0.00
+[INFO] [1785619301.559144189] [controller_node]: v=3.23 decision=3.06 profile=5.53 target=3.06 lookahead=4.61 steering=0.002 throttle=0.04 brake=0.00
+[INFO] [1785619302.562718984] [controller_node]: v=2.69 decision=2.33 profile=5.23 target=2.33 lookahead=4.34 steering=-0.002 throttle=0.00 brake=0.03
+[INFO] [1785619303.608341288] [controller_node]: v=2.22 decision=1.30 profile=4.99 target=1.30 lookahead=4.11 steering=-0.024 throttle=0.00 brake=0.27
+[WARN] [1785619304.211244033] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619306.259381935] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619308.259986865] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619310.308928222] [controller_node]: Safe stop: stop requested by decision layer
+[WARN] [1785619312.309210079] [controller_node]: Safe stop: stop requested by decision layer
+[INFO] [1785619313.958338369] [controller_node]: v=0.00 decision=4.40 profile=3.93 target=3.93 lookahead=3.00 steering=-0.100 throttle=0.70 brake=0.00
+[WARN] [1785619314.465171079] [controller_node]: Safe stop: decision target speed missing or stale
+[INFO] [1785619314.964301685] [controller_node]: v=1.89 decision=4.83 profile=4.40 target=4.40 lookahead=3.94 steering=-0.114 throttle=0.70 brake=0.00
+[INFO] [1785619316.012362433] [controller_node]: v=2.69 decision=5.11 profile=5.09 target=5.09 lookahead=4.35 steering=-0.260 throttle=0.70 brake=0.00
+[INFO] [1785619317.012511219] [controller_node]: v=3.33 decision=5.49 profile=5.46 target=5.46 lookahead=4.66 steering=-0.133 throttle=0.70 brake=0.00
+[INFO] [1785619318.012832155] [controller_node]: v=3.80 decision=5.24 profile=5.16 target=5.16 lookahead=4.90 steering=-0.105 throttle=0.55 brake=0.00
+[INFO] [1785619319.062667096] [controller_node]: v=3.99 decision=5.97 profile=6.29 target=5.97 lookahead=4.99 steering=-1.000 throttle=0.70 brake=0.00
+[INFO] [1785619320.063661353] [controller_node]: v=4.20 decision=5.92 profile=6.25 target=5.92 lookahead=5.10 steering=-1.000 throttle=0.69 brake=0.00
+[INFO] [1785619321.065677314] [controller_node]: v=4.17 decision=5.20 profile=5.20 target=5.20 lookahead=5.09 steering=-1.000 throttle=0.46 brake=0.00
+[WARN] [1785619321.112518733] [controller_node]: Safe stop: trajectory missing or stale
+[INFO] [1785619322.227803159] [rclcpp]: signal_handler(SIGINT/SIGTERM)

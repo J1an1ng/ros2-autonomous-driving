@@ -1,0 +1,64 @@
+1785619104.4730673 [INFO] [launch]: All log files can be found below /home/jianing/i2ros/introduction-to-ros-2026/project/validation_evidence/mission-20260801-231823/ros_logs/2026-08-01-23-18-24-471680-localhost-13124
+1785619104.4732351 [INFO] [launch]: Default logging verbosity is set to INFO
+1785619104.8246307 [INFO] [JSON_param_reader-1]: process started with pid [13139]
+1785619104.8285055 [INFO] [unity_TCP_stream_receiver-2]: process started with pid [13140]
+1785619104.8286672 [INFO] [ROS_command_transmitter-3]: process started with pid [13141]
+1785619104.8287778 [INFO] [static_transform_publisher-4]: process started with pid [13142]
+1785619104.8288727 [INFO] [static_transform_publisher-5]: process started with pid [13143]
+1785619104.8289580 [INFO] [static_transform_publisher-6]: process started with pid [13144]
+1785619104.8291006 [INFO] [static_transform_publisher-7]: process started with pid [13145]
+1785619104.8292027 [INFO] [static_transform_publisher-8]: process started with pid [13146]
+1785619104.8300796 [INFO] [run_unity.sh-9]: process started with pid [13147]
+1785619104.8301842 [INFO] [occupancy_map_node-10]: process started with pid [13150]
+1785619104.8302689 [INFO] [octomap_server_node-11]: process started with pid [13192]
+1785619104.8303418 [INFO] [yolo_rgbd_detector_node-12]: process started with pid [13197]
+1785619104.8304121 [INFO] [route_manager_node-13]: process started with pid [13203]
+1785619104.8304741 [INFO] [trajectory_generator_node-14]: process started with pid [13212]
+1785619104.8305392 [INFO] [obstacle_monitor_node-15]: process started with pid [13235]
+1785619104.8306038 [INFO] [traffic_light_state_machine_node-16]: process started with pid [13238]
+1785619104.8306694 [INFO] [controller_node-17]: process started with pid [13248]
+1785619104.8307371 [INFO] [live_visualization-18]: process started with pid [13291]
+1785619104.8313346 [INFO] [rviz2-19]: process started with pid [13294]
+1785619104.8315120 [INFO] [rviz2-20]: process started with pid [13297]
+1785619104.8859208 [INFO] [JSON_param_reader-1]: process has finished cleanly [pid 13139]
+1785619322.2327387 [WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+1785619322.3237922 [INFO] [rviz2-20]: sending signal 'SIGINT' to process[rviz2-20]
+1785619322.3296361 [INFO] [rviz2-19]: sending signal 'SIGINT' to process[rviz2-19]
+1785619322.3341091 [INFO] [live_visualization-18]: sending signal 'SIGINT' to process[live_visualization-18]
+1785619322.3364894 [INFO] [controller_node-17]: sending signal 'SIGINT' to process[controller_node-17]
+1785619322.3387761 [INFO] [traffic_light_state_machine_node-16]: sending signal 'SIGINT' to process[traffic_light_state_machine_node-16]
+1785619322.3407307 [INFO] [obstacle_monitor_node-15]: sending signal 'SIGINT' to process[obstacle_monitor_node-15]
+1785619322.3433018 [INFO] [trajectory_generator_node-14]: sending signal 'SIGINT' to process[trajectory_generator_node-14]
+1785619322.3454399 [INFO] [route_manager_node-13]: sending signal 'SIGINT' to process[route_manager_node-13]
+1785619322.3503776 [INFO] [yolo_rgbd_detector_node-12]: sending signal 'SIGINT' to process[yolo_rgbd_detector_node-12]
+1785619322.3518064 [INFO] [octomap_server_node-11]: sending signal 'SIGINT' to process[octomap_server_node-11]
+1785619322.3531754 [INFO] [occupancy_map_node-10]: sending signal 'SIGINT' to process[occupancy_map_node-10]
+1785619322.3545887 [INFO] [run_unity.sh-9]: sending signal 'SIGINT' to process[run_unity.sh-9]
+1785619322.3570189 [INFO] [static_transform_publisher-8]: sending signal 'SIGINT' to process[static_transform_publisher-8]
+1785619322.3660123 [INFO] [static_transform_publisher-7]: sending signal 'SIGINT' to process[static_transform_publisher-7]
+1785619322.3834023 [INFO] [static_transform_publisher-6]: sending signal 'SIGINT' to process[static_transform_publisher-6]
+1785619322.3879588 [INFO] [static_transform_publisher-5]: sending signal 'SIGINT' to process[static_transform_publisher-5]
+1785619322.3954957 [INFO] [static_transform_publisher-4]: sending signal 'SIGINT' to process[static_transform_publisher-4]
+1785619322.3976562 [INFO] [ROS_command_transmitter-3]: sending signal 'SIGINT' to process[ROS_command_transmitter-3]
+1785619322.3998876 [INFO] [unity_TCP_stream_receiver-2]: sending signal 'SIGINT' to process[unity_TCP_stream_receiver-2]
+1785619322.4020226 [ERROR] [static_transform_publisher-8]: process has died [pid 13146, exit code -2, cmd '/opt/ros/jazzy/lib/tf2_ros/static_transform_publisher 0 -0.2 0 0.5 -0.5 0.5 -0.5 OurCar/Sensors/SensorBase OurCar/Sensors/RGBCameraRight --ros-args -r __node:=tf_rgb_camera_right'].
+1785619322.4032464 [ERROR] [static_transform_publisher-5]: process has died [pid 13143, exit code -2, cmd '/opt/ros/jazzy/lib/tf2_ros/static_transform_publisher 0.8199998 0 1.269 0 0 0 1 OurCar/Center OurCar/Sensors/SensorBase --ros-args -r __node:=tf_sensors'].
+1785619322.4038780 [ERROR] [static_transform_publisher-4]: process has died [pid 13142, exit code -2, cmd '/opt/ros/jazzy/lib/tf2_ros/static_transform_publisher 0 0 -0.7180116 0 0 0 1 OurCar/INS OurCar/Center --ros-args -r __node:=tf_nominal_center'].
+1785619322.4046857 [ERROR] [static_transform_publisher-7]: process has died [pid 13145, exit code -2, cmd '/opt/ros/jazzy/lib/tf2_ros/static_transform_publisher 0 0.2 0 0.5 -0.5 0.5 -0.5 OurCar/Sensors/SensorBase OurCar/Sensors/RGBCameraLeft --ros-args -r __node:=tf_rgb_camera_left'].
+1785619322.4106810 [ERROR] [static_transform_publisher-6]: process has died [pid 13144, exit code -2, cmd '/opt/ros/jazzy/lib/tf2_ros/static_transform_publisher 0 0 0 0.5 -0.5 0.5 -0.5 OurCar/Sensors/SensorBase OurCar/Sensors/DepthCamera --ros-args -r __node:=tf_depth_camera'].
+1785619322.4114711 [ERROR] [ROS_command_transmitter-3]: process has died [pid 13141, exit code -2, cmd '/home/jianing/i2ros/introduction-to-ros-2026/project/install/simulation/lib/simulation/ROS_command_transmitter --ros-args -r __node:=ROS_Unity_command_Tx --params-file /tmp/launch_params_u8sq_uk2'].
+1785619322.4486811 [ERROR] [rviz2-20]: process has died [pid 13297, exit code -2, cmd '/opt/ros/jazzy/lib/rviz2/rviz2 -d /home/jianing/i2ros/introduction-to-ros-2026/project/install/system_bringup/share/system_bringup/rviz/telemetry_charts.rviz --ros-args -r __node:=telemetry_charts'].
+1785619322.4776256 [ERROR] [live_visualization-18]: process has died [pid 13291, exit code -2, cmd '/home/jianing/i2ros/introduction-to-ros-2026/project/install/system_bringup/lib/system_bringup/live_visualization --ros-args -r __node:=live_visualization'].
+1785619322.5235183 [INFO] [unity_TCP_stream_receiver-2]: process has finished cleanly [pid 13140]
+1785619322.5289598 [INFO] [controller_node-17]: process has finished cleanly [pid 13248]
+1785619322.5306656 [INFO] [occupancy_map_node-10]: process has finished cleanly [pid 13150]
+1785619322.5604908 [ERROR] [obstacle_monitor_node-15]: process has died [pid 13235, exit code -2, cmd '/home/jianing/i2ros/introduction-to-ros-2026/project/install/decision_making/lib/decision_making/obstacle_monitor_node --ros-args -r __node:=obstacle_monitor_node --params-file /home/jianing/i2ros/introduction-to-ros-2026/project/install/decision_making/share/decision_making/config/traffic_light_state_machine.yaml'].
+1785619322.5809212 [INFO] [octomap_server_node-11]: process has finished cleanly [pid 13192]
+1785619322.5812125 [ERROR] [traffic_light_state_machine_node-16]: process has died [pid 13238, exit code -2, cmd '/home/jianing/i2ros/introduction-to-ros-2026/project/install/decision_making/lib/decision_making/traffic_light_state_machine_node --ros-args -r __node:=traffic_light_state_machine_node --params-file /home/jianing/i2ros/introduction-to-ros-2026/project/install/decision_making/share/decision_making/config/traffic_light_state_machine.yaml'].
+1785619322.6019661 [INFO] [yolo_rgbd_detector_node-12]: process has finished cleanly [pid 13197]
+1785619322.6287169 [INFO] [rviz2-19]: process has finished cleanly [pid 13294]
+1785619322.6544561 [INFO] [trajectory_generator_node-14]: process has finished cleanly [pid 13212]
+1785619322.6842330 [INFO] [route_manager_node-13]: process has finished cleanly [pid 13203]
+1785619327.3211708 [ERROR] [run_unity.sh-9]: process[run_unity.sh-9] failed to terminate '5' seconds after receiving 'SIGINT', escalating to 'SIGTERM'
+1785619327.3221138 [INFO] [run_unity.sh-9]: sending signal 'SIGTERM' to process[run_unity.sh-9]
+1785619327.5502524 [INFO] [run_unity.sh-9]: process has finished cleanly [pid 13147]

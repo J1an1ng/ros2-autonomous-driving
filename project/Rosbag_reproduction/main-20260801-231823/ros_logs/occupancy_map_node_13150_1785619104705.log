@@ -1,0 +1,81 @@
+[INFO] [1785619104.856416647] [occupancy_map_node]: Occupancy map node started.
+[INFO] [1785619104.856598420] [occupancy_map_node]: Depth image topics: /OurCar/Sensors/DepthCamera/image_raw, /Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/image_raw
+[INFO] [1785619104.856623171] [occupancy_map_node]: Camera info topics: /OurCar/Sensors/DepthCamera/camera_info, /Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/camera_info
+[INFO] [1785619104.856632177] [occupancy_map_node]: Publishing projected map: /perception/depth/projected_map
+[INFO] [1785619104.856639164] [occupancy_map_node]: Publishing extended map: /perception/extended_map
+[INFO] [1785619107.857260694] [occupancy_map_node]: occupancy diagnostics: depth_images=0, camera_infos=0, published_frames=0, status=waiting for first depth image
+[INFO] [1785619110.856572838] [occupancy_map_node]: occupancy diagnostics: depth_images=0, camera_infos=0, published_frames=0, status=waiting for first depth image
+[INFO] [1785619112.714176738] [occupancy_map_node]: occupancy diagnostics: depth_images=0, camera_infos=1, published_frames=0, status=waiting for first depth image
+[INFO] [1785619115.714164592] [occupancy_map_node]: occupancy diagnostics: depth_images=27, camera_infos=44, published_frames=27, status=published frame: raw_points=5384, obstacle_points=1203
+[INFO] [1785619118.721262966] [occupancy_map_node]: occupancy diagnostics: depth_images=55, camera_infos=85, published_frames=55, status=published frame: raw_points=5921, obstacle_points=1627
+[INFO] [1785619121.719108269] [occupancy_map_node]: occupancy diagnostics: depth_images=87, camera_infos=131, published_frames=87, status=published frame: raw_points=5957, obstacle_points=1657
+[INFO] [1785619124.714162461] [occupancy_map_node]: occupancy diagnostics: depth_images=108, camera_infos=180, published_frames=108, status=published frame: raw_points=4867, obstacle_points=1495
+[INFO] [1785619127.714207046] [occupancy_map_node]: occupancy diagnostics: depth_images=131, camera_infos=212, published_frames=131, status=published frame: raw_points=4042, obstacle_points=1874
+[INFO] [1785619130.714170750] [occupancy_map_node]: occupancy diagnostics: depth_images=147, camera_infos=240, published_frames=147, status=published frame: raw_points=3509, obstacle_points=1738
+[INFO] [1785619133.715794857] [occupancy_map_node]: occupancy diagnostics: depth_images=160, camera_infos=266, published_frames=160, status=published frame: raw_points=7793, obstacle_points=2190
+[INFO] [1785619136.714140799] [occupancy_map_node]: occupancy diagnostics: depth_images=173, camera_infos=288, published_frames=173, status=published frame: raw_points=8665, obstacle_points=3043
+[INFO] [1785619139.714427081] [occupancy_map_node]: occupancy diagnostics: depth_images=192, camera_infos=317, published_frames=192, status=published frame: raw_points=9828, obstacle_points=3404
+[INFO] [1785619142.715463571] [occupancy_map_node]: occupancy diagnostics: depth_images=206, camera_infos=346, published_frames=206, status=published frame: raw_points=11635, obstacle_points=3369
+[INFO] [1785619144.693608552] [occupancy_map_node]: occupancy diagnostics: depth_images=221, camera_infos=373, published_frames=221, status=published frame: raw_points=10817, obstacle_points=2412
+[INFO] [1785619147.693066036] [occupancy_map_node]: occupancy diagnostics: depth_images=236, camera_infos=397, published_frames=236, status=published frame: raw_points=8620, obstacle_points=3517
+[INFO] [1785619150.700042382] [occupancy_map_node]: occupancy diagnostics: depth_images=256, camera_infos=429, published_frames=256, status=published frame: raw_points=6773, obstacle_points=2953
+[INFO] [1785619153.698749400] [occupancy_map_node]: occupancy diagnostics: depth_images=271, camera_infos=457, published_frames=271, status=published frame: raw_points=9873, obstacle_points=3154
+[INFO] [1785619156.695780828] [occupancy_map_node]: occupancy diagnostics: depth_images=291, camera_infos=487, published_frames=291, status=published frame: raw_points=11855, obstacle_points=3546
+[INFO] [1785619159.696248709] [occupancy_map_node]: occupancy diagnostics: depth_images=318, camera_infos=520, published_frames=318, status=published frame: raw_points=10377, obstacle_points=2357
+[INFO] [1785619162.693080950] [occupancy_map_node]: occupancy diagnostics: depth_images=336, camera_infos=553, published_frames=336, status=published frame: raw_points=9323, obstacle_points=3421
+[INFO] [1785619165.693059243] [occupancy_map_node]: occupancy diagnostics: depth_images=360, camera_infos=589, published_frames=360, status=published frame: raw_points=8164, obstacle_points=3449
+[INFO] [1785619168.696113876] [occupancy_map_node]: occupancy diagnostics: depth_images=379, camera_infos=625, published_frames=379, status=published frame: raw_points=6965, obstacle_points=3231
+[INFO] [1785619171.693155504] [occupancy_map_node]: occupancy diagnostics: depth_images=408, camera_infos=661, published_frames=408, status=published frame: raw_points=4857, obstacle_points=2354
+[INFO] [1785619174.693001665] [occupancy_map_node]: occupancy diagnostics: depth_images=432, camera_infos=696, published_frames=432, status=published frame: raw_points=5347, obstacle_points=2522
+[INFO] [1785619176.502083347] [occupancy_map_node]: occupancy diagnostics: depth_images=454, camera_infos=734, published_frames=454, status=published frame: raw_points=5444, obstacle_points=1981
+[INFO] [1785619179.499351262] [occupancy_map_node]: occupancy diagnostics: depth_images=478, camera_infos=772, published_frames=478, status=published frame: raw_points=4863, obstacle_points=1841
+[INFO] [1785619182.499605987] [occupancy_map_node]: occupancy diagnostics: depth_images=508, camera_infos=811, published_frames=508, status=published frame: raw_points=2130, obstacle_points=1082
+[INFO] [1785619185.499333362] [occupancy_map_node]: occupancy diagnostics: depth_images=534, camera_infos=848, published_frames=534, status=published frame: raw_points=3501, obstacle_points=1611
+[INFO] [1785619188.500889402] [occupancy_map_node]: occupancy diagnostics: depth_images=563, camera_infos=892, published_frames=563, status=published frame: raw_points=4516, obstacle_points=1701
+[INFO] [1785619191.499465986] [occupancy_map_node]: occupancy diagnostics: depth_images=579, camera_infos=936, published_frames=579, status=published frame: raw_points=4876, obstacle_points=1651
+[INFO] [1785619194.502056837] [occupancy_map_node]: occupancy diagnostics: depth_images=606, camera_infos=974, published_frames=606, status=published frame: raw_points=4552, obstacle_points=797
+[INFO] [1785619197.500035683] [occupancy_map_node]: occupancy diagnostics: depth_images=618, camera_infos=996, published_frames=618, status=published frame: raw_points=8102, obstacle_points=1981
+[INFO] [1785619200.500939782] [occupancy_map_node]: occupancy diagnostics: depth_images=631, camera_infos=1019, published_frames=631, status=published frame: raw_points=9493, obstacle_points=2825
+[INFO] [1785619203.499385285] [occupancy_map_node]: occupancy diagnostics: depth_images=643, camera_infos=1046, published_frames=643, status=published frame: raw_points=10387, obstacle_points=3040
+[INFO] [1785619205.467675523] [occupancy_map_node]: occupancy diagnostics: depth_images=662, camera_infos=1071, published_frames=662, status=published frame: raw_points=8270, obstacle_points=2830
+[INFO] [1785619208.467630649] [occupancy_map_node]: occupancy diagnostics: depth_images=678, camera_infos=1099, published_frames=678, status=published frame: raw_points=9254, obstacle_points=3433
+[INFO] [1785619211.467689322] [occupancy_map_node]: occupancy diagnostics: depth_images=696, camera_infos=1128, published_frames=696, status=published frame: raw_points=9235, obstacle_points=2481
+[INFO] [1785619214.467696069] [occupancy_map_node]: occupancy diagnostics: depth_images=713, camera_infos=1152, published_frames=713, status=published frame: raw_points=10978, obstacle_points=2463
+[INFO] [1785619217.467628283] [occupancy_map_node]: occupancy diagnostics: depth_images=732, camera_infos=1180, published_frames=732, status=published frame: raw_points=10990, obstacle_points=2480
+[INFO] [1785619220.470171148] [occupancy_map_node]: occupancy diagnostics: depth_images=749, camera_infos=1207, published_frames=749, status=published frame: raw_points=10990, obstacle_points=2480
+[INFO] [1785619223.467603923] [occupancy_map_node]: occupancy diagnostics: depth_images=767, camera_infos=1233, published_frames=767, status=published frame: raw_points=10986, obstacle_points=2380
+[INFO] [1785619226.467639100] [occupancy_map_node]: occupancy diagnostics: depth_images=784, camera_infos=1258, published_frames=784, status=published frame: raw_points=11006, obstacle_points=2167
+[INFO] [1785619229.467605043] [occupancy_map_node]: occupancy diagnostics: depth_images=802, camera_infos=1292, published_frames=802, status=published frame: raw_points=10153, obstacle_points=1735
+[INFO] [1785619232.468549647] [occupancy_map_node]: occupancy diagnostics: depth_images=824, camera_infos=1323, published_frames=824, status=published frame: raw_points=10149, obstacle_points=2674
+[INFO] [1785619235.467554716] [occupancy_map_node]: occupancy diagnostics: depth_images=852, camera_infos=1364, published_frames=852, status=published frame: raw_points=12258, obstacle_points=3150
+[INFO] [1785619238.467567339] [occupancy_map_node]: occupancy diagnostics: depth_images=876, camera_infos=1409, published_frames=876, status=published frame: raw_points=11021, obstacle_points=2921
+[INFO] [1785619241.467550514] [occupancy_map_node]: occupancy diagnostics: depth_images=906, camera_infos=1455, published_frames=906, status=published frame: raw_points=10912, obstacle_points=2566
+[INFO] [1785619244.467556142] [occupancy_map_node]: occupancy diagnostics: depth_images=942, camera_infos=1506, published_frames=942, status=published frame: raw_points=9990, obstacle_points=3645
+[INFO] [1785619247.467574544] [occupancy_map_node]: occupancy diagnostics: depth_images=961, camera_infos=1540, published_frames=961, status=published frame: raw_points=8963, obstacle_points=3483
+[INFO] [1785619250.471709450] [occupancy_map_node]: occupancy diagnostics: depth_images=980, camera_infos=1570, published_frames=980, status=published frame: raw_points=6810, obstacle_points=3070
+[INFO] [1785619252.078366519] [occupancy_map_node]: occupancy diagnostics: depth_images=1004, camera_infos=1603, published_frames=1004, status=published frame: raw_points=7772, obstacle_points=2807
+[INFO] [1785619255.080932678] [occupancy_map_node]: occupancy diagnostics: depth_images=1024, camera_infos=1634, published_frames=1024, status=published frame: raw_points=8202, obstacle_points=3070
+[INFO] [1785619258.078328405] [occupancy_map_node]: occupancy diagnostics: depth_images=1047, camera_infos=1670, published_frames=1047, status=published frame: raw_points=9883, obstacle_points=3243
+[INFO] [1785619261.078985267] [occupancy_map_node]: occupancy diagnostics: depth_images=1069, camera_infos=1705, published_frames=1069, status=published frame: raw_points=12268, obstacle_points=3787
+[INFO] [1785619264.078350425] [occupancy_map_node]: occupancy diagnostics: depth_images=1089, camera_infos=1736, published_frames=1089, status=published frame: raw_points=12178, obstacle_points=3834
+[INFO] [1785619267.087451002] [occupancy_map_node]: occupancy diagnostics: depth_images=1109, camera_infos=1771, published_frames=1109, status=published frame: raw_points=11546, obstacle_points=2470
+[INFO] [1785619270.079976862] [occupancy_map_node]: occupancy diagnostics: depth_images=1132, camera_infos=1808, published_frames=1132, status=published frame: raw_points=9971, obstacle_points=2003
+[INFO] [1785619273.078743871] [occupancy_map_node]: occupancy diagnostics: depth_images=1157, camera_infos=1840, published_frames=1157, status=published frame: raw_points=10689, obstacle_points=3007
+[INFO] [1785619276.078968938] [occupancy_map_node]: occupancy diagnostics: depth_images=1176, camera_infos=1871, published_frames=1176, status=published frame: raw_points=8824, obstacle_points=2608
+[INFO] [1785619279.081166990] [occupancy_map_node]: occupancy diagnostics: depth_images=1205, camera_infos=1907, published_frames=1205, status=published frame: raw_points=8613, obstacle_points=2509
+[INFO] [1785619282.078631570] [occupancy_map_node]: occupancy diagnostics: depth_images=1223, camera_infos=1939, published_frames=1223, status=published frame: raw_points=9023, obstacle_points=1988
+[INFO] [1785619284.172125485] [occupancy_map_node]: occupancy diagnostics: depth_images=1249, camera_infos=1976, published_frames=1249, status=published frame: raw_points=5132, obstacle_points=2295
+[INFO] [1785619287.174190589] [occupancy_map_node]: occupancy diagnostics: depth_images=1269, camera_infos=2012, published_frames=1269, status=published frame: raw_points=9751, obstacle_points=3230
+[INFO] [1785619290.171318327] [occupancy_map_node]: occupancy diagnostics: depth_images=1294, camera_infos=2048, published_frames=1294, status=published frame: raw_points=7506, obstacle_points=2762
+[INFO] [1785619293.174105841] [occupancy_map_node]: occupancy diagnostics: depth_images=1319, camera_infos=2083, published_frames=1319, status=published frame: raw_points=8060, obstacle_points=2940
+[INFO] [1785619296.171693470] [occupancy_map_node]: occupancy diagnostics: depth_images=1347, camera_infos=2121, published_frames=1347, status=published frame: raw_points=8838, obstacle_points=2898
+[INFO] [1785619299.171384502] [occupancy_map_node]: occupancy diagnostics: depth_images=1371, camera_infos=2159, published_frames=1371, status=published frame: raw_points=5751, obstacle_points=1591
+[INFO] [1785619302.177009266] [occupancy_map_node]: occupancy diagnostics: depth_images=1396, camera_infos=2199, published_frames=1396, status=published frame: raw_points=4618, obstacle_points=1364
+[INFO] [1785619305.178886052] [occupancy_map_node]: occupancy diagnostics: depth_images=1426, camera_infos=2244, published_frames=1426, status=published frame: raw_points=5190, obstacle_points=1258
+[INFO] [1785619308.171482157] [occupancy_map_node]: occupancy diagnostics: depth_images=1454, camera_infos=2287, published_frames=1454, status=published frame: raw_points=5153, obstacle_points=1352
+[INFO] [1785619311.172510283] [occupancy_map_node]: occupancy diagnostics: depth_images=1478, camera_infos=2328, published_frames=1478, status=published frame: raw_points=5153, obstacle_points=1352
+[INFO] [1785619314.171267821] [occupancy_map_node]: occupancy diagnostics: depth_images=1502, camera_infos=2370, published_frames=1502, status=published frame: raw_points=5157, obstacle_points=1355
+[INFO] [1785619316.228106127] [occupancy_map_node]: occupancy diagnostics: depth_images=1526, camera_infos=2413, published_frames=1526, status=published frame: raw_points=7696, obstacle_points=1071
+[INFO] [1785619319.227597565] [occupancy_map_node]: occupancy diagnostics: depth_images=1554, camera_infos=2457, published_frames=1554, status=published frame: raw_points=9385, obstacle_points=2077
+[INFO] [1785619322.231938622] [occupancy_map_node]: occupancy diagnostics: depth_images=1583, camera_infos=2503, published_frames=1583, status=published frame: raw_points=5996, obstacle_points=1150
+[INFO] [1785619322.232068680] [rclcpp]: signal_handler(SIGINT/SIGTERM)

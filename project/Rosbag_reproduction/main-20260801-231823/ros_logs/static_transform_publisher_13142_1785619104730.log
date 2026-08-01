@@ -1,0 +1,6 @@
+[WARN] [1785619104.730917050] []: Old-style arguments are deprecated; see --help for new-style arguments
+[INFO] [1785619104.902564153] [tf_nominal_center]: Spinning until stopped - publishing transform
+translation: ('0.000000', '0.000000', '-0.718012')
+rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+from 'OurCar/INS' to 'OurCar/Center'
+[INFO] [1785619322.235054817] [rclcpp]: signal_handler(SIGINT/SIGTERM)

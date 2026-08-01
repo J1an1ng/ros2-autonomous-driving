@@ -1,0 +1,74 @@
+[INFO] [1785619106.392514549] [route_manager_node]: Route Manager started.
+[INFO] [1785619106.393275758] [route_manager_node]: Loaded 64 waypoints.
+[INFO] [1785619106.393826327] [route_manager_node]: map_frame: world
+[INFO] [1785619106.394454217] [route_manager_node]: vehicle_frame: OurCar/INS
+[INFO] [1785619106.395445251] [route_manager_node]: local_path_size: 5
+[INFO] [1785619106.396276151] [route_manager_node]: initial_waypoint_index: 0
+[WARN] [1785619106.469735076] [route_manager_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1785619108.470597493] [route_manager_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1785619110.568872102] [route_manager_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[INFO] [1785619110.769105274] [route_manager_node]: Waypoint 0 reached; switching to waypoint index 1
+[INFO] [1785619121.871282751] [route_manager_node]: Waypoint 1 reached; switching to waypoint index 2
+[INFO] [1785619124.871771608] [route_manager_node]: Waypoint 2 reached; switching to waypoint index 3
+[INFO] [1785619128.969668062] [route_manager_node]: Waypoint 3 reached; switching to waypoint index 4
+[INFO] [1785619130.769748329] [route_manager_node]: Waypoint 4 reached; switching to waypoint index 5
+[INFO] [1785619134.270449881] [route_manager_node]: Waypoint 5 reached; switching to waypoint index 6
+[INFO] [1785619135.173463848] [route_manager_node]: Waypoint 6 reached; switching to waypoint index 7
+[INFO] [1785619135.669318432] [route_manager_node]: Waypoint 7 reached; switching to waypoint index 8
+[INFO] [1785619138.369639180] [route_manager_node]: Waypoint 8 reached; switching to waypoint index 9
+[INFO] [1785619143.169304357] [route_manager_node]: Waypoint 9 reached; switching to waypoint index 10
+[INFO] [1785619144.569611672] [route_manager_node]: Waypoint 10 reached; switching to waypoint index 11
+[INFO] [1785619145.868971887] [route_manager_node]: Waypoint 11 reached; switching to waypoint index 12
+[INFO] [1785619148.369015287] [route_manager_node]: Waypoint 12 reached; switching to waypoint index 13
+[INFO] [1785619152.075898253] [route_manager_node]: Waypoint 13 reached; switching to waypoint index 14
+[INFO] [1785619155.769314645] [route_manager_node]: Waypoint 14 reached; switching to waypoint index 15
+[INFO] [1785619155.870302333] [route_manager_node]: Waypoint 15 reached; switching to waypoint index 16
+[INFO] [1785619155.969117254] [route_manager_node]: Waypoint 16 reached; switching to waypoint index 17
+[INFO] [1785619158.469559032] [route_manager_node]: Waypoint 17 reached; switching to waypoint index 18
+[INFO] [1785619160.370620986] [route_manager_node]: Waypoint 18 reached; switching to waypoint index 19
+[INFO] [1785619163.569644417] [route_manager_node]: Waypoint 19 reached; switching to waypoint index 20
+[INFO] [1785619173.074385421] [route_manager_node]: Waypoint 20 reached; switching to waypoint index 21
+[INFO] [1785619174.869406721] [route_manager_node]: Waypoint 21 reached; switching to waypoint index 22
+[INFO] [1785619178.169841156] [route_manager_node]: Waypoint 22 reached; switching to waypoint index 23
+[INFO] [1785619181.970074744] [route_manager_node]: Waypoint 23 reached; switching to waypoint index 24
+[INFO] [1785619185.469021330] [route_manager_node]: Waypoint 24 reached; switching to waypoint index 25
+[INFO] [1785619189.971772368] [route_manager_node]: Waypoint 25 reached; switching to waypoint index 26
+[INFO] [1785619191.968912537] [route_manager_node]: Waypoint 26 reached; switching to waypoint index 27
+[INFO] [1785619193.469656442] [route_manager_node]: Waypoint 27 reached; switching to waypoint index 28
+[INFO] [1785619194.178850150] [route_manager_node]: Waypoint 28 reached; switching to waypoint index 29
+[INFO] [1785619194.969365706] [route_manager_node]: Waypoint 29 reached; switching to waypoint index 30
+[INFO] [1785619198.468683615] [route_manager_node]: Waypoint 30 reached; switching to waypoint index 31
+[INFO] [1785619203.071339825] [route_manager_node]: Waypoint 31 reached; switching to waypoint index 32
+[INFO] [1785619213.268983974] [route_manager_node]: Waypoint 32 reached; switching to waypoint index 33
+[INFO] [1785619226.968998697] [route_manager_node]: Waypoint 33 reached; switching to waypoint index 34
+[INFO] [1785619228.678777145] [route_manager_node]: Waypoint 34 reached; switching to waypoint index 35
+[INFO] [1785619231.283463018] [route_manager_node]: Waypoint 35 reached; switching to waypoint index 36
+[INFO] [1785619236.670027732] [route_manager_node]: Waypoint 36 reached; switching to waypoint index 37
+[INFO] [1785619237.969063450] [route_manager_node]: Waypoint 37 reached; switching to waypoint index 38
+[INFO] [1785619239.169199254] [route_manager_node]: Waypoint 38 reached; switching to waypoint index 39
+[INFO] [1785619241.670293177] [route_manager_node]: Waypoint 39 reached; switching to waypoint index 40
+[INFO] [1785619244.271253971] [route_manager_node]: Waypoint 40 reached; switching to waypoint index 41
+[INFO] [1785619244.369460307] [route_manager_node]: Waypoint 41 reached; switching to waypoint index 42
+[INFO] [1785619245.473437606] [route_manager_node]: Waypoint 42 reached; switching to waypoint index 43
+[INFO] [1785619247.776189665] [route_manager_node]: Waypoint 43 reached; switching to waypoint index 44
+[INFO] [1785619248.669268880] [route_manager_node]: Waypoint 44 reached; switching to waypoint index 45
+[INFO] [1785619251.270617511] [route_manager_node]: Waypoint 45 reached; switching to waypoint index 46
+[INFO] [1785619256.268810438] [route_manager_node]: Waypoint 46 reached; switching to waypoint index 47
+[INFO] [1785619263.469070668] [route_manager_node]: Waypoint 47 reached; switching to waypoint index 48
+[INFO] [1785619269.569139396] [route_manager_node]: Waypoint 48 reached; switching to waypoint index 49
+[INFO] [1785619270.169857885] [route_manager_node]: Waypoint 49 reached; switching to waypoint index 50
+[INFO] [1785619271.470154049] [route_manager_node]: Waypoint 50 reached; switching to waypoint index 51
+[INFO] [1785619274.068884409] [route_manager_node]: Waypoint 51 reached; switching to waypoint index 52
+[INFO] [1785619280.268739694] [route_manager_node]: Waypoint 52 reached; switching to waypoint index 53
+[INFO] [1785619282.268741551] [route_manager_node]: Waypoint 53 reached; switching to waypoint index 54
+[INFO] [1785619283.269361945] [route_manager_node]: Waypoint 54 reached; switching to waypoint index 55
+[INFO] [1785619284.370126545] [route_manager_node]: Waypoint 55 reached; switching to waypoint index 56
+[INFO] [1785619286.969525712] [route_manager_node]: Waypoint 56 reached; switching to waypoint index 57
+[INFO] [1785619292.169113089] [route_manager_node]: Waypoint 57 reached; switching to waypoint index 58
+[INFO] [1785619294.169107320] [route_manager_node]: Waypoint 58 reached; switching to waypoint index 59
+[INFO] [1785619304.768818222] [route_manager_node]: Waypoint 59 reached; switching to waypoint index 60
+[INFO] [1785619315.869667723] [route_manager_node]: Waypoint 60 reached; switching to waypoint index 61
+[INFO] [1785619318.068791800] [route_manager_node]: Waypoint 61 reached; switching to waypoint index 62
+[INFO] [1785619318.270482244] [route_manager_node]: Waypoint 62 reached; switching to waypoint index 63
+[INFO] [1785619321.069109420] [route_manager_node]: Route completed at waypoint 63
+[INFO] [1785619322.239674656] [route_manager_node]: Route Manager stopped.

@@ -134,16 +134,16 @@ rosdep update
 If `rosdep init` reports that its sources already exist, do not run it again; use only
 `rosdep update`.
 
-## Get the latest project release
+## Get the latest project version
 
 ### New clone
 
 The repository is hosted on LRZ GitLab. After adding your SSH key and obtaining course
-repository access, clone the release directly:
+repository access, clone the current `main` branch:
 
 ```bash
 git lfs install
-git clone --branch release/full-system-v1.9.0 --single-branch \
+git clone --branch main --single-branch \
   git@gitlab.lrz.de:00000000014c3605/i2ros-project-ss26-team20.git \
   introduction-to-ros-2026
 cd introduction-to-ros-2026
@@ -156,12 +156,12 @@ From the repository root:
 
 ```bash
 git fetch origin
-git switch release/full-system-v1.9.0
-git pull --ff-only origin release/full-system-v1.9.0
+git switch main
+git pull --ff-only origin main
 git lfs pull
 ```
 
-Do not copy individual packages into another branch: the release contains matching
+Do not copy individual packages into another branch: `main` contains matching
 interfaces, parameters, route data, model files, simulator configuration, and launch
 files that must be used together.
 
@@ -210,19 +210,13 @@ integration:
 cd project
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-bash tools/check_code_quality.sh
 colcon test
 colcon test-result --verbose
 ```
 
-The final command must report zero failures and zero errors. The code-quality command
-checks Team 20 Python and C++ code, the simulator launch/test Python, and the simulator
-bridge C++. The project-supplied `dummy_controller` and vendored third-party sources are
-excluded; simulator C++ is checked with documented copyright/include-path exemptions.
-
-Acceptance requires all nine packages to build, the quality gate to report no findings,
-and the complete test suite to report zero errors and zero failures. The latest retained
-result is shown separately below as an example.
+The final command must report zero failures and zero errors. Acceptance requires all
+nine packages to build and the complete test suite to pass. The latest retained result
+is shown separately below as an example.
 
 ## Run the complete system
 
@@ -281,9 +275,10 @@ Route completed at waypoint 63
 At the endpoint, the decision and controller layers command a safe stop. The runner then
 stops recording and the launch, validates the completed bag, and atomically replaces
 `mission_results/`. A failed, interrupted, or audit-failing run keeps the previous valid
-result. Raw bags and logs are retained under the Git-ignored `validation_evidence/`
-directory. Direct `ros2 launch` remains useful for diagnostics, but does not publish a
-mission report automatically.
+result. Ordinary raw bags and logs remain under the Git-ignored `validation_evidence/`
+directory; the latest complete-test evidence has been promoted to `Rosbag_reproduction/`
+for reproducibility. Direct `ros2 launch` remains useful for diagnostics, but does not
+publish a mission report automatically.
 
 ### Latest complete-test example
 
@@ -291,30 +286,34 @@ This subsection records one retained validation run. It demonstrates that the ac
 procedure has been completed, but its timing, message counts, obstacle distances, and
 state counts are measurements from that run rather than fixed project guarantees.
 
-The trajectory-planning validation on 2026-08-01 completed waypoint 0 through 63. Mission
-time was **211.065 s**, measured from the first forward `/car_command` (`throttle > 0.01`,
+The current-`main` validation on 2026-08-01 completed waypoint 0 through 63. Mission time
+was **210.231 s**, measured from the first forward `/car_command` (`throttle > 0.01`,
 `brake < 0.01`) to the first `route_complete`; the first-measured-motion cross-check was
-210.925 s. The audit checked 68,355 points in 2,123 `/planning/trajectory` messages and
-found no invalid values or non-monotonic timestamps. Maximum curvature was 0.215946 1/m
+210.051 s. The audit checked 70,008 points in 2,115 `/planning/trajectory` messages and
+found no invalid values or non-monotonic timestamps. Maximum curvature was 0.217622 1/m
 against the steering-derived 0.217704 1/m limit. Observed maxima were 3.0000 m/s² lateral
-acceleration, 2.0003 m/s² longitudinal acceleration, and 3.0000 m/s² deceleration, within
+acceleration, 2.0008 m/s² longitudinal acceleration, and 3.0000 m/s² deceleration, within
 the configured limits plus the documented numerical tolerances. Plots and
 machine-readable data are in
 [`../mission_results/`](../mission_results/README.md).
 
-The route-stage audit additionally found 2,098 nonempty messages out of 2,112 before
-completion (0.66% empty; longest continuous empty interval 0.902 s; maximum message gap
-0.162 s), within the documented 5% / 10 s / 1.05 s availability gates. Of 105 runtime
-path rejections, 104 were classified as `path exceeds the curvature limit` and one as
-`path has fewer than two points`; each straight target-pose fallback was subjected to
-the same feasibility checks before publication. The bag also recorded 1,459 UInt8
-traffic-light messages (1,170 unknown, 196 red, 7 yellow, and 86 green), so the generated
+The route-stage audit additionally found 2,096 nonempty messages out of 2,103 before
+completion (0.33% empty; longest continuous empty interval 0.596 s; maximum message gap
+0.192 s), within the documented 5% / 10 s / 1.05 s availability gates. All 102 runtime
+path rejections were classified as `path exceeds the curvature limit`; each straight
+target-pose fallback was subjected to the same feasibility checks before publication.
+The bag also recorded 1,386 UInt8 traffic-light messages (1,085 unknown, 194 red, 7 yellow,
+and 100 green), so the generated
 traffic-light plot contains an actual state trace.
 
 In Event1, adaptive following stayed continuous: measured speed remained at or above
-2.536 m/s and the decision target at or above 2.949 m/s, with no near-zero samples. Event2
-reached a minimum measured obstacle distance of 7.535 m without collision, emergency
+1.967 m/s and the decision target at or above 1.933 m/s, with no near-zero samples. Event2
+reached a minimum measured obstacle distance of 7.502 m without collision, emergency
 braking, or merge slowdown.
+
+The raw MCAP bag and ROS logs are retained under
+[`../Rosbag_reproduction/main-20260801-231823/`](../Rosbag_reproduction/README.md), including
+the SHA-256 and exact report-reproduction command.
 
 ## Validate a live run
 

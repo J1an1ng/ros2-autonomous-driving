@@ -35,10 +35,9 @@ Improvements:
 - Resolves the `route_manager` flake8 and PEP 257 findings, simplifies the
   route-manager node structure, reformats the waypoint recorder, strengthens
   route-map validation, and adds regression coverage for malformed route data.
-- Introduces a shared repository style through `.editorconfig`,
-  `project/CODE_STYLE.md`, and `project/tools/check_code_quality.sh`. The gate
-  checks Team 20 Python and C++ plus the maintained simulator bridge while
-  preserving documented simulator exemptions.
+- Introduces a shared repository style through `.editorconfig` and
+  `project/CODE_STYLE.md`. Release validation checked Team 20 Python and C++ plus the
+  maintained simulator bridge while preserving documented simulator exemptions.
 - Applies consistent naming, imports, formatting, and documentation across
   perception, route management, trajectory generation, decision making,
   controller, simulation launch code, system bringup, tests, and project tools.

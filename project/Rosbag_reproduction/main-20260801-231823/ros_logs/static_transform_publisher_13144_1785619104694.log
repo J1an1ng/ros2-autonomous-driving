@@ -1,0 +1,6 @@
+[WARN] [1785619104.694634706] []: Old-style arguments are deprecated; see --help for new-style arguments
+[INFO] [1785619104.808208891] [tf_depth_camera]: Spinning until stopped - publishing transform
+translation: ('0.000000', '0.000000', '0.000000')
+rotation: ('0.500000', '-0.500000', '0.500000', '-0.500000')
+from 'OurCar/Sensors/SensorBase' to 'OurCar/Sensors/DepthCamera'
+[INFO] [1785619322.231162610] [rclcpp]: signal_handler(SIGINT/SIGTERM)

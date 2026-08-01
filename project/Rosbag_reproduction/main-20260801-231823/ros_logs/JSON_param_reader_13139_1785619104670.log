@@ -1,0 +1,2 @@
+[INFO] [1785619104.730460605] [JSON_param_reader]: Read control message Tx address: 127.0.0.1, port: 6657
+[INFO] [1785619104.730593246] [JSON_param_reader]: Read sensor message Rx address: 127.0.0.1, port: 9998

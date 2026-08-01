@@ -233,18 +233,18 @@ ros2 run trajectory_generator trajectory_generator_node
 
 ## Validation Evidence
 
-The 2026-08-01 waypoint 0--63 Unity run audited 73,566 points from 2,119
-`/planning/trajectory` messages. Maximum absolute curvature was 0.212908 1/m against the
+The latest 2026-08-01 waypoint 0--63 Unity run audited 70,008 points from 2,115
+`/planning/trajectory` messages. Maximum absolute curvature was 0.217622 1/m against the
 steering-derived 0.217704 1/m limit. Maximum observed lateral acceleration,
 longitudinal acceleration, and longitudinal deceleration were respectively 3.0000,
-2.0009, and 3.0000 m/s². Before route completion, 2,098 of 2,108 trajectory
-publications were nonempty; the 0.47% empty fraction, 0.802 s longest continuous empty
-interval, and 0.167 s maximum message gap passed the documented 5% / 10 s / 1.05 s
-availability gates. All 98 runtime local
+2.0008, and 3.0000 m/s². Before route completion, 2,096 of 2,103 trajectory
+publications were nonempty; the 0.33% empty fraction, 0.596 s longest continuous empty
+interval, and 0.192 s maximum message gap passed the documented 5% / 10 s / 1.05 s
+availability gates. All 102 runtime local
 path rejections were classified as curvature-gate rejections. Each used the straight
 target-pose fallback, which was rechecked against the same feasibility rules before
 publication; an invalid fallback would instead trigger controller safe stop.
-The 0.0009 m/s² acceleration excess is within the documented float/chord numerical
+The 0.0008 m/s² acceleration excess is within the documented float/chord numerical
 tolerance; all timestamps were strictly increasing and all values were finite. See
 [`../../mission_results/README.md`](../../mission_results/README.md) for mission time,
 plots, and machine-readable metrics.

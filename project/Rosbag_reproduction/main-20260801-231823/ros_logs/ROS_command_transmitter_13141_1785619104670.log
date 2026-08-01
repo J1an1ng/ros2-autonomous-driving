@@ -1,0 +1,3 @@
+[INFO] [1785619104.793834945] [ROS_Unity_command_Tx]: Starting command transmit to Unity via UDP 127.0.0.1:6657
+[INFO] [1785619104.794005380] [ROS_Unity_command_Tx]: Listening to command topic: car_command
+[INFO] [1785619322.233348903] [rclcpp]: signal_handler(SIGINT/SIGTERM)

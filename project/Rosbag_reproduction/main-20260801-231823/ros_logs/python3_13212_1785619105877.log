@@ -1,0 +1,59 @@
+[INFO] [1785619106.411441816] [trajectory_generator_node]: Trajectory Generator started.
+[INFO] [1785619106.412396179] [trajectory_generator_node]: map_frame: world
+[INFO] [1785619106.413287408] [trajectory_generator_node]: vehicle_frame: OurCar/INS
+[WARN] [1785619106.487915766] [trajectory_generator_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1785619108.587527155] [trajectory_generator_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1785619110.687300358] [trajectory_generator_node]: TF not available: "world" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1785619123.901349939] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619127.789035130] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619184.789294742] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619186.789792605] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619188.791906781] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619190.792128083] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619192.804393490] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619194.907188064] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619198.489990908] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619200.494182325] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619202.496019769] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619204.503482294] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619206.605200692] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619208.697974237] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619210.791570924] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619212.792864879] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619214.806899981] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619216.889600651] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619218.894217838] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619220.993482934] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619222.998762086] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619225.090300862] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619227.098393173] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619229.990125321] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619236.693480827] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619238.790764380] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619240.791714184] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619242.798543560] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619251.312921849] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619253.390560976] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619255.490456262] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619257.596342988] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619259.689933193] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619261.692784146] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619263.791387004] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619265.889467930] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619267.989483474] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619270.090938166] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619272.113022473] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619274.202386748] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619276.290353759] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619278.388531537] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619280.389031617] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619282.419043598] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619304.790622922] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619306.791491554] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619308.888604712] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619310.890014085] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619312.899502131] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619314.993197126] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619317.091179152] [trajectory_generator_node]: local path rejected (path exceeds the curvature limit); using target-pose fallback
+[WARN] [1785619321.089012101] [trajectory_generator_node]: dynamic profile infeasible (insufficient braking distance: initial speed 4.164 m/s exceeds the first-point cap 0.000 m/s); commanding safe stop
+[INFO] [1785619322.230142514] [trajectory_generator_node]: Trajectory Generator stopped.

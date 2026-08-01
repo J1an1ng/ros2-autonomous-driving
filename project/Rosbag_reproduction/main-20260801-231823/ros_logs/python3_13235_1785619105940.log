@@ -1,0 +1,1 @@
+[INFO] [1785619106.455203047] [obstacle_monitor_node]: Obstacle monitor started; path cloud=/perception/pcl/points_preprocessed safety cloud=/perception/pcl/points vehicle frame=OurCar/INS

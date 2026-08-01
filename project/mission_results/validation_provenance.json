@@ -1,17 +1,18 @@
 {
   "validation_date": "2026-08-01",
-  "started_at": "2026-08-01T21:32:52.857625+02:00",
-  "finished_at": "2026-08-01T21:36:41.808033+02:00",
+  "started_at": "2026-08-01T23:18:23.104121+02:00",
+  "finished_at": "2026-08-01T23:22:07.932986+02:00",
   "launch_command": "ros2 launch system_bringup full_system.launch.py route_initial_waypoint_index:=0 enable_motion:=true enable_visualization:=true",
-  "source_branch": "release/full-system-v1.9.0",
-  "source_commit": "1719b8e92874a87c06a0af2495247c0129d0ae59",
+  "source_branch": "main",
+  "source_commit": "40b1ecc6150752e022f67385f9812de72badbbb8",
   "working_tree_dirty": true,
   "unity_renderer": "D3D12 (NVIDIA GeForce RTX 4060 Laptop GPU)",
   "raw_evidence": {
-    "bag_path": "/home/jianing/i2ros/introduction-to-ros-2026/project/validation_evidence/mission-20260801-213252/bag",
-    "logs_path": "/home/jianing/i2ros/introduction-to-ros-2026/project/validation_evidence/mission-20260801-213252/ros_logs",
-    "git_ignored": true
+    "bag_path": "Rosbag_reproduction/main-20260801-231823/bag",
+    "logs_path": "Rosbag_reproduction/main-20260801-231823/ros_logs",
+    "bag_sha256": "fdb33ded0eb9acdf3e44456431f34b26608f09bc922732658b72ed68c346d89f",
+    "git_ignored": false
   },
-  "mission_time_s": 211.065,
+  "mission_time_s": 210.231,
   "route_complete": true
 }

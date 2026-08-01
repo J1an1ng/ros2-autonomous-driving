@@ -69,7 +69,7 @@ The full component-by-component ownership and design rationale are documented in
 
 ## Quick start
 
-After checking out `release/full-system-v1.9.0` and installing ROS 2 Jazzy:
+After cloning the repository's `main` branch and installing ROS 2 Jazzy:
 
 ```bash
 cd project
@@ -78,18 +78,25 @@ source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 source install/setup.bash
-ros2 launch system_bringup full_system.launch.py enable_motion:=false
+ros2 launch system_bringup full_system.launch.py enable_motion:=true
 ```
 
-The command above starts the complete stack in safe mode. After confirming that Unity,
-TF, sensor topics, perception, planning, and decision making are ready, start a full drive
-from waypoint 0 with:
+The command above starts the complete stack and immediately permits the production
+controller to drive. Use it for a normal interactive run when no retained validation
+record is required.
+
+If figures, metrics, rosbag data, and ROS logs are required, do not leave the moving
+launch above running. First change `enable_motion:=true` to `enable_motion:=false` for an
+optional readiness check, confirm that Unity, TF, sensors, perception, planning, and
+decision making are ready, and stop that launch with `Ctrl+C`. Then run the mission from
+waypoint 0 with:
 
 ```bash
 python3 tools/run_full_mission.py --visualization
 ```
 
-This is the standard moving-run entry point. It launches the production stack,
+The runner enables motion itself; do not run it at the same time as the direct launch
+above. It launches the production stack,
 records the required topics and logs, waits for `route_complete`, audits the
 trajectory, and atomically replaces `mission_results/` with figures and metrics
 from that run. A failed or interrupted run preserves the previous valid result.
@@ -99,8 +106,8 @@ exactly one publisher.
 
 ## Validation requirements
 
-A release is accepted only after the code-quality gate and complete ROS 2 test suite
-pass, all nine packages build, and the production stack completes waypoint 0--63 in
+A release is accepted only after the complete ROS 2 test suite passes, all nine packages
+build, and the production stack completes waypoint 0--63 in
 Unity. The full run must record mission time, scenario-state evidence, trajectory
 availability and dynamic constraints, traffic-light observations, and runtime logs.
 
@@ -119,11 +126,11 @@ i7-13700H, with 8 logical processors and approximately 12 GiB of memory availabl
 WSL2. Unity used the hardware-accelerated D3D12 renderer on an NVIDIA GeForce RTX 4060
 Laptop GPU.
 
-The recorded 2026-08-01 production run completed waypoint 0--63 in **211.065 s** from the
-first forward control command to `route_complete`. Its 68,355 serialized trajectory
+The recorded 2026-08-01 production run completed waypoint 0--63 in **210.231 s** from the
+first forward control command to `route_complete`. Its 70,008 serialized trajectory
 points passed the steering-derived curvature and lateral/longitudinal acceleration
-constraints. Event1 remained in continuous following motion at or above 2.536 m/s rather
+constraints. Event1 remained in continuous following motion at or above 1.967 m/s rather
 than stopping and restarting. The route-stage availability audit also required nonempty
 trajectory evidence and bounded empty-publication fraction/duration; see the results linked
 above for the exact timing definition, traffic-light record, fallback classification,
-and teardown evidence.
+teardown evidence, and the retained rosbag location.

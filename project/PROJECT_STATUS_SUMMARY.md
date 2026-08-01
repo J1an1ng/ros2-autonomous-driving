@@ -308,8 +308,7 @@ trajectory message and connecting it to the controller-facing interface:
 - fixed `route_manager` flake8 and PEP 257 issues and added malformed-route tests;
 - added the root `.editorconfig` and `project/CODE_STYLE.md` to align readability rules
   across Python, C++, launch files, tests, and tools;
-- added `project/tools/check_code_quality.sh` as one gate for Python flake8/PEP 257 and
-  C++ cpplint/uncrustify;
+- applied Python flake8/PEP 257 and C++ cpplint/uncrustify during release validation;
 - kept the course-supplied `dummy_controller` at the v1.8.0 baseline and outside Team 20
   style modifications;
 - protected vendored ONNX Runtime, the JSON header, and other third-party content from
@@ -357,7 +356,6 @@ requirements-yolo-training.txt
 # v1.9.0 code quality and project-level documentation
 ../.editorconfig
 CODE_STYLE.md
-tools/check_code_quality.sh
 tools/analyze_mission_run.py
 docs/ros_graph.svg
 mission_results/README.md
@@ -611,7 +609,6 @@ system contract and are therefore not repeated in this architecture summary.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-bash tools/check_code_quality.sh
 colcon build --symlink-install
 source install/setup.bash
 colcon test
@@ -703,25 +700,26 @@ further reduction by decision making for traffic lights or obstacles. The figure
 
 ## 10. Latest Complete-Test Example
 
-The following v1.9.0 measurements come from the retained 2026-08-01 production run.
-They show one successful application of the acceptance criteria; they are not fixed
+The following current-`main` measurements come from the retained 2026-08-01 production
+run. They show one successful application of the acceptance criteria; they are not fixed
 thresholds or guaranteed outputs for every simulator execution.
 
-- All nine packages built, the quality gate passed, and the complete suite reported
-  216 tests with 0 errors, 0 failures, and 1 expected skip.
+- All nine packages built, and the complete suite reported 216 tests with 0 errors,
+  0 failures, and 1 expected skip.
 - The production route reached waypoint 63 and published `route_complete`; mission time
-  was 211.065 s by the first-forward-command definition and 210.925 s from first motion.
-- Event1 stayed above 2.536 m/s while following, with zero near-stop samples. Event2's
-  minimum obstacle distance was 7.535 m, with no emergency-braking or merge-slowdown entry.
-- Stop/release behaviour was recorded at waypoints 25, 32, and 59; waypoint 52 did not
-  require a stop in this signal cycle.
-- The audit checked 68,355 points in 2,123 trajectory messages. Configured curvature and
+  was 210.231 s by the first-forward-command definition and 210.051 s from first motion.
+- Event1 stayed above 1.967 m/s while following, with zero near-stop samples. Event2's
+  minimum obstacle distance was 7.502 m, with no emergency-braking or merge-slowdown entry.
+- Stop/release behaviour was recorded at waypoints 25, 32, 52, and 59.
+- The audit checked 70,008 points in 2,115 trajectory messages. Configured curvature and
   acceleration limits passed with zero non-monotonic time pairs and zero invalid values.
-- Of 2,112 route-stage trajectory messages, 2,098 were nonempty. The empty fraction was
-  0.66%, the longest empty interval 0.902 s, and the maximum topic gap 0.162 s.
-- There were 105 classified path rejections: 104 curvature-gate events and one path with
-  fewer than two points. Revalidated fallback behavior kept the output fail-safe.
-- The bag contained 1,459 UInt8 traffic-light observations. No collision, route departure,
+- Of 2,103 route-stage trajectory messages, 2,096 were nonempty. The empty fraction was
+  0.33%, the longest empty interval 0.596 s, and the maximum topic gap 0.192 s.
+- All 102 classified path rejections were curvature-gate events. Revalidated fallback
+  behavior kept the output fail-safe.
+- The bag contained 1,386 UInt8 traffic-light observations. No collision, route departure,
   autonomy-node runtime error, or pre-completion process death was found.
 
-The complete machine-readable evidence and figures are in `mission_results/`.
+The complete machine-readable evidence and figures are in `mission_results/`. The raw bag
+and logs, their hashes, and the reproduction command are in
+`Rosbag_reproduction/main-20260801-231823/`.

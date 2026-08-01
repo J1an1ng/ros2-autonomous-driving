@@ -1,0 +1,6 @@
+[WARN] [1785619104.700832510] []: Old-style arguments are deprecated; see --help for new-style arguments
+[INFO] [1785619104.834447912] [tf_sensors]: Spinning until stopped - publishing transform
+translation: ('0.820000', '0.000000', '1.269000')
+rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+from 'OurCar/Center' to 'OurCar/Sensors/SensorBase'
+[INFO] [1785619322.232141679] [rclcpp]: signal_handler(SIGINT/SIGTERM)

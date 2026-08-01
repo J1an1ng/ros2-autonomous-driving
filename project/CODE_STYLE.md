@@ -59,7 +59,6 @@ public-header layout are documented.
 From `project/`, run:
 
 ```bash
-bash tools/check_code_quality.sh
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 colcon test

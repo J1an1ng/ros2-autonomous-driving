@@ -1,0 +1,27 @@
+stdin is not a terminal device. Keyboard handling disabled.[INFO] [1785619103.545822702] [rosbag2_recorder]: Press SPACE for pausing/resuming
+[INFO] [1785619103.545915644] [rosbag2_recorder]: Event publisher thread: Started
+[INFO] [1785619103.551747268] [rosbag2_recorder]: Starting recording to '/home/jianing/i2ros/introduction-to-ros-2026/project/validation_evidence/mission-20260801-231823/bag'
+[INFO] [1785619103.556917502] [rosbag2_recorder]: Listening for topics...
+[INFO] [1785619103.556960876] [rosbag2_recorder]: Recording...
+[INFO] [1785619103.557003723] [rosbag2_recorder]: Topics discovery started.
+[INFO] [1785619105.076114934] [rosbag2_recorder]: Subscribed to topic '/car_command'
+[INFO] [1785619106.353081294] [rosbag2_recorder]: Subscribed to topic '/route/current_waypoint_id'
+[INFO] [1785619106.356851010] [rosbag2_recorder]: Subscribed to topic '/route/current_waypoint_distance'
+[INFO] [1785619106.359990376] [rosbag2_recorder]: Subscribed to topic '/route/route_state'
+[INFO] [1785619106.409471134] [rosbag2_recorder]: Subscribed to topic '/planning/path'
+[INFO] [1785619106.411580406] [rosbag2_recorder]: Subscribed to topic '/planning/target_speed'
+[INFO] [1785619106.415837412] [rosbag2_recorder]: Subscribed to topic '/planning/trajectory'
+[INFO] [1785619107.151325806] [rosbag2_recorder]: Subscribed to topic '/decision/front_obstacle_distance'
+[INFO] [1785619107.157952005] [rosbag2_recorder]: Subscribed to topic '/decision/merge_obstacle_distance'
+[INFO] [1785619107.161157857] [rosbag2_recorder]: Subscribed to topic '/decision/state'
+[INFO] [1785619107.164871873] [rosbag2_recorder]: Subscribed to topic '/decision/target_speed'
+[INFO] [1785619107.170597780] [rosbag2_recorder]: Subscribed to topic '/decision/stop_required'
+[INFO] [1785619107.287431328] [rosbag2_recorder]: Subscribed to topic '/perception/traffic_light_state'
+[INFO] [1785619110.696120938] [rosbag2_recorder]: Subscribed to topic '/OurCar/INS/pose'
+[INFO] [1785619110.704330216] [rosbag2_recorder]: Subscribed to topic '/OurCar/INS/twist'
+[INFO] [1785619110.704381661] [rosbag2_recorder]: All requested topics are subscribed. Stopping discovery...
+[INFO] [1785619110.704385517] [rosbag2_recorder]: Topics discovery stopped.
+[INFO] [1785619327.667540735] [rosbag2_recorder]: Pausing recording.
+[INFO] [1785619327.667699847] [rosbag2_cpp]: Writing remaining messages from cache to the bag. It may take a while
+[INFO] [1785619327.674576436] [rosbag2_recorder]: Recording stopped
+[INFO] [1785619327.691941667] [rosbag2_recorder]: Event publisher thread: Exited
