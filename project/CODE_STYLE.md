@@ -1,10 +1,11 @@
 # Team 20 code style
 
 This document defines the style for Team 20 maintained code under `project/src`.
-Generated files, bundled Unity assets, `simulation/src/json_nlohmann`, and
-`perception/third_party` are third-party code and are not reformatted. The inherited
-simulator bridge is formatted with the project but is exempt from cpplint's copyright and
-include-subdirectory checks until its upstream licence and public-header layout are documented.
+Generated files, bundled Unity assets, the project-provided `dummy_controller`,
+`simulation/src/json_nlohmann`, and `perception/third_party` are not Team 20 code and are
+not reformatted. The inherited simulator bridge is formatted with the project but is exempt
+from cpplint's copyright and include-subdirectory checks until its upstream licence and
+public-header layout are documented.
 
 ## Architecture
 

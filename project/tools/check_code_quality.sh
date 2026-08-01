@@ -25,7 +25,6 @@ mapfile -t team_cpp_paths < <(
     "${project_root}/src/controller/include" \
     "${project_root}/src/controller/src" \
     "${project_root}/src/controller/test" \
-    "${project_root}/src/dummy_controller/src" \
     "${project_root}/src/perception/include" \
     "${project_root}/src/perception/src" \
     "${project_root}/src/perception/test" \
