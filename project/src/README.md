@@ -7,23 +7,46 @@ driving stack. The system runs with the bundled Unity simulator and provides a c
 pipeline from simulated sensors to vehicle commands:
 
 ```text
-Unity RGB, depth, pose, and velocity
-                  |
-                  v
-      perception and occupancy mapping
-                  |
-                  v
-route_manager -> trajectory_generator -> decision_making -> controller
-                                                          |
-                                                          v
-                                                    /car_command
-                                                          |
-                                                          v
-                                                   Unity vehicle
+simulation bridge
+  ├─ RGB/depth/TF ──> perception ── observations/point cloud ────────┐
+  ├─ pose TF ──> route_manager ─┬─ local route ─> trajectory_generator
+  │                             │                       │              │
+  │                             │                       └─ path/speed ─┤
+  │                             └─ route state/ID/distance ───────────┤
+  └─ vehicle twist ──────────────────────────────────────────────────┤
+                                                              v
+                                                       decision_making
+                                                   final speed/stop intent
+
+trajectory_generator ── planning path ────────────────────────┐
+decision_making ─────── final speed/stop intent ──────────────┼─> controller
+simulation bridge ───── vehicle twist/TF ─────────────────────┘       |
+                                                                     v
+                                                               /car_command
+                                                                     |
+                                                                     v
+                                                           simulation / Unity
 ```
 
 Production perception uses the left RGB camera, metric depth, camera calibration, and TF.
 The Unity semantic/segmentation camera is disabled and is not required to run the project.
+
+The arrows express ownership as well as data flow: route management supplies route
+context, trajectory generation owns the nominal path and speed, perception supplies
+observations, decision making owns the final permitted speed/stop intent, and only the
+controller publishes `/car_command`.
+
+## Architecture and design rationale
+
+| Area | Choice | Reason and trade-off |
+| --- | --- | --- |
+| Route | A deterministic 64-waypoint YAML route with semantic types and per-waypoint speed limits | The assessed map is fixed, so a recorded route is reproducible and easy to inspect. It does not provide global replanning for a changed map. |
+| Trajectory | Ego projection followed by Hermite/Bézier smoothing, resampling, validation, and fallback | Produces a smooth local reference without the complexity of MPC. It is geometric and does not optimize vehicle dynamics or avoid obstacles. |
+| Perception model | COCO YOLOv8n ONNX on normal RGB, combined with metric depth and TF | Avoids the Unity semantic-camera shortcut while keeping CPU inference practical. Depth adds range, but small simulator traffic lights require route gates, HSV evidence, and temporal filtering. |
+| Obstacle model | Planning-path point-cloud corridor fused with YOLO RGB-D vehicle range | Visual class identity rejects static geometry; point-cloud agreement checks spatial plausibility. Route-gated fallbacks cover known sensor gaps without weakening the near-field safety guard. |
+| Decision | Explicit state machine with a documented safety priority | Traffic-light, following, merge, and emergency behavior remains traceable and testable. It is less flexible than a learned policy but failures and transitions can be audited. |
+| Control | Pure Pursuit steering plus PID speed control | A transparent, low-complexity controller is sufficient for the fixed course and easy to tune. It is not a model-predictive controller and depends on fresh TF, twist, path, and decision inputs. |
+| Safety | Input timeouts, latched stops, bounded commands, and one authoritative publisher | Missing/stale data produces braking instead of stale motion. This can cause conservative temporary stops during sensor gaps, which is preferred to uncontrolled continuation. |
 
 ## What the project can do
 
@@ -61,8 +84,9 @@ The right-side merge scenario is handled around waypoints 43–48.
 | `system_bringup` | Single launch entry point for the complete system and RViz visualizations. |
 | `dummy_controller` | Project-supplied example controller; not part of Team 20's production control pipeline. |
 
-Package-specific interface and parameter details are documented in each package's
-`README.md`.
+Package-specific interface and parameter details are documented in the main Team 20
+package READMEs. `dummy_controller` remains course-supplied example code and is not part
+of the production architecture.
 
 ## System requirements
 
@@ -373,3 +397,5 @@ installed as `share/perception/models/yolov8n.onnx`.
   parameters.
 - [`simulation/README.md`](simulation/README.md): Unity bridge, sensor topics, networking,
   and simulator configuration.
+- [`system_bringup/README.md`](system_bringup/README.md): full-system orchestration,
+  safety switches, launch arguments, and visualization.

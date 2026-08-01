@@ -2,6 +2,11 @@
 
 This is a ROS2 Jazzy port of the original ROS1 `simulation` package for the Unity simulator bridge.
 
+> **Provenance:** the `simulation` package, Unity assets, and simulator bridge are
+> course-supplied code reused by Team 20. Team 20 integrates this package through
+> `system_bringup` and project configuration; it does not claim the simulator, bridge,
+> or original ROS 2 port as team-written code.
+
 ## What was ported
 
 - `VehicleControl.msg` ROS interface generation

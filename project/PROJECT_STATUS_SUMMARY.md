@@ -2,9 +2,9 @@
 
 更新日期：2026-08-01
 
-> 本文记录本项目的 YOLO 感知更新，以及与其直接相关的 Event1 前车检测/跟车、
-> 红绿灯路口速度规划和停车制动更新。规划、决策与控制的完整代码归属仍不在本文
-> 范围内；第 4 节的第三方归属说明只针对 YOLO 集成。
+> 本文是 full-system-v1.9.0 的书面总结，覆盖全系统架构、感知模型、路线与轨迹、
+> 决策与控制设计、成员分工、Team 20 自研/实质修改代码、课程提供代码和第三方复用
+> 内容。各包 README 保留更详细的 topic、参数、测试和调优说明。
 
 ## 1. 当前结论
 
@@ -14,6 +14,10 @@
 
 当前实现能够：
 
+- 从 YAML 加载经过闭环验证的 64 个 waypoint，发布局部路线、路线语义、目标距离和
+  速度上限，并在 waypoint 63 发布 `route_complete`；
+- 将车辆投影到有序路线，使用 Hermite/Bézier 几何平滑、等弧长重采样、连续性融合
+  和质量门禁生成 `/planning/path`；
 - 使用 C++ ROS 2 节点和 ONNX Runtime 运行固定尺寸的 YOLOv8n ONNX 模型；
 - 在普通 RGB 图像中检测 COCO `car`、`bus`、`truck` 和 `traffic light`；
 - 将深度像素通过三维重建、TF 和 RGB 重投影放入 YOLO 车辆框中，估计前车距离；
@@ -29,6 +33,10 @@
   距离制动包络逐渐减速；
 - 分别在 waypoint 25/32/52/59 前约 2.0/4.0/3.4/4.0 m 命令停车，并通过
   waypoint 25 的局部路线到达半径保证 2 m 停车线的距离参考不会提前切换；
+- 使用显式状态机按“紧急制动 > 交通灯停车 > stale merge 停车 > 自适应跟车 >
+  汇入减速 > 规划速度”的优先级生成最终目标速度；
+- 使用 Pure Pursuit 跟踪轨迹，使用 derivative-on-measurement PID 调节速度，并且
+  只由真实 controller 发布 `/car_command`；
 - 在检测、模型、TF 或深度数据异常时发布保守的安全状态。
 
 2026-08-01 已使用当前生产配置完成 waypoint 0--63 全路线闭环复验并进入
@@ -37,7 +45,55 @@
 碰撞、驶离路线、节点崩溃、`ERROR` 或 `FATAL`；路线完成后 Unity 和全部 ROS 节点
 正常退出。
 
-## 2. 感知与纵向行为链路
+## 2. 总体架构、模型与设计选择
+
+### 2.1 系统分层和权威接口
+
+```text
+Unity / simulation bridge
+  ├─ RGB + Depth + CameraInfo + TF ──> perception
+  │       ├─ YOLO RGB-D vehicle/light observations ──────────────┐
+  │       ├─ point cloud ──────────────> obstacle_monitor ────────┤
+  │       └─ occupancy map / OctoMap ──> visualization/diagnostics
+  ├─ world -> OurCar/INS TF ──> route_manager ──> trajectory_generator
+  │                                  │                    │       │
+  │                                  └─ route context ────┤       │
+  │                                                       └─ path/nominal speed
+  └─ vehicle twist/TF ────────────────────────────────────────────┤
+                                                                  v
+                                                        decision_making
+                                                    final speed + stop intent
+                                                                  │
+                planning path + vehicle twist/TF ─────────────────┤
+                                                                  v
+                                                              controller
+                                                                  │
+                                                             /car_command
+                                                                  │
+                                                                  v
+                                                        simulation / Unity
+```
+
+包边界是设计的一部分：`perception` 只报告观察结果，`route_manager` 只提供有序路线
+上下文，`trajectory_generator` 只生成名义路径/速度，`decision_making` 组合交通规则与
+障碍物行为，`controller` 才把最终意图变成油门、转向和制动。`/planning/target_speed`
+不是最终控制速度；controller 只接受 `/decision/target_speed`。`/car_command` 必须只有
+一个权威 publisher，避免多个控制器相互覆盖。
+
+### 2.2 主要模型和取舍
+
+| 设计位置 | 当前选择 | 选择理由 | 代价/限制 |
+| --- | --- | --- | --- |
+| 全局路线 | 固定地图上的 64-waypoint YAML 路线 | 课程地图固定，路线可复现、可检查、可逐点配置语义和速度 | 地图或任务改变时不能自动全局重规划 |
+| 局部轨迹 | ego 投影 + cubic Hermite / quadratic Bézier + 重采样/质量门禁 | 比直连 waypoint 平滑，同时比 MPC 简单、透明、易测试 | 只是几何平滑，不优化车辆动力学，也不负责避障 |
+| 目标检测模型 | 普通 RGB 上的 COCO YOLOv8n ONNX，C++/ONNX Runtime CPU 推理 | 不依赖 Unity semantic camera；轻量模型可随项目直接运行 | 小交通灯与 Unity 域差异需要路线门控、HSV 和时序补偿 |
+| 距离与障碍物 | RGB-D 重投影 + 规划路径点云走廊 + 近场安全走廊 | YOLO 提供类别，Depth/PointCloud 提供距离和几何一致性，互相降低误检 | 传感器缺帧时会保守停车；特定事件窗口需要经过验证的直接视觉 fallback |
+| 行为决策 | 可解释状态机、锁存和显式优先级 | 红绿灯、跟车、汇入和紧急状态可追踪、可单元测试，安全优先级明确 | 不具备学习策略对未知场景的泛化能力 |
+| 横向控制 | Pure Pursuit + 随车速变化的 lookahead | 对固定路线足够稳定，公式简单，便于调参和检查转向方向 | 高动态/极限操纵能力弱于 MPC |
+| 纵向控制 | PID，微分项作用于测量速度 | 实现透明；避免目标速度阶跃造成 derivative kick | 依赖 Unity 速度反馈和场景相关调参 |
+| 故障处理 | 输入超时、stop latch、有限输出和 safe-stop brake | stale/missing 数据不会继续沿用旧控制命令 | TCP/Depth 短暂抖动可能造成保守的瞬时停车 |
+
+### 2.3 感知与纵向行为细节
 
 ```text
 普通左 RGB 图像
@@ -54,7 +110,7 @@
 这里的 PointCloud/Depth 不负责识别“这是什么物体”。YOLO 负责类别和二维框；
 Depth/PointCloud 负责距离、三维位置和几何安全校验，因此在加入 YOLO 后仍然有用。
 
-### 2.1 车辆检测和测距
+#### 2.3.1 车辆检测和测距
 
 - YOLO 使用 COCO 类别 ID `2/5/7`，对应 `car/bus/truck`。
 - RGB 左相机和 Depth 相机存在约 0.2 m 基线，不能直接使用相同像素坐标取深度。
@@ -63,7 +119,7 @@ Depth/PointCloud 负责距离、三维位置和几何安全校验，因此在加
   背景点和离群点影响。
 - 还会检查有效距离和横向走廊，避免将路旁或对向车辆当作本车道前车。
 
-### 2.2 交通灯检测和选择
+#### 2.3.2 交通灯检测和选择
 
 - 交通灯单独使用 `0.01` 的低置信度阈值，因为远处目标可能只有约 `7 x 15 px`；
   车辆检测仍使用 `0.25`，不会因交通灯阈值而放宽。
@@ -76,7 +132,7 @@ Depth/PointCloud 负责距离、三维位置和几何安全校验，因此在加
 - 明确的绿灯可在连续 2 帧后确认；普通/模糊状态需要 4 帧。非绿灯会立即撤销
   之前的通行许可，使系统能快速响应红灯。
 
-### 2.3 waypoint 25 绿灯漏检与绿色路牌抑制
+#### 2.3.3 waypoint 25 绿灯漏检与绿色路牌抑制
 
 YOLO 的小交通灯框有时只包含红灯和外壳，未完整包含最下方的绿色灯泡。当前修复
 不会把扩展后的大区域直接当成普通交通灯框，而是：
@@ -91,7 +147,7 @@ YOLO 的小交通灯框有时只包含红灯和外壳，未完整包含最下方
 绿色路牌不会成为放行证据。相应单元测试已经覆盖“绿灯框被裁短”“扩展碰到图像
 边界”和“下方大块绿色路牌”三种情况。
 
-### 2.4 Event1 前车检测与连续跟车
+#### 2.3.4 Event1 前车检测与连续跟车
 
 Event1 车辆在 waypoint 17--20 内位于本车道相机走廊，但预处理点云可能暂时无法
 提供一致的路径距离。当前障碍物融合和决策逻辑作了以下更新：
@@ -108,7 +164,7 @@ Event1 车辆在 waypoint 17--20 内位于本车道相机走廊，但预处理�
   第二次不必要制动；
 - 独立的近场紧急制动仍保留，不会被平滑跟车逻辑削弱。
 
-### 2.5 红绿灯限速与渐进刹车
+#### 2.3.5 红绿灯限速与渐进刹车
 
 waypoint 25、32、52、59 的路线远场速度上限均为 `8 m/s`。这消除了切换到
 `stop_zone` 时由路线层直接产生的 `14 -> 3 m/s` 目标速度阶跃。红灯、黄灯或
@@ -131,7 +187,7 @@ remaining_distance = waypoint_distance - active_stop_distance
 
 绿灯确认后解除交通灯制动限制，后续弯道 waypoint 自身的速度限制仍然有效。
 
-### 2.6 v1.9.0 代码质量与文档统一
+### 2.4 v1.9.0 代码质量与文档统一
 
 本版本在不改变 ROS topic、service、message 和 launch 接口的前提下统一了 Team 20
 代码风格：
@@ -150,6 +206,20 @@ remaining_distance = waypoint_distance - active_stop_distance
 ## 3. 关键文件
 
 ```text
+# 全系统主链路
+src/route_manager/route_manager/route_manager_node.py
+src/route_manager/route_manager/route_map.py
+src/route_manager/route_manager/route_progress.py
+src/route_manager/config/route_map.yaml
+src/trajectory_generator/trajectory_generator/path_processor.py
+src/trajectory_generator/trajectory_generator/trajectory_generator_node.py
+src/decision_making/decision_making/obstacle_monitor_node.py
+src/decision_making/decision_making/traffic_light_state_machine.py
+src/controller/src/control_core.cpp
+src/controller/src/controller_node.cpp
+src/system_bringup/launch/full_system.launch.py
+
+# 感知和模型
 src/perception/src/yolo_rgbd_detector_node.cpp
 src/perception/include/perception/yolo_postprocess.hpp
 src/perception/include/perception/traffic_light_route_gate.hpp
@@ -172,9 +242,7 @@ tools/check_code_quality.sh
 ../README.md
 src/README.md
 
-# Event1、路口速度与制动
-src/decision_making/decision_making/traffic_light_state_machine.py
-src/decision_making/decision_making/obstacle_monitor_node.py
+# Event1、路口速度与制动配置/测试
 src/decision_making/config/traffic_light_state_machine.yaml
 src/decision_making/test/test_traffic_light_state_machine.py
 src/route_manager/route_manager/route_progress.py
@@ -183,13 +251,50 @@ src/route_manager/test/test_route_progress.py
 src/route_manager/test/test_route_safety_geometry.py
 ```
 
-## 4. Which code is our own, and which code is reused?
+## 4. 成员分工、Team 20 代码与复用内容
 
-以下归属只针对 YOLO 更新。“our own”表示 Team 20 在本项目中编写或实质修改的
-集成代码，并不表示 YOLO 算法、预训练权重或依赖库由 Team 20 发明。最终报告列出
-个人作者时，仍需由团队确认每位成员的实际贡献。
+“Team 20 代码”表示团队在本项目中编写或实质修改的实现、配置、测试和集成逻辑，
+不表示团队发明了所采用的公开算法。课程提供代码和第三方依赖即使因 ROS 2 兼容、
+格式或集成而被修改，原始归属也不会转移给 Team 20。
 
-### 4.1 Team 20 编写/修改的 YOLO 集成代码
+### 4.1 Who did what?
+
+| 成员 | 主要责任 | 可追踪的模块/产物 |
+| --- | --- | --- |
+| Lei Fang | `route_manager` | `src/route_manager`：路线 YAML、waypoint recorder、路线加载/校验、进度判定、局部路线和 route tests |
+| Yida Lyu | `decision`、`controller`、part of integration | `src/decision_making`、`src/controller`：状态机、障碍物行为、最终目标速度、Pure Pursuit、PID、安全停车和 decision-to-command 接口 |
+| Tao Zhang | Perception、part of integration | `src/perception`：YOLO RGB-D、交通灯颜色/时序、车辆距离、点云/occupancy、模型配置和 perception-to-decision 接口 |
+| Jianing Huang | `Trajectory_Generator`、part of integration | `src/trajectory_generator`：路线投影、平滑/重采样、连续性/质量门禁、名义速度和 route-to-planning 接口 |
+
+Yida Lyu、Tao Zhang、Jianing Huang 的 integration 是共享工作，包括各自模块边界的
+topic/config 对齐、`system_bringup` 联调、端到端测试、动态验证和文档。团队没有提供
+更细的个人拆分，因此本文不虚构更细粒度的个人归属。
+
+### 4.2 全系统归属表
+
+| 组件 | 归属类别 | Team 20 的工作 / 复用边界 |
+| --- | --- | --- |
+| `route_manager` | Team-written / substantively developed | 路线模型、记录工具、加载校验、进度与越点判定、局部路线、参数、测试和文档；负责人 Lei Fang |
+| `trajectory_generator` | Team-written / substantively developed | 路线投影、Hermite/Bézier 应用、重采样、连续性融合、质量验证、fallback、测试和文档；负责人 Jianing Huang |
+| `decision_making` | Team-written / substantively developed | 交通灯状态机、障碍物融合、跟车/汇入/紧急优先级、timeout/latch、测试和文档；负责人 Yida Lyu |
+| `controller` | Team-written / substantively developed | Pure Pursuit/PID 的项目实现、输入检查、输出限幅、安全停车、参数、测试和文档；负责人 Yida Lyu |
+| `perception` 中 YOLO RGB-D 和项目映射逻辑 | Team-written / substantively developed around reused libraries/model | ROS 节点、RGB-D 重投影、候选选择、HSV/时序规则、occupancy 输出、配置、测试和文档；负责人 Tao Zhang |
+| `system_bringup`、项目配置、集成测试/文档 | Team integration | 单入口 launch、模块开关、安全默认值、RViz、接口联调和验证；Yida/Tao/Jianing shared integration |
+| `simulation` / Unity bridge and assets | Course-supplied, retained/reused | 提供传感器/车辆状态和命令传输；Team 20 通过 `system_bringup` 和项目配置调用该包，不把 simulator、bridge 或原始 ROS 2 port 声明为自研 |
+| `dummy_controller` | Course-supplied, not production | 示例控制器，保持项目基线，不属于 Team 20 生产控制或代码风格评分范围 |
+| `.editorconfig`、`CODE_STYLE.md`、质量门禁和项目级 README | Team 20 shared deliverables | 统一风格、质量检查、可追踪性和运行/发布说明；未按个人进一步拆分 |
+
+复用算法和实现边界：
+
+| 方法/依赖 | 复用内容 | Team 20 实现内容 |
+| --- | --- | --- |
+| Pure Pursuit / PID | 公开控制方法和数学原理 | Yida Lyu 在本项目中的 C++ 实现、ROS 适配、安全检查和参数调优 |
+| Hermite / Bézier interpolation | 公开几何曲线方法 | Jianing Huang 的路线裁剪、切线约束、曲线拼接、重采样、质量门禁与连续性逻辑 |
+| Finite-state machine pattern | 通用软件设计模式 | Yida Lyu 的交通灯、跟车、汇入、紧急制动状态/优先级/锁存实现 |
+| YOLOv8n / COCO weights | Ultralytics 网络、预训练权重和类别知识 | Tao Zhang 的 ROS 2 ONNX 推理集成、RGB-D 测距、路线门控和交通灯后处理 |
+| ROS 2 / TF / OpenCV / ONNX Runtime / OctoMap | 第三方框架和库 | Team 20 的节点、topic、参数、变换、配置和系统集成代码 |
+
+### 4.3 Team 20 编写/修改的 YOLO 集成代码
 
 | 内容 | 文件 | Team 20 的工作 |
 | --- | --- | --- |
@@ -203,7 +308,7 @@ src/route_manager/test/test_route_safety_geometry.py
 `tools/train_yolo_sim.py` 和 `tools/export_yolo_onnx.py` 只是调用 Ultralytics
 公开 API 的本地封装；训练器、网络结构、损失函数和导出器本身不是 Team 20 的代码。
 
-### 4.2 复用的开源模型、代码和库
+### 4.4 复用的开源模型、代码和库
 
 | 第三方内容 | 在本项目中的用途 | 版本/来源证据 | 许可证与归属说明 |
 | --- | --- | --- | --- |
@@ -214,7 +319,7 @@ src/route_manager/test/test_route_safety_geometry.py
 | ROS 2 Jazzy API | 节点、消息、参数、TF 和 launch 接口 | `rclcpp`、`sensor_msgs`、`tf2_ros` 等依赖 | 外部 ROS 2 包；本项目只调用其 API，遵守各 ROS 包自身许可证 |
 | NumPy、PyYAML、rclpy | 采集/训练辅助脚本 | Python imports 和 training requirements | 外部 Python 包；不属于运行时 C++ YOLO 节点 |
 
-### 4.3 模型与许可证记录
+### 4.5 模型与许可证记录
 
 当前随项目分发的模型信息：
 
@@ -243,7 +348,7 @@ runtime: Microsoft ONNX Runtime 1.22.0 CPU
 本节依据当前工作区文件和许可证头整理。如果团队成员曾从未保存在仓库中的示例、
 论坛或其他项目手工复制代码片段，应由相应作者在最终文档中补充来源。
 
-### 4.4 可直接用于英文报告的表述
+### 4.6 可直接用于英文报告的表述
 
 > The YOLO integration code was developed by Team 20. It includes the ROS 2
 > C++ inference node, RGB-D reprojection and ranging, YOLO output parsing and
@@ -458,8 +563,9 @@ ros2 launch system_bringup full_system.launch.py \
   或标签。
 - 交通灯很小，因此依赖低 YOLO 阈值、路线门控和分路口 ROI。全路线已经跑通，
   但换相机参数、分辨率、路线或地图后必须重新标定 ROI。
-- v1.9.0 已完成一次 waypoint 0--63 最终闭环运行。为了让最终报告可由第三方复现，
-  仍建议将后续正式演示的 rosbag、完整日志、Event1 跟车曲线、四个路口的目标速度/
-  停车距离、debug 截图和模型校验值保存到持久化结果目录。
+- v1.9.0 已完成一次含两个事件的 waypoint 0--63 生产闭环运行；单独的 no-event
+  对照运行以及持久化 rosbag/config 证据包尚未完成，因此不能表述为“完整 Gate 4
+  证据已归档”。正式演示仍应保存完整日志、Event1 跟车曲线、四个路口的目标速度/
+  停车距离、debug 截图和模型校验值，以便第三方复现。
 - 最终文档应分别写清楚“Team 20 的 YOLO 集成贡献”和“复用的 YOLOv8n/COCO/
   ONNX Runtime/OpenCV/ROS 2”，不要笼统写成“YOLO was developed by us”。

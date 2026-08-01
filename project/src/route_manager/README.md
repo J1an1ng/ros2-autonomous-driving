@@ -1,185 +1,169 @@
 # Route Manager
 
-This package provides waypoint recording and route target selection for the autonomous driving project.
+## Purpose and ownership
 
-The route manager uses a predefined route map stored in `config/route_map.yaml`. The route map contains waypoints, waypoint types, speed limits. During runtime, the route manager reads the current vehicle pose from TF and publishes the next target waypoint for the trajectory planning module.
+`route_manager` is Team 20's deterministic route-context package and Lei Fang's primary
+contribution. It loads the recorded course route, tracks vehicle progress, and publishes
+the ordered local route and semantic context used by trajectory generation and decision
+making.
+
+The package deliberately does not smooth paths, detect obstacles, make traffic decisions,
+or produce vehicle commands. Those responsibilities belong to `trajectory_generator`,
+`perception`, `decision_making`, and `controller` respectively.
+
+## Design choice
+
+The assessed Unity map and mission are fixed, so the project uses a reviewed YAML route
+instead of a general-purpose global planner. This makes every waypoint, speed limit, stop
+reference, and route state reproducible and traceable in `config/route_map.yaml`.
+
+The trade-off is that a changed map or destination requires a new route recording. The
+runtime manager follows route order rather than choosing a new global path around a
+blockage.
 
 ## Nodes
 
-### 1. `waypoint_recorder`
+### `route_manager_node`
 
-The `waypoint_recorder` node is an interactive tool for recording waypoints from the current vehicle pose.
+The production node runs at 10 Hz and:
 
-It reads the TF transform: world -> OurCar/INS
+1. loads and validates the configured route file;
+2. looks up `world -> OurCar/INS` (configurable) in TF;
+3. marks a waypoint reached inside its radius or passed after the ego vehicle crosses its
+   forward progress plane;
+4. publishes the current target, local path, distance, type, ID, and speed limit;
+5. publishes `route_complete` and zero route speed after waypoint 63.
 
-and stores the current vehicle position as a waypoint when the user enters a command in the terminal.
+Using a forward progress plane as a second completion condition prevents a slightly
+missed waypoint from stalling the route. Waypoint 0 is an exception: it must be reached
+and cannot be skipped only by being geometrically beyond it.
 
-Supported waypoint types include:
-n      normal
-ca     curve_approach
-ce     curve_entry
-c      curve_mid
-cx     curve_exit
-ia     intersection_approach
-s      stop_zone
-i      intersection
-ix     intersection_exit
-slow   slow_zone
-The recorded waypoints are saved into: config/route_map.yaml
-2. route_manager_node
+The local path normally retains the previous waypoint before the active target. This lets
+the trajectory generator project the vehicle onto the active route segment instead of
+drawing a straight line directly to a distant waypoint.
 
-The route_manager_node is the main runtime node of this package.
+### `waypoint_recorder`
 
-It performs the following tasks:
+The interactive recorder reads the current vehicle pose from TF and writes a YAML route.
+It records position, yaw, type, speed, and segment membership, and derives segment/zone
+metadata. It is a route-authoring tool and is not started by the production full-system
+launch.
 
-Loads the predefined route from route_map.yaml.
-Reads the current vehicle pose from TF.
-Checks the distance and forward progress relative to the current waypoint.
-Switches to the next waypoint when the vehicle reaches it or crosses its
-forward progress plane, so a slightly missed waypoint cannot stall the route.
-Publishes the selected waypoint as the current target pose.
-/route/target_pose
+## Route data model
 
-Output Topics
-/route/target_pose
+The installed production route contains IDs 0–63. Its top-level YAML fields are:
 
-Type: geometry_msgs/msg/PoseStamped
+| Field | Meaning |
+| --- | --- |
+| `map_frame` | Global route frame, normally `world`. |
+| `vehicle_frame` | Vehicle TF frame used while recording. |
+| `waypoints` | Ordered waypoint dictionaries consumed at runtime. |
+| `segments` | Traceability metadata grouping waypoint ranges. |
+| `zones` | Metadata for stop, curve, and intersection-approach regions. |
 
-Description:The currently selected target waypoint. This topic can be used by the trajectory planner as the next short-term goal.
+Runtime waypoint fields are:
 
-/route/local_path
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `x`, `y` | yes | Position in metres in the map frame. |
+| `id` | recommended | Public route ID; list index is the fallback. |
+| `z` | no | Height in metres; default `0.0`. |
+| `yaw_deg` | no | Recorded heading in degrees; default `0.0`. |
+| `speed_limit` | no | Nominal route speed in m/s; default `2.0`. |
+| `type` | no | Semantic route state; default `normal`. |
+| `reach_distance` | no | Per-waypoint reach-radius override in metres. |
+| `segment_id` | no | Traceability group used by the route file. |
 
-Type:
+The loader rejects an empty path, missing file, non-file path, malformed YAML structure,
+an empty waypoint list, non-dictionary waypoints, and waypoints missing `x` or `y`.
 
-nav_msgs/msg/Path
+## Runtime interfaces
 
-Description:
-A local navigation path containing up to five consecutive waypoints. It starts
-at the previous waypoint when available, allowing the trajectory generator to
-project the ego pose onto the active route segment. For example, if the current
-route index is 10, the local path normally contains:
+The node has no ROS topic subscription. Vehicle position comes from TF.
 
-9
-10
-11
-12
-13
+| Output topic | Type | Consumer and meaning |
+| --- | --- | --- |
+| `/route/target_pose` | `geometry_msgs/msg/PoseStamped` | Current short-term target for trajectory fallback. |
+| `/route/local_path` | `nav_msgs/msg/Path` | Previous/current/upcoming ordered waypoint window for trajectory generation. |
+| `/route/speed_limit` | `std_msgs/msg/Float32` | Nominal speed limit for the selected target, in m/s. |
+| `/route/current_waypoint_id` | `std_msgs/msg/Int32` | Public ID of the current target waypoint. |
+| `/route/current_waypoint_distance` | `std_msgs/msg/Float32` | Planar ego-to-target distance in metres. |
+| `/route/route_state` | `std_msgs/msg/String` | Current semantic type or `route_complete`. |
 
-Near the end of the route, fewer than five waypoints may be published.
+Route semantics provide context but do not automatically impose a generic intersection
+slowdown. Dynamic traffic-light stops are owned by `decision_making`; keeping a non-zero
+planning speed at the controlled signal waypoints allows a confirmed green to release the
+vehicle without a route-layer deadlock.
 
-This topic provides the trajectory planner with information about the road geometry ahead, especially at curves and intersections.
+## Parameters
 
-Waypoint types describe route semantics and do not automatically reduce speed
-at an intersection. The recorder gives intersection types the same default
-speed as a normal waypoint. Add an explicit curve or slow-zone limit only where
-the recorded path geometry requires it.
+| Parameter | Default | Constraint and purpose |
+| --- | ---: | --- |
+| `route_file` | empty | Must resolve to an installed/readable YAML file. The full-system launch supplies the installed production route. |
+| `map_frame` | `world` | Global frame used in route messages and TF lookup. |
+| `vehicle_frame` | `OurCar/INS` | Ego TF frame. |
+| `waypoint_reach_distance` | `3.0` | Global reach radius in metres; use a positive value. A waypoint may override it. |
+| `lookahead_index` | `1` | Offset from the progress index to the published target. Full-system production uses `0`. |
+| `local_path_size` | `5` | Number of local route poses; must be greater than zero. |
+| `initial_waypoint_index` | `0` | Diagnostic start index; must be inside the route. Full benchmarks use `0`. |
 
-/route/speed_limit
+Waypoint 25 uses `reach_distance: 1.5` so its distance reference remains active through
+the configured 2 m traffic-light stop boundary. Controlled traffic-light waypoints 25,
+32, 52, and 59 use an 8 m/s far-field route ceiling; decision making applies the final
+distance-based stop envelope. Geometry-specific curve limits remain in the route file.
 
-Type: std_msgs/msg/Float32
+## Build and run
 
-Description:The recommended speed limit for the current target waypoint, in meters per second.
+From `project/`:
 
-/route/current_waypoint_id
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select route_manager --symlink-install
+source install/setup.bash
+```
 
-Type: std_msgs/msg/Int32
+The recommended production entry point is:
 
-Description: The id of the currently selected target waypoint.
+```bash
+ros2 launch system_bringup full_system.launch.py enable_motion:=false
+```
 
-Note: This id represents the current target waypoint, not necessarily the last reached waypoint.
+For a standalone route-manager run using the installed route:
 
-`/route/current_waypoint_distance` (`std_msgs/msg/Float32`) publishes the
-planar ego-to-target distance in metres. The decision layer uses this existing
-route geometry to approach an unclassified traffic light slowly while retaining
-a hard stop boundary.
+```bash
+route_file="$(ros2 pkg prefix --share route_manager)/config/route_map.yaml"
+ros2 run route_manager route_manager_node --ros-args \
+  -p route_file:="$route_file" \
+  -p lookahead_index:=0
+```
 
-/route/route_state
+Run the recorder only when intentionally creating a new route. Use an explicit source-tree
+output path so the recorded file is reviewable before installation:
 
-Type: std_msgs/msg/String
+```bash
+ros2 run route_manager waypoint_recorder --ros-args \
+  -p output_file:=/absolute/path/to/project/src/route_manager/config/route_map.yaml
+```
 
-Description: The semantic type of the current target waypoint.
+Recorder commands include `n`, `ca`, `ce`, `c`, `cx`, `ia`, `s`, `i`, `ix`, `slow`,
+`seg <id>`, `undo`, `list`, and `q`.
 
-Possible values include:
-normal
-curve_approach
-curve_entry
-curve_mid
-curve_exit
-intersection_approach
-stop_zone
-intersection
-intersection_exit
-route_complete
+## Tests and validation
 
-At `route_complete`, the speed limit is published as zero and the final
-waypoint remains the target.
+```bash
+colcon test --packages-select route_manager
+colcon test-result --verbose
+```
 
-The initial stop waypoint (ID 0) has a zero route speed. Dynamic traffic-light
-waypoints 25, 32, 52, and 59 use an 8 m/s far-field ceiling so the decision
-node's distance-based
-braking envelope can reduce speed smoothly toward each stop boundary instead
-of applying an early 14 -> 3 m/s speed step. The decision node owns the
-red/yellow stop at all four lights. Keeping a non-zero planning speed at those
-waypoints also lets the vehicle leave after a stable green release and prevents
-a route-progress deadlock. Waypoint25 overrides the global 3 m route reach
-radius with 1.5 m, keeping its distance reference active through the requested
-2 m stop boundary.
-The waypoint32 T-junction uses the closed-loop-validated waypoint33--35
-geometry with a 3 m/s corner limit. The event-intersection turn retains the
-faster v1.5 waypoint39--42 geometry and speed profile (3, 8, 8, and 14 m/s),
-and the road-end turn uses the updated waypoint47--50 samples to keep the local
-path aligned with the recorded route through all bends.
+Tests cover route-file validation, reach-radius and progress-plane behavior, waypoint 25's
+local reach override, all 64 waypoint IDs, protected curve/intersection geometry, speed
+profiles, recorder defaults, flake8, and PEP 257. In full-system-v1.9.0 the node advanced
+from waypoint 0 through 63 and logged `Route completed at waypoint 63`.
 
-The straight-through intersections at waypoints9--10 and 16--18 retain the
-surrounding 14 m/s road limit. Their semantic `intersection` labels are used
-for route context only and must not create a 14 -> 3 -> 14 m/s target-speed
-step. Explicit lower speeds remain only where route geometry or dynamic
-decision behavior requires them.
+## Limitations
 
-Waypoints60--63 extend the route beyond the final traffic-light stop at
-waypoint59 and complete the turn back toward the starting area. The route map
-also includes matching segment and zone metadata for all 64 waypoints.
-
-Runtime parameters include `initial_waypoint_index` (default `0`). This is a
-diagnostic aid for local segment tests with a matching Unity spawn; benchmark
-runs must retain index 0 and spawn 0.
-
-Run Waypoint Recorder
-
-Before running the recorder, make sure the simulation bridge is running and the TF transform world -> OurCar/INS is available.
-
-ros2 run route_manager waypoint_recorder \
-  --ros-args \
-  -p map_frame:=world \
-  -p vehicle_frame:=OurCar/INS \
-  -p output_file:=/home/linux/ros_course/introduction-to-ros-2026/project/src/route_manager/config/route_map.yaml
-
-Useful commands inside the recorder:
-
-n      record normal waypoint
-c      record curve_mid waypoint
-s      record stop_zone waypoint
-i      record intersection waypoint
-undo   remove the last recorded waypoint
-list   show recent waypoints
-q      save and quit
-
-Run Route Manager
-
-Before running the route manager, make sure the simulation bridge is running and the TF transform world -> OurCar/INS is available.
-
-ros2 run route_manager route_manager_node \
-  --ros-args \
-  -p route_file:=/home/linux/ros_course/introduction-to-ros-2026/project/src/route_manager/config/route_map.yaml \
-  -p map_frame:=world \
-  -p vehicle_frame:=OurCar/INS \
-  -p waypoint_reach_distance:=3.0 \
-  -p lookahead_index:=0 \
-  -p initial_waypoint_index:=0
-  
-Check Published Topics
-ros2 topic echo /route/target_pose
-ros2 topic echo /route/speed_limit
-ros2 topic echo /route/current_waypoint_id
-ros2 topic echo /route/route_state
-ros2 topic echo /route/local_path
+- This is route tracking, not global planning or obstacle avoidance.
+- Progress is planar; height does not affect waypoint completion.
+- The route must be rerecorded or edited when the map/mission changes.
+- `segments` and `zones` are traceability metadata; runtime behavior is driven by the
+  ordered waypoint fields and downstream decision logic.

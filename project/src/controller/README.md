@@ -71,8 +71,8 @@ lookahead = clamp(lookahead_base + lookahead_speed_gain * speed,
                   lookahead_min, lookahead_max)
 ```
 
-The steering output is angle-limited and rate-limited. `steering_sign` exists because the
-Unity steering convention must be confirmed during the first closed-loop test.
+The steering output is angle-limited and rate-limited. `steering_sign=-1.0` records the
+closed-loop-validated Unity convention in which positive Unity steering turns right.
 
 ### Longitudinal control
 
@@ -139,12 +139,12 @@ Build and source the workspace first. Use separate terminals and source
    ros2 launch perception perception.launch.py
    ```
 
-3. Start the route manager. Its current package does not install `route_map.yaml`, so pass
-   the source-tree file explicitly:
+3. Start the route manager with its installed route:
 
    ```bash
+   route_file="$(ros2 pkg prefix --share route_manager)/config/route_map.yaml"
    ros2 run route_manager route_manager_node --ros-args \
-     -p route_file:=/absolute/path/to/repository/project/src/route_manager/config/route_map.yaml \
+     -p route_file:="$route_file" \
      -p map_frame:=world \
      -p vehicle_frame:=OurCar/INS \
      -p waypoint_reach_distance:=3.0 \
@@ -230,6 +230,7 @@ Tune in this order and at low speed:
 5. Verify red-light stopping and green release, then merge slowdown and emergency braking.
 6. Raise maximum speed or throttle only after low-speed full-route tracking is stable.
 
-The current defaults are safe initial estimates, not final Unity-calibrated values. Final
-acceptance still requires closed-loop simulator testing, especially steering sign,
-steering normalization, wheelbase, braking strength, and PID/lookahead tuning.
+The current defaults are the full-system-v1.9.0 closed-loop-validated production values.
+Changing vehicle geometry, simulator physics, route speed, PID/lookahead gains, steering
+normalization, or braking strength requires a new motion-disabled check followed by
+closed-loop regression testing.

@@ -70,6 +70,17 @@ The `obstacle_monitor_node` subscribes to
 from their source frame into `OurCar/INS`, fuses the path-relative point cloud with the
 YOLO/RGB-D vehicle detector, and publishes the two control-facing distances above.
 
+Obstacle-monitor inputs are traceable separately from the state-machine inputs:
+
+| Topic | Type | Purpose |
+| --- | --- | --- |
+| `/perception/pcl/points_preprocessed` | `sensor_msgs/msg/PointCloud2` | Height-filtered points matched to the planning-path corridor and merge ROI. |
+| `/perception/pcl/points` | `sensor_msgs/msg/PointCloud2` | Independent near-field raw safety corridor. |
+| `/planning/path` | `nav_msgs/msg/Path` | Ego-lane corridor reference. |
+| `/route/current_waypoint_id` | `std_msgs/msg/Int32` | Event windows and fixed-structure suppression context. |
+| `/perception/front_vehicle_detected` | `std_msgs/msg/Bool` | Fresh accepted YOLO/RGB-D vehicle identity. |
+| `/perception/front_vehicle_distance` | `std_msgs/msg/Float32` | Visual vehicle range fused with path-cloud distance. |
+
 ### Published topics
 
 | Topic | Type | Consumer | Meaning |
@@ -388,7 +399,7 @@ ros2 launch system_bringup full_system.launch.py \
 - The perception output contains only a color, without confidence, traffic-light ID or
   source timestamp. Route context is therefore used to reduce false triggers.
 - The state machine commands a target speed of zero; stopping distance and brake strength
-  depend on the future controller.
+  are executed by the production controller and depend on its validated configuration.
 - It does not modify `/planning/path`.
 - Point-cloud ROI detection measures proximity, not object identity or relative velocity.
   Static roadside objects can therefore cause false positives if the ROI is too wide.
@@ -397,9 +408,9 @@ ros2 launch system_bringup full_system.launch.py \
 - Global vehicle following requires a fresh vision/point-cloud range match outside the
   validated Event2 direct-control window; a vehicle temporarily hidden from either sensor
   can therefore be released after the configured timeout.
-- Earlier full-route no-event and two-event runs validated the decision behavior. The new
-  YOLO perception path still requires a fresh Unity closed-loop regression after collecting
-  or fine-tuning on representative simulator images.
+- The full-system-v1.9.0 YOLO RGB-D production path completed a fresh Unity closed-loop
+  run from waypoint 0 through 63 with traffic-light, following, and merge behavior. Model,
+  camera, route, or threshold changes still require a new regression.
 
 When decision behaviors are tuned or extended, update the topic tables, priority rules,
 parameters, tests and limitations in this README.

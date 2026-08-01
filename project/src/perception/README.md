@@ -63,6 +63,23 @@ The launch file starts:
 | output | `/perception/front_vehicle_debug` | `std_msgs/String` | Vehicle rejection/measurement details |
 | output | `/perception/traffic_light_debug` | `std_msgs/String` | Light selection and colour details |
 
+`occupancy_map_node` publishes the depth-derived point-cloud and 2-D mapping interfaces:
+
+| Direction | Topic | Type | Meaning |
+| --- | --- | --- | --- |
+| output | `/perception/pcl/points` | `sensor_msgs/PointCloud2` | Raw valid depth points transformed to `world`. |
+| output | `/perception/pcl/points_preprocessed` | `sensor_msgs/PointCloud2` | Height-filtered obstacle points used by `obstacle_monitor_node`. |
+| output | `/perception/depth/projected_map` | `nav_msgs/OccupancyGrid` | Direct 2-D projection of depth-derived obstacle cells. |
+| output | `/perception/extended_map` | `nav_msgs/OccupancyGrid` | Inflated 2-D obstacle map for visualization. |
+
+When `enable_octomap:=true`, the separately launched `octomap_server_node` consumes the
+preprocessed cloud and publishes these additional visualization/diagnostic products:
+
+| Direction | Topic | Type | Meaning |
+| --- | --- | --- | --- |
+| output | `/perception/octomap/projected_map` | `nav_msgs/OccupancyGrid` | OctoMap server's projected occupied cells. |
+| output | `/perception/octomap/octomap_binary` | `octomap_msgs/Octomap` | Binary 3-D map from `octomap_server_node`. |
+
 The vehicle classes are COCO `car`, `bus`, and `truck`. A measurement is
 accepted only when enough reprojected depth samples lie inside the trimmed
 box, its robust range is valid, and its lateral offset is within the configured
@@ -82,8 +99,24 @@ red/yellow observation elsewhere on the route. Missing images, TF, camera
 calibration, model, or inference errors publish fail-safe `UNKNOWN`,
 `detected=false`, and `distance=inf`.
 
-All thresholds, class IDs and topic names are in
-`config/yolo_rgbd.yaml`.
+All thresholds, class IDs and topic names are in `config/yolo_rgbd.yaml`. The node clamps
+invalid scalar values at startup; the production defaults and enforced ranges for the
+most safety-relevant groups are:
+
+| Parameter group | Production value | Unit / enforced constraint |
+| --- | --- | --- |
+| `confidence_threshold`; `traffic_light_confidence_threshold`; `nms_threshold` | `0.25`; `0.01`; `0.45` | Unitless probability/overlap ratio, each clamped to `[0, 1]`. |
+| `maximum_depth_age_s` | `1.0` | Seconds, constrained to `>= 0`; older RGB-depth pairs are rejected. |
+| `minimum_range_m`; `maximum_range_m`; `maximum_abs_lateral_m` | `0.5`; `35.0`; `2.8` | Metres; minimum and lateral range are `>= 0`, maximum is `>= minimum_range_m`. |
+| `distance_percentile` | `0.20` | Unitless quantile, clamped to `[0, 1]`. |
+| `bbox_inner_x_ratio`; `bbox_top_trim_ratio`; `bbox_bottom_trim_ratio` | `0.08`; `0.08`; `0.15` | Image-box ratios, each clamped to `[0, 0.45]`. |
+| `traffic_light_max_y_ratio`; ROI min/max/target ratios | route-specific | Normalized image coordinates, clamped to `[0, 1]`; each ROI maximum is also constrained to be at least its minimum. All per-waypoint ROI arrays must have equal length or startup fails. |
+| `traffic_light_activation_distance_m` | `20.0` | Metres, constrained to `>= 0`. |
+| `traffic_consecutive_frames`; `traffic_confident_green_frames` | `4`; `2` | Frames, each constrained to integer `>= 1`. |
+| `traffic_confident_green_max_red_score`; `traffic_confident_green_min_score` | `4`; `20` | Pixel evidence score, each constrained to integer `>= 0`. |
+
+Changing the camera model, image size, route, or Unity scene requires revalidating the
+ROI and confidence values with motion disabled before a closed-loop run.
 
 ## Improve Unity recognition with fine-tuning
 
