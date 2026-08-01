@@ -13,7 +13,7 @@ uses RGB and depth images with YOLO; it does not use the Unity semantic camera.
 
 | Team member | Student ID | Main contribution | Traceable project artifacts |
 | --- | --- | --- | --- |
-| Lei Fang | 03805710 | `route_manager` | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
+| Lei Fang | 03805710 | `route_manager`, part of integration | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
 | Yida Lyu | 03816236 | `decision`, `controller`, part of integration | Decision state machine, obstacle behavior, Pure Pursuit/PID control, safety handling, and the interfaces from final intent to `/car_command` |
 | Tao Zhang | 03822999 | `Perception`, part of integration | YOLO RGB-D detection, traffic-light classification, vehicle ranging, occupancy mapping, perception configuration, and perception-to-decision interfaces |
 | Jianing Huang | 03814771 | `Trajectory_Generator`, part of integration, project-wide documentation | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, route-to-planning interfaces, and project documentation |
@@ -24,8 +24,8 @@ In the repository, `decision` is implemented by the `decision_making` package an
 The Unity simulation bridge and `dummy_controller` were supplied with the project and are
 not listed as Team 20 contributions.
 
-“Part of integration” is shared work by Yida Lyu, Tao Zhang, and Jianing Huang. It covers
-bringup/configuration alignment, ROS interface integration around their modules,
+“Part of integration” is shared work by Lei Fang, Yida Lyu, Tao Zhang, and Jianing Huang.
+It covers bringup/configuration alignment, ROS interface integration around their modules,
 end-to-end testing, and dynamic validation. Jianing Huang wrote the repository-wide
 project documentation. The repository does not claim a more granular individual split
 for the shared integration work where the team did not provide one.

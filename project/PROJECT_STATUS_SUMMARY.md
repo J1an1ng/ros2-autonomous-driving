@@ -386,13 +386,13 @@ compatibility, formatting, or integration changes.
 
 | Member | Student ID | Primary responsibility | Traceable modules / artifacts |
 | --- | --- | --- | --- |
-| Lei Fang | 03805710 | `route_manager` | `src/route_manager`: route YAML, waypoint recorder, route loading/validation, progress tracking, local route, and route tests |
+| Lei Fang | 03805710 | `route_manager`, part of integration | `src/route_manager`: route YAML, waypoint recorder, route loading/validation, progress tracking, local route, and route tests |
 | Yida Lyu | 03816236 | `decision`, `controller`, part of integration | `src/decision_making`, `src/controller`: state machine, obstacle behaviour, final target speed, Pure Pursuit, PID, safe stop, and decision-to-command interfaces |
 | Tao Zhang | 03822999 | Perception, part of integration | `src/perception`: YOLO RGB-D, traffic-light colour/temporal logic, vehicle range, point cloud/occupancy, model configuration, and perception-to-decision interfaces |
 | Jianing Huang | 03814771 | `Trajectory_Generator`, part of integration, project-wide documentation | `src/trajectory_generator`, `src/autonomy_interfaces`: route projection, smoothing/resampling, continuity/quality gates, constrained time parameterization, custom trajectory messages, and route-to-planning interfaces; repository-wide project documentation |
 
-Integration is shared work by Yida Lyu, Tao Zhang, and Jianing Huang. It includes
-topic/config alignment at their module boundaries, `system_bringup` integration,
+Integration is shared work by Lei Fang, Yida Lyu, Tao Zhang, and Jianing Huang. It
+includes topic/config alignment at their module boundaries, `system_bringup` integration,
 end-to-end testing, and dynamic validation. Jianing Huang wrote the repository-wide
 project documentation. The team did not provide a finer-grained individual split for
 the shared integration work, so this document does not invent one.

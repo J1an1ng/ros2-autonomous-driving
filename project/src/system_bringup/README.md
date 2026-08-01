@@ -4,8 +4,8 @@
 
 `system_bringup` is Team 20's integration package. It provides one production launch entry
 point for simulation, perception, route management, trajectory generation, decision
-making, control, and visualization. Integration is shared by Yida Lyu, Tao Zhang, and
-Jianing Huang around their respective modules.
+making, control, and visualization. Integration is shared by Lei Fang, Yida Lyu, Tao
+Zhang, and Jianing Huang around their respective modules.
 
 The package contains orchestration and visualization code; it does not duplicate the
 domain logic owned by the individual packages.
