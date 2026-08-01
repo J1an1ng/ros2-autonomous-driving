@@ -19,10 +19,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='linux',
-    maintainer_email='linux@todo.todo',
+    maintainer='Team 20',
+    maintainer_email='go29hir@tum.de',
     description='Reference path generation package for autonomous driving.',
-    license='TODO: License declaration',
+    license='Proprietary',
     extras_require={
         'test': [
             'pytest',

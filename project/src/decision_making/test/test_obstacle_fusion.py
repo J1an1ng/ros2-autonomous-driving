@@ -1,13 +1,12 @@
 import math
 
-import pytest
-
 from decision_making.obstacle_fusion import (
     distances_match,
     fuse_vehicle_obstacle_distances,
     vision_detection_is_held,
     vision_distance_is_plausible,
 )
+import pytest
 
 
 def fuse(front, merge, detected, vision, direct=True):

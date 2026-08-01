@@ -3,9 +3,9 @@
 <package format="3">
   <name>route_manager</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="linux@todo.todo">linux</maintainer>
-  <license>TODO: License declaration</license>
+  <description>Route loading, progress tracking, and local path publication.</description>
+  <maintainer email="go29hir@tum.de">Team 20</maintainer>
+  <license>Proprietary</license>
 
   <depend>rclpy</depend>
   <depend>tf2_ros</depend>

@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #include "controller/control_core.hpp"
 
 #include <algorithm>
@@ -156,9 +158,11 @@ LongitudinalCommand SpeedController::update(
     unsaturated, -config_.maximum_brake, config_.maximum_throttle);
 
   const bool is_saturated = std::abs(unsaturated - saturated) > 1.0e-9;
+  const bool above_throttle_limit = unsaturated > config_.maximum_throttle;
+  const bool below_brake_limit = unsaturated < -config_.maximum_brake;
   const bool moves_out_of_saturation =
-    (unsaturated > config_.maximum_throttle && error < 0.0) ||
-    (unsaturated < -config_.maximum_brake && error > 0.0);
+    (above_throttle_limit && error < 0.0) ||
+    (below_brake_limit && error > 0.0);
   if (!is_saturated || moves_out_of_saturation) {
     integral_ = candidate_integral;
   }

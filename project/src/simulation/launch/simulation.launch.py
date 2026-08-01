@@ -18,11 +18,38 @@ def static_tf(name, args):
 
 def vehicle_sensor_transforms():
     return [
-        static_tf('tf_nominal_center', [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center']),
-        static_tf('tf_sensors', [0.8199998, 0, 1.269, 0, 0, 0, 1, 'OurCar/Center', 'OurCar/Sensors/SensorBase']),
-        static_tf('tf_depth_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera']),
-        static_tf('tf_rgb_camera_left', [0, 0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft']),
-        static_tf('tf_rgb_camera_right', [0, -0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight']),
+        static_tf(
+            'tf_nominal_center',
+            [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center'],
+        ),
+        static_tf(
+            'tf_sensors',
+            [
+                0.8199998, 0, 1.269, 0, 0, 0, 1,
+                'OurCar/Center', 'OurCar/Sensors/SensorBase',
+            ],
+        ),
+        static_tf(
+            'tf_depth_camera',
+            [
+                0, 0, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera',
+            ],
+        ),
+        static_tf(
+            'tf_rgb_camera_left',
+            [
+                0, 0.2, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft',
+            ],
+        ),
+        static_tf(
+            'tf_rgb_camera_right',
+            [
+                0, -0.2, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight',
+            ],
+        ),
     ]
 
 
@@ -32,7 +59,11 @@ def generate_launch_description():
     sensor_bind_host = LaunchConfiguration('sensor_bind_host')
     default_config = PathJoinSubstitution([
         FindPackageShare('simulation'),
-        'unity_sim', 'Build_Ubuntu', 'AD_Sim_Data', 'StreamingAssets', 'simulation_config.json'
+        'unity_sim',
+        'Build_Ubuntu',
+        'AD_Sim_Data',
+        'StreamingAssets',
+        'simulation_config.json',
     ])
 
     return LaunchDescription([
@@ -51,7 +82,10 @@ def generate_launch_description():
             executable='unity_TCP_stream_receiver',
             name='Unity_ROS_message_Rx',
             output='screen',
-            parameters=[{'config_file': config_file, 'bind_host': sensor_bind_host}],
+            parameters=[{
+                'config_file': config_file,
+                'bind_host': sensor_bind_host,
+            }],
         ),
         Node(
             package='simulation',
@@ -64,7 +98,9 @@ def generate_launch_description():
         ExecuteProcess(
             cmd=[PathJoinSubstitution([
                 FindPackageShare('simulation'),
-                'unity_sim', 'Build_Ubuntu', 'AD_Sim.x86_64'
+                'unity_sim',
+                'Build_Ubuntu',
+                'AD_Sim.x86_64',
             ])],
             output='screen',
             condition=IfCondition(start_unity),

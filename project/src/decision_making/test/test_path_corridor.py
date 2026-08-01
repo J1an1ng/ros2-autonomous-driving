@@ -1,7 +1,5 @@
 import math
 
-import pytest
-
 from decision_making.path_corridor import (
     in_vehicle_safety_corridor,
     matches_fixed_structure_signature,
@@ -9,6 +7,7 @@ from decision_making.path_corridor import (
     project_to_path,
     robust_nearest_distance,
 )
+import pytest
 
 
 def test_straight_path_projection_reports_arc_length_and_signed_offset():

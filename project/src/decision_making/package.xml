@@ -4,8 +4,8 @@
   <name>decision_making</name>
   <version>0.2.0</version>
   <description>Traffic-light decision state machine for the autonomous driving project.</description>
-  <maintainer email="yida@todo.todo">Yida</maintainer>
-  <license>TODO</license>
+  <maintainer email="go29hir@tum.de">Team 20</maintainer>
+  <license>Proprietary</license>
 
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>

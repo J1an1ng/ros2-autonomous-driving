@@ -17,11 +17,38 @@ def static_tf(name, args):
 
 def vehicle_sensor_transforms():
     return [
-        static_tf('tf_nominal_center', [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center']),
-        static_tf('tf_sensors', [0.8199998, 0, 1.269, 0, 0, 0, 1, 'OurCar/Center', 'OurCar/Sensors/SensorBase']),
-        static_tf('tf_depth_camera', [0, 0, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera']),
-        static_tf('tf_rgb_camera_left', [0, 0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft']),
-        static_tf('tf_rgb_camera_right', [0, -0.2, 0, 0.5, -0.5, 0.5, -0.5, 'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight']),
+        static_tf(
+            'tf_nominal_center',
+            [0, 0, -0.7180116, 0, 0, 0, 1, 'OurCar/INS', 'OurCar/Center'],
+        ),
+        static_tf(
+            'tf_sensors',
+            [
+                0.8199998, 0, 1.269, 0, 0, 0, 1,
+                'OurCar/Center', 'OurCar/Sensors/SensorBase',
+            ],
+        ),
+        static_tf(
+            'tf_depth_camera',
+            [
+                0, 0, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/DepthCamera',
+            ],
+        ),
+        static_tf(
+            'tf_rgb_camera_left',
+            [
+                0, 0.2, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraLeft',
+            ],
+        ),
+        static_tf(
+            'tf_rgb_camera_right',
+            [
+                0, -0.2, 0, 0.5, -0.5, 0.5, -0.5,
+                'OurCar/Sensors/SensorBase', 'OurCar/Sensors/RGBCameraRight',
+            ],
+        ),
     ]
 
 
@@ -29,7 +56,11 @@ def generate_launch_description():
     config_file = LaunchConfiguration('config_file')
     default_config = PathJoinSubstitution([
         FindPackageShare('simulation'),
-        'unity_sim', 'Build_Ubuntu', 'AD_Sim_Data', 'StreamingAssets', 'simulation_config.json'
+        'unity_sim',
+        'Build_Ubuntu',
+        'AD_Sim_Data',
+        'StreamingAssets',
+        'simulation_config.json',
     ])
 
     return LaunchDescription([

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Publish dependency-free RViz markers for live vehicle telemetry charts."""
 
-import math
 from collections import deque
+import math
 
-import rclpy
 from geometry_msgs.msg import Point, TwistStamped
+import rclpy
 from rclpy.node import Node
 from simulation.msg import VehicleControl
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -17,7 +17,7 @@ class LiveVisualization(Node):
     GRAPH_WIDTH = 20.0
 
     def __init__(self):
-        super().__init__("live_visualization")
+        super().__init__('live_visualization')
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.start_time = self.now_seconds()
@@ -28,20 +28,20 @@ class LiveVisualization(Node):
         self.samples = deque()
         self.trace = deque(maxlen=5000)
         self.charts_pub = self.create_publisher(
-            MarkerArray, "/visualization/telemetry_charts", 10
+            MarkerArray, '/visualization/telemetry_charts', 10
         )
         self.trace_pub = self.create_publisher(
-            Marker, "/visualization/vehicle_trace", 10
+            Marker, '/visualization/vehicle_trace', 10
         )
         self.create_subscription(
-            TwistStamped, "/OurCar/INS/twist", self.twist_callback, 10
+            TwistStamped, '/OurCar/INS/twist', self.twist_callback, 10
         )
         self.create_subscription(
-            VehicleControl, "/car_command", self.command_callback, 10
+            VehicleControl, '/car_command', self.command_callback, 10
         )
         self.create_timer(0.1, self.update)
         self.get_logger().info(
-            "Live charts: speed, throttle, steering wheel and heading"
+            'Live charts: speed, throttle, steering wheel and heading'
         )
 
     def now_seconds(self):
@@ -68,9 +68,9 @@ class LiveVisualization(Node):
 
     def make_line(self, marker_id, points, color, width=0.055):
         marker = Marker()
-        marker.header.frame_id = "telemetry"
+        marker.header.frame_id = 'telemetry'
         marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "charts"
+        marker.ns = 'charts'
         marker.id = marker_id
         marker.type = Marker.LINE_STRIP
         marker.action = Marker.ADD
@@ -81,9 +81,9 @@ class LiveVisualization(Node):
 
     def make_text(self, marker_id, x, y, text, color):
         marker = Marker()
-        marker.header.frame_id = "telemetry"
+        marker.header.frame_id = 'telemetry'
         marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "labels"
+        marker.ns = 'labels'
         marker.id = marker_id
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
@@ -99,7 +99,7 @@ class LiveVisualization(Node):
     def update_pose(self):
         try:
             transform = self.tf_buffer.lookup_transform(
-                "world", "OurCar/INS", rclpy.time.Time()
+                'world', 'OurCar/INS', rclpy.time.Time()
             )
         except TransformException:
             return
@@ -119,9 +119,9 @@ class LiveVisualization(Node):
 
     def publish_trace(self):
         marker = Marker()
-        marker.header.frame_id = "world"
+        marker.header.frame_id = 'world'
         marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "vehicle_trace"
+        marker.ns = 'vehicle_trace'
         marker.id = 0
         marker.type = Marker.LINE_STRIP
         marker.action = Marker.ADD
@@ -132,10 +132,10 @@ class LiveVisualization(Node):
 
     def publish_charts(self, now):
         rows = [
-            ("Speed", "m/s", 6.0, 0.0, 15.0, (0.1, 0.85, 1.0), self.speed),
-            ("Throttle", "%", 2.0, 0.0, 1.0, (0.2, 1.0, 0.3), self.throttle),
-            ("Steering wheel", "%", -2.0, -1.0, 1.0, (1.0, 0.75, 0.1), self.steering),
-            ("Heading", "deg", -6.0, -180.0, 180.0, (1.0, 0.25, 0.7), self.heading),
+            ('Speed', 'm/s', 6.0, 0.0, 15.0, (0.1, 0.85, 1.0), self.speed),
+            ('Throttle', '%', 2.0, 0.0, 1.0, (0.2, 1.0, 0.3), self.throttle),
+            ('Steering wheel', '%', -2.0, -1.0, 1.0, (1.0, 0.75, 0.1), self.steering),
+            ('Heading', 'deg', -6.0, -180.0, 180.0, (1.0, 0.25, 0.7), self.heading),
         ]
         array = MarkerArray()
         for index, (name, unit, center, low, high, color, value) in enumerate(rows):
@@ -152,18 +152,18 @@ class LiveVisualization(Node):
                 normalized = max(0.0, min(1.0, normalized))
                 points.append(Point(x=x, y=center - 1.25 + 2.5 * normalized, z=0.05))
             array.markers.append(self.make_line(index, points, color))
-            shown = value * 100.0 if unit == "%" else value
+            shown = value * 100.0 if unit == '%' else value
             array.markers.append(
                 self.make_text(
                     200 + index,
                     3.2,
                     center + 1.55,
-                    f"{name}: {shown:6.2f} {unit}",
+                    f'{name}: {shown:6.2f} {unit}',
                     color,
                 )
             )
         array.markers.append(
-            self.make_text(300, 17.0, 8.0, "60 s live history", (0.85, 0.85, 0.85))
+            self.make_text(300, 17.0, 8.0, '60 s live history', (0.85, 0.85, 0.85))
         )
         self.charts_pub.publish(array)
 
@@ -191,5 +191,5 @@ def main(args=None):
         rclpy.try_shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

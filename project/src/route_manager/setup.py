@@ -17,18 +17,20 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='linux',
-    maintainer_email='linux@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='Team 20',
+    maintainer_email='go29hir@tum.de',
+    description='Route loading, progress tracking, and local path publication.',
+    license='Proprietary',
     extras_require={
         'test': [
             'pytest',
         ],
     },
     entry_points={
-        'console_scripts': ['waypoint_recorder = 		route_manager.interactive_waypoint_recorder:main',
-'route_manager_node = route_manager.route_manager_node:main',
+        'console_scripts': [
+            'route_manager_node = route_manager.route_manager_node:main',
+            'waypoint_recorder = '
+            'route_manager.interactive_waypoint_recorder:main',
         ],
     },
 )

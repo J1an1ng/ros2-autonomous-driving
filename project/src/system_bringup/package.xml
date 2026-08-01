@@ -4,8 +4,8 @@
   <name>system_bringup</name>
   <version>0.1.0</version>
   <description>Single launch entry point for staged full-system integration.</description>
-  <maintainer email="team20@todo.todo">Team 20</maintainer>
-  <license>TODO</license>
+  <maintainer email="go29hir@tum.de">Team 20</maintainer>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

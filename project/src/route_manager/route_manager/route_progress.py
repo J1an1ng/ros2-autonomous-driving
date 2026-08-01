@@ -17,27 +17,27 @@ def waypoint_reached_or_passed(
     waypoint = waypoints[index]
     effective_reach_distance = max(
         0.0,
-        float(waypoint.get("reach_distance", reach_distance)),
+        float(waypoint.get('reach_distance', reach_distance)),
     )
     distance = distance_2d(
         ego_x,
         ego_y,
-        float(waypoint["x"]),
-        float(waypoint["y"]),
+        float(waypoint['x']),
+        float(waypoint['y']),
     )
     if distance <= effective_reach_distance:
-        return "reached"
+        return 'reached'
     if index == 0:
-        return ""
+        return ''
 
     previous = waypoints[index - 1]
-    segment_x = float(waypoint["x"]) - float(previous["x"])
-    segment_y = float(waypoint["y"]) - float(previous["y"])
+    segment_x = float(waypoint['x']) - float(previous['x'])
+    segment_y = float(waypoint['y']) - float(previous['y'])
     if segment_x * segment_x + segment_y * segment_y <= 1e-6:
-        return ""
+        return ''
 
-    beyond_x = ego_x - float(waypoint["x"])
-    beyond_y = ego_y - float(waypoint["y"])
+    beyond_x = ego_x - float(waypoint['x'])
+    beyond_y = ego_y - float(waypoint['y'])
     if beyond_x * segment_x + beyond_y * segment_y >= 0.0:
-        return "passed"
-    return ""
+        return 'passed'
+    return ''

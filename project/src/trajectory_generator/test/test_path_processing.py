@@ -198,11 +198,11 @@ def test_quality_validation_rejects_each_geometric_limit():
         PathPoint(x=1.0, y=0.0, z=0.0, yaw=0.0, s=1.0),
     ]
     limits = {
-        "path_resolution": 1.0,
-        "max_curvature": 2.0,
-        "max_yaw_step": 1.1,
-        "max_start_distance": 5.0,
-        "max_spline_deviation": 2.0,
+        'path_resolution': 1.0,
+        'max_curvature': 2.0,
+        'max_yaw_step': 1.1,
+        'max_start_distance': 5.0,
+        'max_spline_deviation': 2.0,
     }
 
     assert validate_path(valid_path, **limits)

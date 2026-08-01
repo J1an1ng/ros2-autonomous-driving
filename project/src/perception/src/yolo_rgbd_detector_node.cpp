@@ -1,3 +1,10 @@
+// Copyright 2026 Team 20
+
+#include <onnxruntime_cxx_api.h>
+#include <tf2/exceptions.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -22,7 +29,6 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
-#include <onnxruntime_cxx_api.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -32,9 +38,6 @@
 #include <std_msgs/msg/int32_multi_array.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/u_int8.hpp>
-#include <tf2/exceptions.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
 
 #include "perception/traffic_light_stability_filter.hpp"
 #include "perception/traffic_light_route_gate.hpp"
@@ -69,8 +72,8 @@ struct RigidTransform
   {
     return Point3{
       r00 * point.x + r01 * point.y + r02 * point.z + tx,
-      r10 * point.x + r11 * point.y + r12 * point.z + ty,
-      r20 * point.x + r21 * point.y + r22 * point.z + tz};
+        r10 * point.x + r11 * point.y + r12 * point.z + ty,
+        r20 * point.x + r21 * point.y + r22 * point.z + tz};
   }
 };
 
@@ -713,10 +716,10 @@ private:
           continue;
         }
         samples.push_back(ProjectedDepthSample{
-            static_cast<float>(image_x),
-            static_cast<float>(image_y),
-            static_cast<float>(rgb_point.z),
-            static_cast<float>(rgb_point.x)});
+          static_cast<float>(image_x),
+          static_cast<float>(image_y),
+          static_cast<float>(rgb_point.z),
+          static_cast<float>(rgb_point.x)});
       }
     }
     status = "ok";

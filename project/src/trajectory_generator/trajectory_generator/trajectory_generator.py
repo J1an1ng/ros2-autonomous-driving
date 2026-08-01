@@ -29,44 +29,44 @@ class TrajectoryGeneratorConfig:
 
     def __post_init__(self):
         values = {
-            "path_resolution": self.path_resolution,
-            "min_target_distance": self.min_target_distance,
-            "default_speed": self.default_speed,
-            "max_speed": self.max_speed,
-            "stop_speed": self.stop_speed,
-            "smoothing_strength": self.smoothing_strength,
-            "max_curvature": self.max_curvature,
-            "max_yaw_step": self.max_yaw_step,
-            "max_start_distance": self.max_start_distance,
-            "max_spline_deviation": self.max_spline_deviation,
-            "continuity_blend_distance": self.continuity_blend_distance,
-            "continuity_candidate_weight": self.continuity_candidate_weight,
-            "max_continuity_deviation": self.max_continuity_deviation,
+            'path_resolution': self.path_resolution,
+            'min_target_distance': self.min_target_distance,
+            'default_speed': self.default_speed,
+            'max_speed': self.max_speed,
+            'stop_speed': self.stop_speed,
+            'smoothing_strength': self.smoothing_strength,
+            'max_curvature': self.max_curvature,
+            'max_yaw_step': self.max_yaw_step,
+            'max_start_distance': self.max_start_distance,
+            'max_spline_deviation': self.max_spline_deviation,
+            'continuity_blend_distance': self.continuity_blend_distance,
+            'continuity_candidate_weight': self.continuity_candidate_weight,
+            'max_continuity_deviation': self.max_continuity_deviation,
         }
         invalid_value = next(
             (name for name, value in values.items() if not math.isfinite(value)),
             None,
         )
         if invalid_value is not None:
-            raise ValueError(f"{invalid_value} must be finite")
+            raise ValueError(f'{invalid_value} must be finite')
         if self.path_resolution <= 0.0:
-            raise ValueError("path_resolution must be greater than zero")
+            raise ValueError('path_resolution must be greater than zero')
         nonnegative_values = {
-            name: value for name, value in values.items() if name != "path_resolution"
+            name: value for name, value in values.items() if name != 'path_resolution'
         }
         invalid_value = next(
             (name for name, value in nonnegative_values.items() if value < 0.0),
             None,
         )
         if invalid_value is not None:
-            raise ValueError(f"{invalid_value} must not be negative")
+            raise ValueError(f'{invalid_value} must not be negative')
 
 
 @dataclass(frozen=True)
 class GeneratedTrajectory:
     path_points: list
     target_speed: float
-    path_status: str = ""
+    path_status: str = ''
 
 
 class TrajectoryGenerator:
@@ -84,7 +84,7 @@ class TrajectoryGenerator:
         local_path=None,
     ):
         local_path_supplied = bool(local_path)
-        path_source = "local"
+        path_source = 'local'
         processing_result = process_local_path_result(
             route_points=local_path or [],
             ego_pose=ego_pose,
@@ -97,9 +97,9 @@ class TrajectoryGenerator:
             use_waypoint_yaw=self.config.use_waypoint_yaw,
         )
         path_points = processing_result.path_points
-        path_status = ""
+        path_status = ''
         if not path_points and target_pose is not None:
-            path_source = "fallback"
+            path_source = 'fallback'
             path_points = interpolate_path(
                 ego_pose=ego_pose,
                 target_pose=target_pose,
@@ -108,8 +108,8 @@ class TrajectoryGenerator:
             )
             if path_points and local_path_supplied:
                 path_status = (
-                    f"local path rejected ({processing_result.rejection_reason}); "
-                    "using target-pose fallback"
+                    f'local path rejected ({processing_result.rejection_reason}); '
+                    'using target-pose fallback'
                 )
         rejection_reason = get_path_rejection_reason(
             path_points,
@@ -123,13 +123,13 @@ class TrajectoryGenerator:
         if rejection_reason:
             path_points = []
             if target_pose is not None:
-                path_status = f"fallback path rejected: {rejection_reason}"
+                path_status = f'fallback path rejected: {rejection_reason}'
             elif local_path_supplied:
                 path_status = (
-                    f"local path rejected: {processing_result.rejection_reason}"
+                    f'local path rejected: {processing_result.rejection_reason}'
                 )
             else:
-                path_status = "no local path or target pose is available"
+                path_status = 'no local path or target pose is available'
         if path_points and path_source == self.previous_path_source:
             path_points = blend_with_previous_path(
                 previous_path=self.previous_path_points,

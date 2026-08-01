@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>

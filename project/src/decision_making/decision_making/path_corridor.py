@@ -32,7 +32,8 @@ def robust_nearest_distance(
     distances: Iterable[float],
     minimum_points: int,
 ) -> float:
-    """Return the nearest distance supported by the requested number of points.
+    """
+    Return the nearest distance supported by the requested number of points.
 
     Using the Nth-nearest point prevents a single depth outlier from commanding
     an emergency stop while retaining a conservative distance for solid objects.
@@ -98,7 +99,8 @@ def project_to_path(
     y: float,
     path: Sequence[Tuple[float, float]],
 ) -> Optional[PathProjection]:
-    """Project a vehicle-frame point onto a polyline.
+    """
+    Project a vehicle-frame point onto a polyline.
 
     ``along`` is arc length from the ego origin. Positive ``lateral`` is left
     of the local path tangent and negative is right.

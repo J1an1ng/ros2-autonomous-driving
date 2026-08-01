@@ -1,22 +1,26 @@
 import socket
 import struct
 
+
 def decode(data):
-    if len(data) == 16:
-        values = struct.unpack("ffff", data)
-        return values
-    else:
+    if len(data) != 16:
         return None
+    return struct.unpack('ffff', data)
+
 
 port = 6657
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(("0.0.0.0", port))
+sock.bind(('0.0.0.0', port))
 
-print("Listening on UDP port " + str(port) + "...")
+print(f'Listening on UDP port {port}...')
 
 while True:
-    data, addr = sock.recvfrom(1024)
-    values = decode(data = data)
+    data, address = sock.recvfrom(1024)
+    values = decode(data=data)
     if values is not None:
-        print("Address: " + str(addr))
-        print(f"Control values: throttle={values[0]:.3f}, steering={values[1]:.3f}, brake={values[2]:.3f}, dummy={values[3]:.3f}")
+        print(f'Address: {address}')
+        print(
+            f'Control values: throttle={values[0]:.3f}, '
+            f'steering={values[1]:.3f}, brake={values[2]:.3f}, '
+            f'dummy={values[3]:.3f}'
+        )

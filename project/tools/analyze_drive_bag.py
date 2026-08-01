@@ -5,8 +5,8 @@ import collections
 import math
 import re
 
-import rosbag2_py
 from rclpy.serialization import deserialize_message
+import rosbag2_py
 from rosidl_runtime_py.utilities import get_message
 
 

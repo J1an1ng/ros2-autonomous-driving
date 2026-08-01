@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 
 import math
-from pathlib import Path as FilePath
 
-import yaml
+from geometry_msgs.msg import PoseStamped, Quaternion
+from nav_msgs.msg import Path as NavPath
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-
-from std_msgs.msg import Int32, Float32, String
-from geometry_msgs.msg import PoseStamped, Quaternion
-from nav_msgs.msg import Path as NavPath
-from tf2_ros import Buffer, TransformListener, TransformException
-
+from route_manager.route_map import load_route
 from route_manager.route_progress import distance_2d, waypoint_reached_or_passed
+from std_msgs.msg import Float32, Int32, String
+from tf2_ros import Buffer, TransformException, TransformListener
 
 
 def yaw_deg_to_quaternion(yaw_deg):
@@ -31,46 +28,46 @@ def yaw_deg_to_quaternion(yaw_deg):
 class RouteManagerNode(Node):
 
     def __init__(self):
-        super().__init__("route_manager_node")
+        super().__init__('route_manager_node')
 
         # Parameters
-        self.declare_parameter("route_file", "")
-        self.declare_parameter("map_frame", "world")
-        self.declare_parameter("vehicle_frame", "OurCar/INS")
-        self.declare_parameter("waypoint_reach_distance", 3.0)
-        self.declare_parameter("lookahead_index", 1)
-        self.declare_parameter("local_path_size", 5)
-        self.declare_parameter("initial_waypoint_index", 0)
+        self.declare_parameter('route_file', '')
+        self.declare_parameter('map_frame', 'world')
+        self.declare_parameter('vehicle_frame', 'OurCar/INS')
+        self.declare_parameter('waypoint_reach_distance', 3.0)
+        self.declare_parameter('lookahead_index', 1)
+        self.declare_parameter('local_path_size', 5)
+        self.declare_parameter('initial_waypoint_index', 0)
 
-        self.route_file = self.get_parameter("route_file").value
-        self.map_frame = self.get_parameter("map_frame").value
-        self.vehicle_frame = self.get_parameter("vehicle_frame").value
+        self.route_file = self.get_parameter('route_file').value
+        self.map_frame = self.get_parameter('map_frame').value
+        self.vehicle_frame = self.get_parameter('vehicle_frame').value
 
         self.reach_distance = float(
-            self.get_parameter("waypoint_reach_distance").value
+            self.get_parameter('waypoint_reach_distance').value
         )
 
         self.lookahead_index = int(
-            self.get_parameter("lookahead_index").value
+            self.get_parameter('lookahead_index').value
         )
 
         self.local_path_size = int(
-            self.get_parameter("local_path_size").value
+            self.get_parameter('local_path_size').value
         )
 
         if self.local_path_size <= 0:
             raise RuntimeError(
-                "Parameter local_path_size must be greater than 0."
+                'Parameter local_path_size must be greater than 0.'
             )
 
         # Load route
-        self.waypoints = self.load_route_file(self.route_file)
+        self.waypoints = load_route(self.route_file)
         self.current_index = int(
-            self.get_parameter("initial_waypoint_index").value
+            self.get_parameter('initial_waypoint_index').value
         )
         if not 0 <= self.current_index < len(self.waypoints):
             raise RuntimeError(
-                "Parameter initial_waypoint_index is outside the route."
+                'Parameter initial_waypoint_index is outside the route.'
             )
         self.route_completed = False
 
@@ -84,37 +81,37 @@ class RouteManagerNode(Node):
         # Publishers
         self.target_pose_pub = self.create_publisher(
             PoseStamped,
-            "/route/target_pose",
+            '/route/target_pose',
             10
         )
 
         self.speed_limit_pub = self.create_publisher(
             Float32,
-            "/route/speed_limit",
+            '/route/speed_limit',
             10
         )
 
         self.current_wp_pub = self.create_publisher(
             Int32,
-            "/route/current_waypoint_id",
+            '/route/current_waypoint_id',
             10
         )
 
         self.waypoint_distance_pub = self.create_publisher(
             Float32,
-            "/route/current_waypoint_distance",
+            '/route/current_waypoint_distance',
             10
         )
 
         self.route_state_pub = self.create_publisher(
             String,
-            "/route/route_state",
+            '/route/route_state',
             10
         )
 
         self.local_path_pub = self.create_publisher(
             NavPath,
-            "/route/local_path",
+            '/route/local_path',
             10
         )
 
@@ -124,77 +121,22 @@ class RouteManagerNode(Node):
             self.timer_callback
         )
 
-        self.get_logger().info("Route Manager started.")
+        self.get_logger().info('Route Manager started.')
         self.get_logger().info(
-            f"Loaded {len(self.waypoints)} waypoints."
+            f'Loaded {len(self.waypoints)} waypoints.'
         )
         self.get_logger().info(
-            f"map_frame: {self.map_frame}"
+            f'map_frame: {self.map_frame}'
         )
         self.get_logger().info(
-            f"vehicle_frame: {self.vehicle_frame}"
+            f'vehicle_frame: {self.vehicle_frame}'
         )
         self.get_logger().info(
-            f"local_path_size: {self.local_path_size}"
+            f'local_path_size: {self.local_path_size}'
         )
         self.get_logger().info(
-            f"initial_waypoint_index: {self.current_index}"
+            f'initial_waypoint_index: {self.current_index}'
         )
-
-    def load_route_file(self, route_file):
-        if not route_file:
-            raise RuntimeError(
-                "Parameter route_file is empty."
-            )
-
-        path = FilePath(route_file)
-
-        if not path.exists():
-            raise RuntimeError(
-                f"Route file does not exist: {route_file}"
-            )
-
-        if not path.is_file():
-            raise RuntimeError(
-                f"Route path is not a file: {route_file}"
-            )
-
-        with open(path, "r", encoding="utf-8") as file:
-            data = yaml.safe_load(file)
-
-        if not isinstance(data, dict):
-            raise RuntimeError(
-                "Route file does not contain a valid YAML dictionary."
-            )
-
-        waypoints = data.get("waypoints", [])
-
-        if not isinstance(waypoints, list) or not waypoints:
-            raise RuntimeError(
-                "No valid waypoints found in route file."
-            )
-
-        required_fields = ["x", "y"]
-
-        for index, waypoint in enumerate(waypoints):
-            if not isinstance(waypoint, dict):
-                raise RuntimeError(
-                    f"Waypoint {index} is not a valid dictionary."
-                )
-
-            missing_fields = [
-                field
-                for field in required_fields
-                if field not in waypoint
-            ]
-
-            if missing_fields:
-                raise RuntimeError(
-                    f"Waypoint {index} is missing fields: "
-                    f"{missing_fields}"
-                )
-
-        return waypoints
 
     def get_vehicle_pose(self):
         try:
@@ -206,7 +148,7 @@ class RouteManagerNode(Node):
 
         except TransformException as ex:
             self.get_logger().warn(
-                f"TF not available: {ex}",
+                f'TF not available: {ex}',
                 throttle_duration_sec=2.0
             )
             return None
@@ -238,18 +180,18 @@ class RouteManagerNode(Node):
                 break
 
             waypoint = self.waypoints[self.current_index]
-            waypoint_id = int(waypoint.get("id", self.current_index))
+            waypoint_id = int(waypoint.get('id', self.current_index))
             if self.current_index == len(self.waypoints) - 1:
                 self.route_completed = True
                 self.get_logger().info(
-                    f"Route completed at waypoint {waypoint_id}"
+                    f'Route completed at waypoint {waypoint_id}'
                 )
                 break
 
             self.current_index += 1
             self.get_logger().info(
-                f"Waypoint {waypoint_id} {progress}; "
-                f"switching to waypoint index {self.current_index}"
+                f'Waypoint {waypoint_id} {progress}; '
+                f'switching to waypoint index {self.current_index}'
             )
 
     def get_target_waypoint(self):
@@ -268,17 +210,17 @@ class RouteManagerNode(Node):
         pose_msg.header.frame_id = self.map_frame
 
         pose_msg.pose.position.x = float(
-            waypoint["x"]
+            waypoint['x']
         )
         pose_msg.pose.position.y = float(
-            waypoint["y"]
+            waypoint['y']
         )
         pose_msg.pose.position.z = float(
-            waypoint.get("z", 0.0)
+            waypoint.get('z', 0.0)
         )
 
         yaw_deg = float(
-            waypoint.get("yaw_deg", 0.0)
+            waypoint.get('yaw_deg', 0.0)
         )
 
         pose_msg.pose.orientation = (
@@ -287,27 +229,27 @@ class RouteManagerNode(Node):
 
         speed_msg = Float32()
         speed_msg.data = 0.0 if self.route_completed else float(
-            waypoint.get("speed_limit", 2.0)
+            waypoint.get('speed_limit', 2.0)
         )
 
         id_msg = Int32()
         id_msg.data = int(
-            waypoint.get("id", target_index)
+            waypoint.get('id', target_index)
         )
 
         state_msg = String()
         state_msg.data = (
-            "route_complete"
+            'route_complete'
             if self.route_completed
-            else str(waypoint.get("type", "normal"))
+            else str(waypoint.get('type', 'normal'))
         )
 
         distance_msg = Float32()
         distance_msg.data = distance_2d(
             ego_x,
             ego_y,
-            float(waypoint["x"]),
-            float(waypoint["y"]),
+            float(waypoint['x']),
+            float(waypoint['y']),
         )
 
         self.target_pose_pub.publish(pose_msg)
@@ -319,7 +261,7 @@ class RouteManagerNode(Node):
     def publish_local_path(self):
         if not self.waypoints:
             self.get_logger().warn(
-                "Cannot publish local path: no waypoints loaded."
+                'Cannot publish local path: no waypoints loaded.'
             )
             return
 
@@ -328,8 +270,7 @@ class RouteManagerNode(Node):
             or self.current_index >= len(self.waypoints)
         ):
             self.get_logger().warn(
-                f"Invalid current waypoint index: "
-                f"{self.current_index}"
+                f'Invalid current waypoint index: {self.current_index}'
             )
             return
 
@@ -362,17 +303,17 @@ class RouteManagerNode(Node):
             pose_msg.header.frame_id = self.map_frame
 
             pose_msg.pose.position.x = float(
-                waypoint["x"]
+                waypoint['x']
             )
             pose_msg.pose.position.y = float(
-                waypoint["y"]
+                waypoint['y']
             )
             pose_msg.pose.position.z = float(
-                waypoint.get("z", 0.0)
+                waypoint.get('z', 0.0)
             )
 
             yaw_deg = float(
-                waypoint.get("yaw_deg", 0.0)
+                waypoint.get('yaw_deg', 0.0)
             )
 
             pose_msg.pose.orientation = (
@@ -422,7 +363,7 @@ def main(args=None):
     except KeyboardInterrupt:
         if node is not None:
             node.get_logger().info(
-                "Route Manager stopped."
+                'Route Manager stopped.'
             )
 
     except ExternalShutdownException:
@@ -436,10 +377,10 @@ def main(args=None):
             return
         if node is not None:
             node.get_logger().error(
-                f"Route Manager failed: {ex}"
+                f'Route Manager failed: {ex}'
             )
         else:
-            print(f"Route Manager failed: {ex}")
+            print(f'Route Manager failed: {ex}')
 
         raise
 
@@ -453,5 +394,5 @@ def main(args=None):
         rclpy.try_shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

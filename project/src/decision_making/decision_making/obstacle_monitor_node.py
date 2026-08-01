@@ -3,17 +3,9 @@
 import math
 import struct
 
-import rclpy
-from nav_msgs.msg import Path
-from rclpy.executors import ExternalShutdownException
-from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2, PointField
-from std_msgs.msg import Bool, Float32, Int32
-from tf2_ros import Buffer, TransformException, TransformListener
-
 from decision_making.obstacle_fusion import (
-    VehicleObstacleFusion,
     fuse_vehicle_obstacle_distances,
+    VehicleObstacleFusion,
     vision_detection_is_held,
     vision_distance_is_plausible,
 )
@@ -24,124 +16,131 @@ from decision_making.path_corridor import (
     project_to_path,
     robust_nearest_distance,
 )
+from nav_msgs.msg import Path
+import rclpy
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Bool, Float32, Int32
+from tf2_ros import Buffer, TransformException, TransformListener
 
 
 class ObstacleMonitorNode(Node):
     """Publish nearest-point distances in two vehicle-frame regions of interest."""
 
     def __init__(self) -> None:
-        super().__init__("obstacle_monitor_node")
+        super().__init__('obstacle_monitor_node')
         self.declare_parameter(
-            "pointcloud_topic", "/perception/pcl/points_preprocessed"
+            'pointcloud_topic', '/perception/pcl/points_preprocessed'
         )
         self.declare_parameter(
-            "safety_pointcloud_topic", "/perception/pcl/points"
+            'safety_pointcloud_topic', '/perception/pcl/points'
         )
-        self.declare_parameter("safety_pointcloud_timeout", 0.5)
-        self.declare_parameter("vehicle_frame", "OurCar/INS")
-        self.declare_parameter("use_latest_tf", True)
-        self.declare_parameter("planning_path_topic", "/planning/path")
-        self.declare_parameter("planning_path_timeout", 0.75)
-        self.declare_parameter("pointcloud_match_timeout", 0.75)
-        self.declare_parameter("front_min_x", 0.5)
-        self.declare_parameter("front_max_x", 30.0)
-        self.declare_parameter("front_half_width", 1.2)
-        self.declare_parameter("safety_corridor_enabled", True)
-        self.declare_parameter("safety_min_x", 0.5)
-        self.declare_parameter("safety_max_x", 3.5)
-        self.declare_parameter("safety_half_width", 1.1)
-        self.declare_parameter("safety_min_points", 5)
+        self.declare_parameter('safety_pointcloud_timeout', 0.5)
+        self.declare_parameter('vehicle_frame', 'OurCar/INS')
+        self.declare_parameter('use_latest_tf', True)
+        self.declare_parameter('planning_path_topic', '/planning/path')
+        self.declare_parameter('planning_path_timeout', 0.75)
+        self.declare_parameter('pointcloud_match_timeout', 0.75)
+        self.declare_parameter('front_min_x', 0.5)
+        self.declare_parameter('front_max_x', 30.0)
+        self.declare_parameter('front_half_width', 1.2)
+        self.declare_parameter('safety_corridor_enabled', True)
+        self.declare_parameter('safety_min_x', 0.5)
+        self.declare_parameter('safety_max_x', 3.5)
+        self.declare_parameter('safety_half_width', 1.1)
+        self.declare_parameter('safety_min_points', 5)
         self.declare_parameter(
-            "fixed_structure_suppression_waypoint_ids", [48]
+            'fixed_structure_suppression_waypoint_ids', [48]
         )
-        self.declare_parameter("fixed_structure_max_path_distance", 9.5)
-        self.declare_parameter("fixed_structure_max_safety_distance", 4.0)
-        self.declare_parameter("fixed_structure_max_merge_distance", 9.5)
-        self.declare_parameter("merge_min_x", 0.5)
-        self.declare_parameter("merge_max_x", 15.0)
-        self.declare_parameter("merge_right_min_y", -2.5)
-        self.declare_parameter("merge_right_max_y", -0.8)
-        self.declare_parameter("min_z", -0.5)
-        self.declare_parameter("max_z", 2.0)
+        self.declare_parameter('fixed_structure_max_path_distance', 9.5)
+        self.declare_parameter('fixed_structure_max_safety_distance', 4.0)
+        self.declare_parameter('fixed_structure_max_merge_distance', 9.5)
+        self.declare_parameter('merge_min_x', 0.5)
+        self.declare_parameter('merge_max_x', 15.0)
+        self.declare_parameter('merge_right_min_y', -2.5)
+        self.declare_parameter('merge_right_max_y', -0.8)
+        self.declare_parameter('min_z', -0.5)
+        self.declare_parameter('max_z', 2.0)
         self.declare_parameter(
-            "vision_vehicle_detected_topic",
-            "/perception/front_vehicle_detected",
-        )
-        self.declare_parameter(
-            "vision_vehicle_distance_topic",
-            "/perception/front_vehicle_distance",
-        )
-        self.declare_parameter("vision_vehicle_timeout", 1.0)
-        self.declare_parameter("vision_vehicle_detection_hold_time", 0.6)
-        self.declare_parameter("vision_vehicle_max_abs_range_rate", 6.0)
-        self.declare_parameter("vision_vehicle_jump_tolerance", 1.5)
-        self.declare_parameter("vehicle_distance_match_tolerance", 2.5)
-        self.declare_parameter(
-            "vehicle_distance_match_relative_tolerance", 0.2
+            'vision_vehicle_detected_topic',
+            '/perception/front_vehicle_detected',
         )
         self.declare_parameter(
-            "vision_direct_control_waypoint_ids",
+            'vision_vehicle_distance_topic',
+            '/perception/front_vehicle_distance',
+        )
+        self.declare_parameter('vision_vehicle_timeout', 1.0)
+        self.declare_parameter('vision_vehicle_detection_hold_time', 0.6)
+        self.declare_parameter('vision_vehicle_max_abs_range_rate', 6.0)
+        self.declare_parameter('vision_vehicle_jump_tolerance', 1.5)
+        self.declare_parameter('vehicle_distance_match_tolerance', 2.5)
+        self.declare_parameter(
+            'vehicle_distance_match_relative_tolerance', 0.2
+        )
+        self.declare_parameter(
+            'vision_direct_control_waypoint_ids',
             [17, 18, 19, 20, 43, 44, 45, 46, 47, 48],
         )
-        self.declare_parameter("unconfirmed_emergency_distance", 0.8)
+        self.declare_parameter('unconfirmed_emergency_distance', 0.8)
 
-        self.vehicle_frame = self.get_parameter("vehicle_frame").value
+        self.vehicle_frame = self.get_parameter('vehicle_frame').value
         self.safety_pointcloud_topic = self.get_parameter(
-            "safety_pointcloud_topic"
+            'safety_pointcloud_topic'
         ).value
         self.safety_pointcloud_timeout = max(
             0.0,
-            float(self.get_parameter("safety_pointcloud_timeout").value),
+            float(self.get_parameter('safety_pointcloud_timeout').value),
         )
-        self.use_latest_tf = bool(self.get_parameter("use_latest_tf").value)
-        self.front_min_x = float(self.get_parameter("front_min_x").value)
-        self.front_max_x = float(self.get_parameter("front_max_x").value)
-        self.front_half_width = float(self.get_parameter("front_half_width").value)
+        self.use_latest_tf = bool(self.get_parameter('use_latest_tf').value)
+        self.front_min_x = float(self.get_parameter('front_min_x').value)
+        self.front_max_x = float(self.get_parameter('front_max_x').value)
+        self.front_half_width = float(self.get_parameter('front_half_width').value)
         self.safety_corridor_enabled = bool(
-            self.get_parameter("safety_corridor_enabled").value
+            self.get_parameter('safety_corridor_enabled').value
         )
-        self.safety_min_x = float(self.get_parameter("safety_min_x").value)
-        self.safety_max_x = float(self.get_parameter("safety_max_x").value)
+        self.safety_min_x = float(self.get_parameter('safety_min_x').value)
+        self.safety_max_x = float(self.get_parameter('safety_max_x').value)
         self.safety_half_width = float(
-            self.get_parameter("safety_half_width").value
+            self.get_parameter('safety_half_width').value
         )
         self.safety_min_points = max(
-            1, int(self.get_parameter("safety_min_points").value)
+            1, int(self.get_parameter('safety_min_points').value)
         )
         self.fixed_structure_suppression_waypoint_ids = {
             int(value)
             for value in self.get_parameter(
-                "fixed_structure_suppression_waypoint_ids"
+                'fixed_structure_suppression_waypoint_ids'
             ).value
         }
         self.fixed_structure_max_path_distance = float(
-            self.get_parameter("fixed_structure_max_path_distance").value
+            self.get_parameter('fixed_structure_max_path_distance').value
         )
         self.fixed_structure_max_safety_distance = float(
-            self.get_parameter("fixed_structure_max_safety_distance").value
+            self.get_parameter('fixed_structure_max_safety_distance').value
         )
         self.fixed_structure_max_merge_distance = float(
-            self.get_parameter("fixed_structure_max_merge_distance").value
+            self.get_parameter('fixed_structure_max_merge_distance').value
         )
-        self.merge_min_x = float(self.get_parameter("merge_min_x").value)
-        self.merge_max_x = float(self.get_parameter("merge_max_x").value)
+        self.merge_min_x = float(self.get_parameter('merge_min_x').value)
+        self.merge_max_x = float(self.get_parameter('merge_max_x').value)
         self.merge_right_min_y = float(
-            self.get_parameter("merge_right_min_y").value
+            self.get_parameter('merge_right_min_y').value
         )
         self.merge_right_max_y = float(
-            self.get_parameter("merge_right_max_y").value
+            self.get_parameter('merge_right_max_y').value
         )
-        self.min_z = float(self.get_parameter("min_z").value)
-        self.max_z = float(self.get_parameter("max_z").value)
+        self.min_z = float(self.get_parameter('min_z').value)
+        self.max_z = float(self.get_parameter('max_z').value)
         self.vision_vehicle_timeout = max(
             0.0,
-            float(self.get_parameter("vision_vehicle_timeout").value),
+            float(self.get_parameter('vision_vehicle_timeout').value),
         )
         self.vision_vehicle_detection_hold_time = max(
             0.0,
             float(
                 self.get_parameter(
-                    "vision_vehicle_detection_hold_time"
+                    'vision_vehicle_detection_hold_time'
                 ).value
             ),
         )
@@ -149,7 +148,7 @@ class ObstacleMonitorNode(Node):
             0.0,
             float(
                 self.get_parameter(
-                    "vision_vehicle_max_abs_range_rate"
+                    'vision_vehicle_max_abs_range_rate'
                 ).value
             ),
         )
@@ -157,7 +156,7 @@ class ObstacleMonitorNode(Node):
             0.0,
             float(
                 self.get_parameter(
-                    "vision_vehicle_jump_tolerance"
+                    'vision_vehicle_jump_tolerance'
                 ).value
             ),
         )
@@ -165,7 +164,7 @@ class ObstacleMonitorNode(Node):
             0.0,
             float(
                 self.get_parameter(
-                    "vehicle_distance_match_tolerance"
+                    'vehicle_distance_match_tolerance'
                 ).value
             ),
         )
@@ -173,28 +172,28 @@ class ObstacleMonitorNode(Node):
             0.0,
             float(
                 self.get_parameter(
-                    "vehicle_distance_match_relative_tolerance"
+                    'vehicle_distance_match_relative_tolerance'
                 ).value
             ),
         )
         self.vision_direct_control_waypoint_ids = {
             int(value)
             for value in self.get_parameter(
-                "vision_direct_control_waypoint_ids"
+                'vision_direct_control_waypoint_ids'
             ).value
         }
         self.unconfirmed_emergency_distance = max(
             0.0,
             float(
-                self.get_parameter("unconfirmed_emergency_distance").value
+                self.get_parameter('unconfirmed_emergency_distance').value
             ),
         )
         self.planning_path_timeout = max(
-            0.0, float(self.get_parameter("planning_path_timeout").value)
+            0.0, float(self.get_parameter('planning_path_timeout').value)
         )
         self.pointcloud_match_timeout = max(
             0.0,
-            float(self.get_parameter("pointcloud_match_timeout").value),
+            float(self.get_parameter('pointcloud_match_timeout').value),
         )
         self.planning_path = None
         self.planning_path_receive_time = None
@@ -216,12 +215,12 @@ class ObstacleMonitorNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.front_pub = self.create_publisher(
-            Float32, "/decision/front_obstacle_distance", 10
+            Float32, '/decision/front_obstacle_distance', 10
         )
         self.merge_pub = self.create_publisher(
-            Float32, "/decision/merge_obstacle_distance", 10
+            Float32, '/decision/merge_obstacle_distance', 10
         )
-        pointcloud_topic = self.get_parameter("pointcloud_topic").value
+        pointcloud_topic = self.get_parameter('pointcloud_topic').value
         self.create_subscription(
             PointCloud2,
             pointcloud_topic,
@@ -237,32 +236,32 @@ class ObstacleMonitorNode(Node):
             )
         self.create_subscription(
             Path,
-            self.get_parameter("planning_path_topic").value,
+            self.get_parameter('planning_path_topic').value,
             self.planning_path_callback,
             5,
         )
         self.create_subscription(
             Int32,
-            "/route/current_waypoint_id",
+            '/route/current_waypoint_id',
             self.waypoint_callback,
             10,
         )
         self.create_subscription(
             Bool,
-            self.get_parameter("vision_vehicle_detected_topic").value,
+            self.get_parameter('vision_vehicle_detected_topic').value,
             self.vision_vehicle_detected_callback,
             10,
         )
         self.create_subscription(
             Float32,
-            self.get_parameter("vision_vehicle_distance_topic").value,
+            self.get_parameter('vision_vehicle_distance_topic').value,
             self.vision_vehicle_distance_callback,
             10,
         )
         self.get_logger().info(
-            f"Obstacle monitor started; path cloud={pointcloud_topic} "
-            f"safety cloud={self.safety_pointcloud_topic} "
-            f"vehicle frame={self.vehicle_frame}"
+            f'Obstacle monitor started; path cloud={pointcloud_topic} '
+            f'safety cloud={self.safety_pointcloud_topic} '
+            f'vehicle frame={self.vehicle_frame}'
         )
 
     def vision_vehicle_detected_callback(self, msg: Bool) -> None:
@@ -344,7 +343,7 @@ class ObstacleMonitorNode(Node):
             )
         except TransformException as ex:
             self.get_logger().warn(
-                f"Point-cloud transform unavailable: {ex}",
+                f'Point-cloud transform unavailable: {ex}',
                 throttle_duration_sec=2.0,
             )
             return
@@ -421,7 +420,7 @@ class ObstacleMonitorNode(Node):
             )
         except TransformException as ex:
             self.get_logger().warn(
-                f"Raw safety point-cloud transform unavailable: {ex}",
+                f'Raw safety point-cloud transform unavailable: {ex}',
                 throttle_duration_sec=2.0,
             )
             return
@@ -567,7 +566,7 @@ class ObstacleMonitorNode(Node):
                 ).transform
         except TransformException as ex:
             self.get_logger().warn(
-                f"Planning-path transform unavailable: {ex}",
+                f'Planning-path transform unavailable: {ex}',
                 throttle_duration_sec=2.0,
             )
             return []
@@ -585,16 +584,16 @@ class ObstacleMonitorNode(Node):
     @staticmethod
     def iter_xyz(msg: PointCloud2):
         fields = {field.name: field for field in msg.fields}
-        if not all(name in fields for name in ("x", "y", "z")):
+        if not all(name in fields for name in ('x', 'y', 'z')):
             return
-        endian = ">" if msg.is_bigendian else "<"
+        endian = '>' if msg.is_bigendian else '<'
         readers = []
-        for name in ("x", "y", "z"):
+        for name in ('x', 'y', 'z'):
             field = fields[name]
             if field.datatype == PointField.FLOAT32:
-                readers.append((field.offset, struct.Struct(endian + "f")))
+                readers.append((field.offset, struct.Struct(endian + 'f')))
             elif field.datatype == PointField.FLOAT64:
-                readers.append((field.offset, struct.Struct(endian + "d")))
+                readers.append((field.offset, struct.Struct(endian + 'd')))
             else:
                 return
 

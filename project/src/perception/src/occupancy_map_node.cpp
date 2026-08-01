@@ -1,3 +1,9 @@
+// Copyright 2026 Team 20
+
+#include <tf2/exceptions.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -15,19 +21,19 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/point_field.hpp>
-#include <tf2/exceptions.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
 
-namespace {
+namespace
+{
 
-struct Point3 {
+struct Point3
+{
   float x{0.0F};
   float y{0.0F};
   float z{0.0F};
 };
 
-struct RigidTransform {
+struct RigidTransform
+{
   double tx{0.0};
   double ty{0.0};
   double tz{0.0};
@@ -41,18 +47,20 @@ struct RigidTransform {
   double r21{0.0};
   double r22{1.0};
 
-  Point3 Apply(const Point3 &point) const {
+  Point3 Apply(const Point3 & point) const
+  {
     return Point3{
-        static_cast<float>(r00 * point.x + r01 * point.y + r02 * point.z + tx),
-        static_cast<float>(r10 * point.x + r11 * point.y + r12 * point.z + ty),
-        static_cast<float>(r20 * point.x + r21 * point.y + r22 * point.z + tz)};
+      static_cast<float>(r00 * point.x + r01 * point.y + r02 * point.z + tx),
+      static_cast<float>(r10 * point.x + r11 * point.y + r12 * point.z + ty),
+      static_cast<float>(r20 * point.x + r21 * point.y + r22 * point.z + tz)};
   }
 };
 
-RigidTransform ToRigidTransform(const geometry_msgs::msg::TransformStamped &tf) {
-  const auto &q_msg = tf.transform.rotation;
+RigidTransform ToRigidTransform(const geometry_msgs::msg::TransformStamped & tf)
+{
+  const auto & q_msg = tf.transform.rotation;
   const double norm =
-      std::sqrt(q_msg.x * q_msg.x + q_msg.y * q_msg.y + q_msg.z * q_msg.z + q_msg.w * q_msg.w);
+    std::sqrt(q_msg.x * q_msg.x + q_msg.y * q_msg.y + q_msg.z * q_msg.z + q_msg.w * q_msg.w);
   const double x = norm > 1e-9 ? q_msg.x / norm : 0.0;
   const double y = norm > 1e-9 ? q_msg.y / norm : 0.0;
   const double z = norm > 1e-9 ? q_msg.z / norm : 0.0;
@@ -74,9 +82,11 @@ RigidTransform ToRigidTransform(const geometry_msgs::msg::TransformStamped &tf) 
   return result;
 }
 
-sensor_msgs::msg::PointCloud2 BuildPointCloud(const std::vector<Point3> &points,
-                                              const std::string &frame_id,
-                                              const rclcpp::Time &stamp) {
+sensor_msgs::msg::PointCloud2 BuildPointCloud(
+  const std::vector<Point3> & points,
+  const std::string & frame_id,
+  const rclcpp::Time & stamp)
+{
   sensor_msgs::msg::PointCloud2 cloud;
   cloud.header.frame_id = frame_id;
   cloud.header.stamp = stamp;
@@ -104,7 +114,8 @@ sensor_msgs::msg::PointCloud2 BuildPointCloud(const std::vector<Point3> &points,
   return cloud;
 }
 
-double ReadDepthMeters(const sensor_msgs::msg::Image &image, size_t index) {
+double ReadDepthMeters(const sensor_msgs::msg::Image & image, size_t index)
+{
   if (image.encoding == "16UC1" || image.encoding == "mono16") {
     const size_t byte_index = index * 2;
     if (byte_index + 1 >= image.data.size()) {
@@ -137,9 +148,10 @@ double ReadDepthMeters(const sensor_msgs::msg::Image &image, size_t index) {
 class OccupancyMapNode : public rclcpp::Node {
 public:
   OccupancyMapNode()
-      : Node("occupancy_map_node"),
-        tf_buffer_(std::make_unique<tf2_ros::Buffer>(get_clock())),
-        tf_listener_(std::make_unique<tf2_ros::TransformListener>(*tf_buffer_)) {
+  : Node("occupancy_map_node"),
+    tf_buffer_(std::make_unique<tf2_ros::Buffer>(get_clock())),
+    tf_listener_(std::make_unique<tf2_ros::TransformListener>(*tf_buffer_))
+  {
     image_topic_ = declare_parameter<std::string>(
         "image_topic", "/OurCar/Sensors/DepthCamera/image_raw");
     camera_info_topic_ = declare_parameter<std::string>(
@@ -147,7 +159,8 @@ public:
     alternate_image_topic_ = declare_parameter<std::string>(
         "alternate_image_topic", "/Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/image_raw");
     alternate_camera_info_topic_ = declare_parameter<std::string>(
-        "alternate_camera_info_topic", "/Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/camera_info");
+        "alternate_camera_info_topic",
+      "/Unity_ROS_message_Rx/OurCar/Sensors/DepthCamera/camera_info");
     target_frame_ = declare_parameter<std::string>("target_frame", "world");
     use_latest_tf_ = declare_parameter<bool>("use_latest_tf", true);
 
@@ -173,7 +186,7 @@ public:
 
     pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(pointcloud_topic_, 5);
     preprocessed_pointcloud_pub_ =
-        create_publisher<sensor_msgs::msg::PointCloud2>(preprocessed_pointcloud_topic_, 5);
+      create_publisher<sensor_msgs::msg::PointCloud2>(preprocessed_pointcloud_topic_, 5);
     projected_map_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(projected_map_topic_, 1);
     extended_map_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(extended_map_topic_, 1);
 
@@ -194,7 +207,8 @@ public:
   }
 
 private:
-  void SubscribeCameraInfo(const std::string &topic) {
+  void SubscribeCameraInfo(const std::string & topic)
+  {
     if (topic.empty() || HasTopic(camera_info_topics_, topic)) {
       return;
     }
@@ -204,7 +218,8 @@ private:
         std::bind(&OccupancyMapNode::OnCameraInfo, this, std::placeholders::_1)));
   }
 
-  void SubscribeDepthImage(const std::string &topic) {
+  void SubscribeDepthImage(const std::string & topic)
+  {
     if (topic.empty() || HasTopic(image_topics_, topic)) {
       return;
     }
@@ -214,16 +229,19 @@ private:
         std::bind(&OccupancyMapNode::OnDepthImage, this, std::placeholders::_1)));
   }
 
-  static bool HasTopic(const std::vector<std::string> &topics, const std::string &topic) {
+  static bool HasTopic(const std::vector<std::string> & topics, const std::string & topic)
+  {
     return std::find(topics.begin(), topics.end(), topic) != topics.end();
   }
 
-  void OnCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr msg) {
+  void OnCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
+  {
     latest_camera_info_ = msg;
     ++camera_info_count_;
   }
 
-  void OnDepthImage(const sensor_msgs::msg::Image::SharedPtr msg) {
+  void OnDepthImage(const sensor_msgs::msg::Image::SharedPtr msg)
+  {
     ++depth_image_count_;
     if (!latest_camera_info_) {
       last_status_ = "waiting for CameraInfo";
@@ -247,14 +265,14 @@ private:
       return;
     }
 
-    const double fx = latest_camera_info_->k[0] > 1e-9 ? latest_camera_info_->k[0]
-                                                       : latest_camera_info_->p[0];
-    const double fy = latest_camera_info_->k[4] > 1e-9 ? latest_camera_info_->k[4]
-                                                       : latest_camera_info_->p[5];
-    const double cx = latest_camera_info_->k[2] > 1e-9 ? latest_camera_info_->k[2]
-                                                       : latest_camera_info_->p[2];
-    const double cy = latest_camera_info_->k[5] > 1e-9 ? latest_camera_info_->k[5]
-                                                       : latest_camera_info_->p[6];
+    const double fx = latest_camera_info_->k[0] > 1e-9 ? latest_camera_info_->k[0] :
+      latest_camera_info_->p[0];
+    const double fy = latest_camera_info_->k[4] > 1e-9 ? latest_camera_info_->k[4] :
+      latest_camera_info_->p[5];
+    const double cx = latest_camera_info_->k[2] > 1e-9 ? latest_camera_info_->k[2] :
+      latest_camera_info_->p[2];
+    const double cy = latest_camera_info_->k[5] > 1e-9 ? latest_camera_info_->k[5] :
+      latest_camera_info_->p[6];
     if (fx <= 1e-9 || fy <= 1e-9) {
       last_status_ = "invalid camera intrinsics";
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Camera intrinsics are invalid.");
@@ -275,9 +293,9 @@ private:
         }
 
         const Point3 camera_point{
-            static_cast<float>((static_cast<double>(u) - cx) * depth_m / fx),
-            static_cast<float>((static_cast<double>(v) - cy) * depth_m / fy),
-            static_cast<float>(depth_m)};
+          static_cast<float>((static_cast<double>(u) - cx) * depth_m / fx),
+          static_cast<float>((static_cast<double>(v) - cy) * depth_m / fy),
+          static_cast<float>(depth_m)};
         camera_points.push_back(camera_point);
 
         const Point3 world_point = transform->Apply(camera_point);
@@ -293,20 +311,21 @@ private:
     PublishMaps(obstacle_points, *transform, msg->header.stamp);
     ++published_frames_;
     last_status_ = "published frame: raw_points=" + std::to_string(camera_points.size()) +
-                   ", obstacle_points=" + std::to_string(obstacle_points.size());
+      ", obstacle_points=" + std::to_string(obstacle_points.size());
   }
 
-  std::unique_ptr<RigidTransform> LookupTransform(const sensor_msgs::msg::Image &msg) {
+  std::unique_ptr<RigidTransform> LookupTransform(const sensor_msgs::msg::Image & msg)
+  {
     try {
       const rclcpp::Time lookup_time =
-          use_latest_tf_ ? rclcpp::Time(0, 0, get_clock()->get_clock_type())
-                         : rclcpp::Time(msg.header.stamp);
+        use_latest_tf_ ? rclcpp::Time(0, 0, get_clock()->get_clock_type()) :
+        rclcpp::Time(msg.header.stamp);
       const auto tf_msg =
-          tf_buffer_->lookupTransform(target_frame_, msg.header.frame_id, lookup_time);
+        tf_buffer_->lookupTransform(target_frame_, msg.header.frame_id, lookup_time);
       return std::make_unique<RigidTransform>(ToRigidTransform(tf_msg));
-    } catch (const tf2::TransformException &ex) {
+    } catch (const tf2::TransformException & ex) {
       last_status_ = "TF lookup failed from " + msg.header.frame_id + " to " + target_frame_ +
-                     ": " + ex.what();
+        ": " + ex.what();
       RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
           "Cannot transform depth camera frame '%s' to '%s': %s",
@@ -315,18 +334,24 @@ private:
     }
   }
 
-  void PublishDiagnostics() {
+  void PublishDiagnostics()
+  {
     RCLCPP_INFO(
         get_logger(),
-        "occupancy diagnostics: depth_images=%zu, camera_infos=%zu, published_frames=%zu, status=%s",
+        "occupancy diagnostics: depth_images=%zu, camera_infos=%zu, "
+        "published_frames=%zu, status=%s",
         depth_image_count_, camera_info_count_, published_frames_, last_status_.c_str());
   }
 
-  void PublishMaps(const std::vector<Point3> &obstacle_points,
-                   const RigidTransform &camera_to_world,
-                   const builtin_interfaces::msg::Time &stamp) {
-    const int width_cells = std::max(1, static_cast<int>(std::ceil(map_width_m_ / map_resolution_m_)));
-    const int height_cells = std::max(1, static_cast<int>(std::ceil(map_height_m_ / map_resolution_m_)));
+  void PublishMaps(
+    const std::vector<Point3> & obstacle_points,
+    const RigidTransform & camera_to_world,
+    const builtin_interfaces::msg::Time & stamp)
+  {
+    const int width_cells = std::max(1,
+      static_cast<int>(std::ceil(map_width_m_ / map_resolution_m_)));
+    const int height_cells = std::max(1,
+      static_cast<int>(std::ceil(map_height_m_ / map_resolution_m_)));
     const double origin_x = camera_to_world.tx - 0.5 * map_width_m_;
     const double origin_y = camera_to_world.ty - 0.5 * map_height_m_;
 
@@ -334,7 +359,7 @@ private:
         width_cells, height_cells, origin_x, origin_y, stamp);
     nav_msgs::msg::OccupancyGrid extended_map = projected_map;
 
-    for (const auto &point : obstacle_points) {
+    for (const auto & point : obstacle_points) {
       const int x_cell = static_cast<int>(std::floor((point.x - origin_x) / map_resolution_m_));
       const int y_cell = static_cast<int>(std::floor((point.y - origin_y) / map_resolution_m_));
       if (!IsInside(x_cell, y_cell, width_cells, height_cells)) {
@@ -348,11 +373,13 @@ private:
     extended_map_pub_->publish(extended_map);
   }
 
-  nav_msgs::msg::OccupancyGrid BuildEmptyMap(int width_cells,
-                                             int height_cells,
-                                             double origin_x,
-                                             double origin_y,
-                                             const builtin_interfaces::msg::Time &stamp) const {
+  nav_msgs::msg::OccupancyGrid BuildEmptyMap(
+    int width_cells,
+    int height_cells,
+    double origin_x,
+    double origin_y,
+    const builtin_interfaces::msg::Time & stamp) const
+  {
     nav_msgs::msg::OccupancyGrid map;
     map.header.frame_id = target_frame_;
     map.header.stamp = stamp;
@@ -369,13 +396,15 @@ private:
     return map;
   }
 
-  void MarkInflated(nav_msgs::msg::OccupancyGrid &map,
-                    int x_cell,
-                    int y_cell,
-                    int width_cells,
-                    int height_cells) const {
+  void MarkInflated(
+    nav_msgs::msg::OccupancyGrid & map,
+    int x_cell,
+    int y_cell,
+    int width_cells,
+    int height_cells) const
+  {
     const int radius_cells =
-        std::max(0, static_cast<int>(std::ceil(inflation_radius_m_ / map_resolution_m_)));
+      std::max(0, static_cast<int>(std::ceil(inflation_radius_m_ / map_resolution_m_)));
     const int radius_squared = radius_cells * radius_cells;
     for (int dy = -radius_cells; dy <= radius_cells; ++dy) {
       for (int dx = -radius_cells; dx <= radius_cells; ++dx) {
@@ -391,11 +420,13 @@ private:
     }
   }
 
-  static bool IsInside(int x_cell, int y_cell, int width_cells, int height_cells) {
+  static bool IsInside(int x_cell, int y_cell, int width_cells, int height_cells)
+  {
     return x_cell >= 0 && y_cell >= 0 && x_cell < width_cells && y_cell < height_cells;
   }
 
-  static size_t ToIndex(int x_cell, int y_cell, int width_cells) {
+  static size_t ToIndex(int x_cell, int y_cell, int width_cells)
+  {
     return static_cast<size_t>(y_cell) * static_cast<size_t>(width_cells) +
            static_cast<size_t>(x_cell);
   }
@@ -439,7 +470,8 @@ private:
   std::string last_status_{"waiting for first depth image"};
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   rclcpp::init(argc, argv);
   rclcpp::spin(std::make_shared<OccupancyMapNode>());
   rclcpp::shutdown();

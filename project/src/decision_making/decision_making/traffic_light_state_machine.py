@@ -33,7 +33,8 @@ class DecisionOutput:
 
 
 class TrafficLightStateMachine:
-    """Select a safe target speed from route, planning and traffic-light inputs.
+    """
+    Select a safe target speed from route, planning and traffic-light inputs.
 
     Time values passed to update methods and :meth:`evaluate` must use the same
     monotonic clock. The class deliberately has no ROS dependency so transition
@@ -153,7 +154,7 @@ class TrafficLightStateMachine:
             stop_distance_overrides
         ):
             raise ValueError(
-                "stop-distance waypoint IDs and overrides must have equal length"
+                'stop-distance waypoint IDs and overrides must have equal length'
             )
         self.stop_distance_overrides = {
             int(waypoint_id): max(0.0, float(distance))
@@ -270,7 +271,7 @@ class TrafficLightStateMachine:
         }
 
         self.state = DecisionState.CRUISE
-        self.route_state = ""
+        self.route_state = ''
         self.waypoint_id: Optional[int] = None
         self.waypoint_distance: Optional[float] = None
         self.waypoint_distance_time: Optional[float] = None
@@ -316,7 +317,7 @@ class TrafficLightStateMachine:
         self.merge_latched = False
 
     def update_route(self, route_state: str, waypoint_id: Optional[int] = None) -> None:
-        self.route_state = (route_state or "").strip().lower()
+        self.route_state = (route_state or '').strip().lower()
         self.waypoint_id = waypoint_id
 
     def update_planning_speed(self, speed: float, now: float) -> None:
@@ -960,55 +961,55 @@ class TrafficLightStateMachine:
             target_speed = 0.0
             output_state = DecisionState.EMERGENCY_BRAKING
             stop_required = True
-            reason = "front_obstacle_emergency"
+            reason = 'front_obstacle_emergency'
         elif traffic_stop_required:
             target_speed = 0.0
             output_state = self.state
             stop_required = True
             reason = (
-                "strict_green_evidence_rejected"
+                'strict_green_evidence_rejected'
                 if (
                     light_fresh
                     and self.traffic_light == TrafficLight.GREEN
                     and strict_green_required
                     and not strict_green_evidence
                 )
-                else "traffic_light_stop_latched"
+                else 'traffic_light_stop_latched'
             )
         elif merge_obstacle_stale_stop:
             target_speed = 0.0
             output_state = DecisionState.SLOWING_FOR_MERGE
             stop_required = True
-            reason = "merge_obstacle_stale_stop"
+            reason = 'merge_obstacle_stale_stop'
         elif following_active:
             target_speed = following_target
             output_state = DecisionState.FOLLOWING_VEHICLE
             stop_required = False
             reason = (
-                "adaptive_vehicle_following_hold"
+                'adaptive_vehicle_following_hold'
                 if following_dropout_held
-                else "adaptive_vehicle_following"
+                else 'adaptive_vehicle_following'
             )
         elif self.merge_latched and planning_fresh:
             target_speed = min(permitted_speed, self.merge_target_speed)
             output_state = DecisionState.SLOWING_FOR_MERGE
             stop_required = False
-            reason = "merge_vehicle_slowdown"
+            reason = 'merge_vehicle_slowdown'
         elif not planning_fresh:
             target_speed = 0.0
             output_state = self.state
             stop_required = False
-            reason = "planning_speed_timeout"
+            reason = 'planning_speed_timeout'
         else:
             target_speed = permitted_speed
             output_state = self.state
             stop_required = False
             reason = (
-                "traffic_light_controlled_approach"
+                'traffic_light_controlled_approach'
                 if signal_light_approach
-                else "unknown_light_controlled_approach"
+                else 'unknown_light_controlled_approach'
                 if unknown_light_approach
-                else "planning_speed"
+                else 'planning_speed'
             )
 
         return DecisionOutput(target_speed, output_state, stop_required, reason)

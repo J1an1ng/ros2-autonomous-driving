@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #pragma once
 
 #include <algorithm>
@@ -530,15 +532,15 @@ inline TrafficLightScores ClassifyTrafficLight(const cv::Mat & bgr_crop)
     green_valid &&
     static_cast<double>(result.green) >=
     0.8 * static_cast<double>(std::max(1, result.red));
-
-  if (red_valid && !green_over_red && !yellow_dominates) {
-    result.state = kRed;
-  } else if (
+  const bool yellow_without_red =
     !red_valid && yellow_valid &&
     (!green_valid ||
     static_cast<double>(result.yellow) >=
-    1.25 * static_cast<double>(std::max(1, result.green))))
-  {
+    1.25 * static_cast<double>(std::max(1, result.green)));
+
+  if (red_valid && !green_over_red && !yellow_dominates) {
+    result.state = kRed;
+  } else if (yellow_without_red) {
     result.state = kYellow;
   } else if (green_valid && !yellow_dominates) {
     result.state = kGreen;

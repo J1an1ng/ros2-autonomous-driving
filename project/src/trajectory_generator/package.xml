@@ -4,8 +4,8 @@
   <name>trajectory_generator</name>
   <version>0.0.0</version>
   <description>Reference path generation package for the autonomous driving project.</description>
-  <maintainer email="linux@todo.todo">linux</maintainer>
-  <license>TODO: License declaration</license>
+  <maintainer email="go29hir@tum.de">Team 20</maintainer>
+  <license>Proprietary</license>
 
   <depend>rclpy</depend>
   <depend>tf2_ros</depend>

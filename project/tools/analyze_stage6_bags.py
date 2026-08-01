@@ -7,12 +7,12 @@ import argparse
 import csv
 import json
 import math
-import re
 from pathlib import Path
+import re
 from statistics import mean
 
-import rosbag2_py
 from rclpy.serialization import deserialize_message
+import rosbag2_py
 from rosidl_runtime_py.utilities import get_message
 
 
@@ -163,7 +163,9 @@ def read_run(bag_path: Path, logs_path: Path):
         fallback_count += len(re.findall(r'local path rejected|fallback path rejected', text))
         died_lines = [line for line in text.splitlines() if 'process has died' in line]
         process_died_count += len(died_lines)
-        route_complete_seconds = route_complete_ns / 1e9 if route_complete_ns is not None else math.inf
+        route_complete_seconds = (
+            route_complete_ns / 1e9 if route_complete_ns is not None else math.inf
+        )
         for line in died_lines:
             match = re.match(r'([0-9]+(?:\.[0-9]+)?) ', line)
             if match and float(match.group(1)) <= route_complete_seconds:
@@ -205,7 +207,9 @@ def read_run(bag_path: Path, logs_path: Path):
         'simultaneous_throttle_brake': sum(
             1 for _, throttle, _, brake in commands if throttle > 1e-6 and brake > 1e-6
         ),
-        'throttle_saturation_samples': sum(1 for _, throttle, _, _ in commands if throttle >= 0.349),
+        'throttle_saturation_samples': sum(
+            1 for _, throttle, _, _ in commands if throttle >= 0.349
+        ),
         'brake_saturation_samples': sum(1 for _, _, _, brake in commands if brake >= 0.999),
         'path_rejection_or_fallback_count': fallback_count,
         'process_died_log_count': process_died_count,
@@ -251,8 +255,13 @@ def write_stacked_svg(path: Path, title: str, panels, y_range=None):
             low, high = y_range
         if high <= low:
             high = low + 1.0
-        x_scale = lambda x: margin + x / max(max_x, 1e-6) * (width - 2 * margin)
-        y_scale = lambda y: top + panel_height - 35 - (y - low) / (high - low) * (panel_height - 65)
+
+        def x_scale(x):
+            return margin + x / max(max_x, 1e-6) * (width - 2 * margin)
+
+        def y_scale(y):
+            plot_height = panel_height - 65
+            return top + panel_height - 35 - (y - low) / (high - low) * plot_height
         parts.extend([
             f'<text x="12" y="{top + 18}" font-size="14">{label}</text>',
             f'<line x1="{margin}" y1="{top + panel_height - 35}" x2="{width - margin}" '
@@ -262,7 +271,8 @@ def write_stacked_svg(path: Path, title: str, panels, y_range=None):
             f'<text x="{margin}" y="{top + panel_height - 15}" font-size="11">0 s</text>',
             f'<text x="{width - margin}" y="{top + panel_height - 15}" text-anchor="end" '
             f'font-size="11">{max_x:.0f} s</text>',
-            f'<text x="{margin - 6}" y="{top + 40}" text-anchor="end" font-size="11">{high:.2f}</text>',
+            f'<text x="{margin - 6}" y="{top + 40}" text-anchor="end" '
+            f'font-size="11">{high:.2f}</text>',
             f'<text x="{margin - 6}" y="{top + panel_height - 35}" text-anchor="end" '
             f'font-size="11">{low:.2f}</text>',
         ])
@@ -283,12 +293,17 @@ def write_route_svg(path: Path, runs):
     points = [(x, y) for data in runs for _, x, y in data['pose']]
     min_x, max_x = min(x for x, _ in points), max(x for x, _ in points)
     min_y, max_y = min(y for _, y in points), max(y for _, y in points)
-    x_scale = lambda x: margin + (x - min_x) / (max_x - min_x) * (width - 2 * margin)
-    y_scale = lambda y: height - margin - (y - min_y) / (max_y - min_y) * (height - 2 * margin)
+
+    def x_scale(x):
+        return margin + (x - min_x) / (max_x - min_x) * (width - 2 * margin)
+
+    def y_scale(y):
+        return height - margin - (y - min_y) / (max_y - min_y) * (height - 2 * margin)
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">',
         '<rect width="100%" height="100%" fill="white" />',
-        f'<text x="{width / 2}" y="28" text-anchor="middle" font-size="18">Stage 6 route traces</text>',
+        f'<text x="{width / 2}" y="28" text-anchor="middle" font-size="18">'
+        'Stage 6 route traces</text>',
         f'<rect x="{margin}" y="{margin}" width="{width - 2 * margin}" '
         f'height="{height - 2 * margin}" fill="none" stroke="#444" />',
     ]
@@ -300,7 +315,8 @@ def write_route_svg(path: Path, runs):
             f'fill="{COLORS[index]}" font-size="13">run {index + 1}</text>'
         )
     parts.extend([
-        f'<text x="{margin}" y="{height - 16}" font-size="11">x: {min_x:.1f} .. {max_x:.1f} m</text>',
+        f'<text x="{margin}" y="{height - 16}" font-size="11">'
+        f'x: {min_x:.1f} .. {max_x:.1f} m</text>',
         f'<text x="{width - margin}" y="{height - 16}" text-anchor="end" '
         f'font-size="11">y: {min_y:.1f} .. {max_y:.1f} m</text>',
         '</svg>',
@@ -339,7 +355,10 @@ def main():
     write_route_svg(args.output / 'route_trace.svg', runs)
     write_stacked_svg(
         args.output / 'tracking_error.svg', 'Path tracking error',
-        [(f'run {i + 1}', [('error (m)', run['tracking'], COLORS[0])]) for i, run in enumerate(runs)],
+        [
+            (f'run {i + 1}', [('error (m)', run['tracking'], COLORS[0])])
+            for i, run in enumerate(runs)
+        ],
         y_range=(0.0, max(1.0, max(point[1] for run in runs for point in run['tracking']))),
     )
     write_stacked_svg(
@@ -351,7 +370,8 @@ def main():
         y_range=(0.0, 10.5),
     )
     write_stacked_svg(
-        args.output / 'traffic_light_state.svg', 'Traffic-light state (0 unknown, 1 red, 2 yellow, 3 green)',
+        args.output / 'traffic_light_state.svg',
+        'Traffic-light state (0 unknown, 1 red, 2 yellow, 3 green)',
         [(f'run {i + 1}', [('state', run['light'], COLORS[2])]) for i, run in enumerate(runs)],
         y_range=(-0.2, 3.2),
     )

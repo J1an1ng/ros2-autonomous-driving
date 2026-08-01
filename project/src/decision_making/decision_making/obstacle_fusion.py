@@ -22,7 +22,6 @@ def distances_match(
     relative_tolerance: float,
 ) -> bool:
     """Return whether two finite positive ranges plausibly describe one object."""
-
     if (
         not math.isfinite(pointcloud_distance)
         or not math.isfinite(vision_distance)
@@ -45,7 +44,6 @@ def vision_distance_is_plausible(
     jump_tolerance: float,
 ) -> bool:
     """Reject a one-frame vision range jump that is physically implausible."""
-
     if not math.isfinite(candidate_distance) or candidate_distance <= 0.0:
         return False
     if not math.isfinite(previous_distance) or previous_distance <= 0.0:
@@ -65,7 +63,6 @@ def vision_detection_is_held(
     hold_time: float,
 ) -> bool:
     """Bridge a short detector dropout after a confirmed positive frame."""
-
     if detected:
         return True
     return (
@@ -85,7 +82,8 @@ def fuse_vehicle_obstacle_distances(
     vision_direct_control: bool = False,
     pointcloud_match_front_distance: float | None = None,
 ) -> VehicleObstacleFusion:
-    """Fuse YOLO/RGB-D classification with path-relative point-cloud evidence.
+    """
+    Fuse YOLO/RGB-D classification with path-relative point-cloud evidence.
 
     Across the route, a vision vehicle controls the car only when its range
     agrees with the point-cloud front or merge corridor. Selected, validated
@@ -95,7 +93,6 @@ def fuse_vehicle_obstacle_distances(
     The tiny unconfirmed point-cloud front range remains as a last-resort
     generic collision guard when no vision vehicle is present.
     """
-
     vision_valid = (
         vision_vehicle_detected
         and math.isfinite(vision_vehicle_distance)

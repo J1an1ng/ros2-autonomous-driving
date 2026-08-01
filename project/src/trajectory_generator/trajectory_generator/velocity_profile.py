@@ -6,9 +6,9 @@ def select_target_speed(
     stop_speed,
 ):
     effective_speed_limit = default_speed if speed_limit is None else speed_limit
-    normalized_state = (route_state or "").lower()
+    normalized_state = (route_state or '').lower()
 
-    if normalized_state == "route_complete":
+    if normalized_state == 'route_complete':
         return float(stop_speed)
 
     return float(min(effective_speed_limit, max_speed))

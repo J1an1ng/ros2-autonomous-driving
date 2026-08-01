@@ -10,18 +10,18 @@ from ultralytics import YOLO
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="yolov8n.pt")
+    parser.add_argument('--model', default='yolov8n.pt')
     parser.add_argument(
-        "--output",
+        '--output',
         type=Path,
-        default=Path("src/perception/models/yolov8n.onnx"),
+        default=Path('src/perception/models/yolov8n.onnx'),
     )
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--opset", type=int, default=12)
+    parser.add_argument('--imgsz', type=int, default=640)
+    parser.add_argument('--opset', type=int, default=12)
     parser.add_argument(
-        "--simplify",
-        action="store_true",
-        help="Run onnxslim; disabled by default for a reproducible raw export.",
+        '--simplify',
+        action='store_true',
+        help='Run onnxslim; disabled by default for a reproducible raw export.',
     )
     return parser.parse_args()
 
@@ -31,7 +31,7 @@ def main():
     model = YOLO(args.model)
     exported = Path(
         model.export(
-            format="onnx",
+            format='onnx',
             imgsz=args.imgsz,
             opset=args.opset,
             dynamic=False,
@@ -45,5 +45,5 @@ def main():
     print(args.output.resolve())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

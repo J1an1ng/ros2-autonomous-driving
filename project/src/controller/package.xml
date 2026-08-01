@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>Pure Pursuit and PID vehicle controller for the autonomous driving project.</description>
   <maintainer email="go29hir@tum.de">Team 20</maintainer>
-  <license>TODO</license>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

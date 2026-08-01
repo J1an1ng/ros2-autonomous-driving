@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #include <gtest/gtest.h>
 
 #include <opencv2/imgproc.hpp>

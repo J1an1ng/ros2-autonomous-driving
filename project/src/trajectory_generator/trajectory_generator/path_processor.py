@@ -22,7 +22,7 @@ class PathPoint:
 @dataclass(frozen=True)
 class PathProcessingResult:
     path_points: list
-    rejection_reason: str = ""
+    rejection_reason: str = ''
 
 
 def interpolate_path(ego_pose, target_pose, path_resolution, min_target_distance):
@@ -451,7 +451,7 @@ def get_path_rejection_reason(
 ):
     """Return an empty string for a valid path, otherwise a rejection reason."""
     if len(path_points) < 2:
-        return "path has fewer than two points"
+        return 'path has fewer than two points'
 
     for point in path_points:
         values = (
@@ -463,17 +463,17 @@ def get_path_rejection_reason(
             point.curvature,
         )
         if not all(math.isfinite(value) for value in values):
-            return "path contains a non-finite value"
+            return 'path contains a non-finite value'
         if abs(point.curvature) > max_curvature:
-            return "path exceeds the curvature limit"
+            return 'path exceeds the curvature limit'
 
     resolution = max(float(path_resolution), 1e-3)
     for start, end in zip(path_points, path_points[1:]):
         delta_s = end.s - start.s
         if delta_s <= POINT_MERGE_TOLERANCE:
-            return "path arc length is not strictly increasing"
+            return 'path arc length is not strictly increasing'
         if delta_s > resolution * 1.5 + POINT_MERGE_TOLERANCE:
-            return "path sample spacing exceeds the limit"
+            return 'path sample spacing exceeds the limit'
         yaw_step = abs(
             math.atan2(
                 math.sin(end.yaw - start.yaw),
@@ -481,10 +481,10 @@ def get_path_rejection_reason(
             )
         )
         if yaw_step > max_yaw_step:
-            return "path exceeds the yaw-step limit"
+            return 'path exceeds the yaw-step limit'
 
     if abs(path_points[0].s) > POINT_MERGE_TOLERANCE:
-        return "path arc length does not start at zero"
+        return 'path arc length does not start at zero'
     if ego_pose is not None:
         start_distance = distance_2d(
             ego_pose.x,
@@ -493,12 +493,12 @@ def get_path_rejection_reason(
             path_points[0].y,
         )
         if start_distance > max_start_distance:
-            return "path starts too far from the ego pose"
+            return 'path starts too far from the ego pose'
     if source_points is not None:
         for point in path_points:
             if _distance_to_polyline(point, source_points) > max_spline_deviation:
-                return "path deviates too far from its source polyline"
-    return ""
+                return 'path deviates too far from its source polyline'
+    return ''
 
 
 def validate_path(
@@ -663,12 +663,12 @@ def process_local_path_result(
 ):
     """Create a path and retain a diagnostic reason when it is rejected."""
     if len(route_points) < 2:
-        return PathProcessingResult([], "local path has fewer than two points")
+        return PathProcessingResult([], 'local path has fewer than two points')
     if any(
         not all(math.isfinite(value) for value in (point.x, point.y, point.z))
         for point in route_points
     ):
-        return PathProcessingResult([], "local path contains a non-finite value")
+        return PathProcessingResult([], 'local path contains a non-finite value')
 
     usable_points = _deduplicate_route_points(route_points)
     cropped_points = _crop_from_projection(usable_points, ego_pose)

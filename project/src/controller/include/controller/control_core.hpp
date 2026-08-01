@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #ifndef CONTROLLER__CONTROL_CORE_HPP_
 #define CONTROLLER__CONTROL_CORE_HPP_
 

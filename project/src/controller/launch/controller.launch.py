@@ -6,16 +6,16 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     config_file = PathJoinSubstitution(
-        [FindPackageShare("controller"), "config", "controller.yaml"]
+        [FindPackageShare('controller'), 'config', 'controller.yaml']
     )
 
     return LaunchDescription(
         [
             Node(
-                package="controller",
-                executable="controller_node",
-                name="controller_node",
-                output="screen",
+                package='controller',
+                executable='controller_node',
+                name='controller_node',
+                output='screen',
                 parameters=[config_file],
             )
         ]
