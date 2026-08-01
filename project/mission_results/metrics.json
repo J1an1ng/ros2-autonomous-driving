@@ -1,0 +1,73 @@
+{
+  "route_complete": true,
+  "mission_duration_s": 322.516,
+  "max_waypoint": 63,
+  "max_speed_mps": 5.846,
+  "mean_speed_mps": 3.006,
+  "tracking_rmse_m": 1.0025,
+  "tracking_p95_m": 2.6278,
+  "tracking_max_m": 4.3391,
+  "max_twist_gap_s": 9.8909,
+  "max_planning_path_gap_s": 0.2057,
+  "max_decision_speed_gap_s": 0.3262,
+  "event1_min_front_m": 16.726,
+  "event2_min_merge_m": 8.837,
+  "event2_min_front_m": 8.975,
+  "emergency_entries": 1,
+  "merge_slowdown_entries": 1,
+  "simultaneous_throttle_brake": 0,
+  "throttle_saturation_samples": 4094,
+  "brake_saturation_samples": 2184,
+  "path_rejection_or_fallback_count": 39,
+  "runtime_path_rejection_or_fallback_count": 0,
+  "post_route_complete_path_fallback_count": 39,
+  "process_died_log_count": 1,
+  "runtime_process_died_count": 0,
+  "teardown_process_died_count": 1,
+  "safe_stop_reasons": {
+    "path missing or stale": 2,
+    "vehicle velocity missing or stale": 11,
+    "stop requested by decision layer": 56
+  },
+  "stop_events": [
+    {
+      "waypoint": 25,
+      "distance": 1.7970595359802246,
+      "time_s": 124.252195195
+    },
+    {
+      "waypoint": 32,
+      "distance": 3.4457669258117676,
+      "time_s": 156.649844414
+    },
+    {
+      "waypoint": 39,
+      "distance": 5.213840484619141,
+      "time_s": 178.308085422
+    },
+    {
+      "waypoint": 59,
+      "distance": 3.4268548488616943,
+      "time_s": 297.252812241
+    }
+  ],
+  "recording_to_route_complete_s": 322.516,
+  "mission_time_s": 321.054,
+  "first_motion_to_route_complete_s": 319.116,
+  "mission_time_definition": "first forward /car_command (throttle > 0.01, brake < 0.01) to first route_complete",
+  "trajectory_messages": 3943,
+  "trajectory_points": 147717,
+  "max_points_per_trajectory": 90,
+  "max_lateral_acceleration_mps2": 3.0,
+  "max_longitudinal_acceleration_mps2": 2.0005,
+  "max_longitudinal_deceleration_mps2": 3.0,
+  "non_monotonic_time_pairs": 0,
+  "invalid_numeric_points": 0,
+  "configured_limits_mps2": {
+    "lateral": 3.0,
+    "longitudinal_acceleration": 2.0,
+    "longitudinal_deceleration": 3.0
+  },
+  "constraint_tolerance_mps2": 0.05,
+  "trajectory_constraint_audit_passed": true
+}

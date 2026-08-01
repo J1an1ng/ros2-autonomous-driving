@@ -19,3 +19,8 @@ trajectory_generator_node:
     # geometry-validated turns; semantic intersection states add no extra cap.
     max_speed: 14.0
     stop_speed: 0.0
+    max_lateral_acceleration: 3.0
+    max_longitudinal_acceleration: 2.0
+    max_longitudinal_deceleration: 3.0
+    target_speed_lookahead_distance: 4.0
+    velocity_timeout: 1.0

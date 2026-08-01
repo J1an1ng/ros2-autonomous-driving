@@ -1,0 +1,4 @@
+geometry_msgs/Pose pose
+float32 curvature
+float32 target_speed
+builtin_interfaces/Duration time_from_start

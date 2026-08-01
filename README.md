@@ -16,7 +16,7 @@ uses RGB and depth images with YOLO; it does not use the Unity semantic camera.
 | Lei Fang | `route_manager` | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
 | Yida Lyu | `decision`, `controller`, part of integration | Decision state machine, obstacle behavior, Pure Pursuit/PID control, safety handling, and the interfaces from final intent to `/car_command` |
 | Tao Zhang | Perception, part of integration | YOLO RGB-D detection, traffic-light classification, vehicle ranging, occupancy mapping, perception configuration, and perception-to-decision interfaces |
-| Jianing Huang | `Trajectory_Generator`, part of integration | Route projection, path smoothing/validation, speed-profile output, and route-to-planning interfaces |
+| Jianing Huang | `Trajectory_Generator`, part of integration | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, and route-to-planning interfaces |
 
 In the repository, `decision` is implemented by the `decision_making` package and
 `Trajectory_Generator` is stored as the `trajectory_generator` package.
@@ -32,8 +32,9 @@ a more granular individual split where the team did not provide one.
 ## Code ownership and reuse
 
 - Team 20 wrote or substantively developed `perception`, `route_manager`,
-  `trajectory_generator`, `decision_making`, `controller`, and `system_bringup`, together
-  with their project-specific configuration, tests, integration tools, and documentation.
+  `autonomy_interfaces`, `trajectory_generator`, `decision_making`, `controller`, and
+  `system_bringup`, together with their project-specific configuration, tests,
+  integration tools, and documentation.
 - The Unity simulator/ROS bridge and `dummy_controller` were supplied with the course
   project. Formatting or ROS 2 integration work does not transfer ownership of that
   supplied code to Team 20.
@@ -58,6 +59,10 @@ The full component-by-component ownership and design rationale are documented in
   build and test commands, full-system startup, validation, and troubleshooting.
 - [`project/INTEGRATION_README.md`](project/INTEGRATION_README.md): staged integration and
   scenario-validation procedure.
+- [`project/docs/ros_graph.svg`](project/docs/ros_graph.svg): ROS package/topic graph with
+  contribution ownership.
+- [`project/mission_results/README.md`](project/mission_results/README.md): recorded
+  waypoint 0--63 mission time, trajectory-constraint audit, and generated plots.
 - The main Team 20 functional packages contain package-specific READMEs with their
   interfaces, parameters, and design details.
 
@@ -88,3 +93,8 @@ ros2 launch system_bringup full_system.launch.py \
 
 Never run `dummy_controller` and the real `controller` together: `/car_command` must have
 exactly one publisher.
+
+The recorded 2026-08-01 production run completed waypoint 0--63 in **321.054 s** from the
+first forward control command to `route_complete`. Its `/planning/trajectory` audit
+passed the configured lateral and longitudinal acceleration constraints; see the mission
+results linked above for the exact timing definition and evidence.

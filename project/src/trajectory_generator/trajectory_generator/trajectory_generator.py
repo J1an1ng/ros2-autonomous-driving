@@ -7,7 +7,11 @@ from trajectory_generator.path_processor import (
     interpolate_path,
     process_local_path_result,
 )
-from trajectory_generator.velocity_profile import select_target_speed
+from trajectory_generator.velocity_profile import (
+    DynamicLimits,
+    select_target_speed,
+    time_parameterize,
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +30,10 @@ class TrajectoryGeneratorConfig:
     continuity_candidate_weight: float = 0.5
     max_continuity_deviation: float = 2.0
     use_waypoint_yaw: bool = False
+    max_lateral_acceleration: float = 3.0
+    max_longitudinal_acceleration: float = 2.0
+    max_longitudinal_deceleration: float = 3.0
+    target_speed_lookahead_distance: float = 3.0
 
     def __post_init__(self):
         values = {
@@ -42,6 +50,16 @@ class TrajectoryGeneratorConfig:
             'continuity_blend_distance': self.continuity_blend_distance,
             'continuity_candidate_weight': self.continuity_candidate_weight,
             'max_continuity_deviation': self.max_continuity_deviation,
+            'max_lateral_acceleration': self.max_lateral_acceleration,
+            'max_longitudinal_acceleration': (
+                self.max_longitudinal_acceleration
+            ),
+            'max_longitudinal_deceleration': (
+                self.max_longitudinal_deceleration
+            ),
+            'target_speed_lookahead_distance': (
+                self.target_speed_lookahead_distance
+            ),
         }
         invalid_value = next(
             (name for name, value in values.items() if not math.isfinite(value)),
@@ -60,11 +78,27 @@ class TrajectoryGeneratorConfig:
         )
         if invalid_value is not None:
             raise ValueError(f'{invalid_value} must not be negative')
+        positive_limits = {
+            'max_lateral_acceleration': self.max_lateral_acceleration,
+            'max_longitudinal_acceleration': (
+                self.max_longitudinal_acceleration
+            ),
+            'max_longitudinal_deceleration': (
+                self.max_longitudinal_deceleration
+            ),
+        }
+        invalid_value = next(
+            (name for name, value in positive_limits.items() if value <= 0.0),
+            None,
+        )
+        if invalid_value is not None:
+            raise ValueError(f'{invalid_value} must be greater than zero')
 
 
 @dataclass(frozen=True)
 class GeneratedTrajectory:
     path_points: list
+    trajectory_samples: list
     target_speed: float
     path_status: str = ''
 
@@ -82,6 +116,7 @@ class TrajectoryGenerator:
         speed_limit,
         route_state,
         local_path=None,
+        current_speed=None,
     ):
         local_path_supplied = bool(local_path)
         path_source = 'local'
@@ -146,15 +181,54 @@ class TrajectoryGenerator:
             )
         self.previous_path_points = path_points
         self.previous_path_source = path_source if path_points else None
-        target_speed = select_target_speed(
+        nominal_speed = select_target_speed(
             route_state=route_state,
             speed_limit=speed_limit,
             default_speed=self.config.default_speed,
             max_speed=self.config.max_speed,
             stop_speed=self.config.stop_speed,
         )
+        initial_speed = (
+            nominal_speed if current_speed is None else float(current_speed)
+        )
+        terminal_speed = (
+            self.config.stop_speed
+            if (route_state or '').lower() == 'route_complete'
+            else None
+        )
+        trajectory_samples = time_parameterize(
+            path_points=path_points,
+            initial_speed=initial_speed,
+            speed_limit=nominal_speed,
+            limits=DynamicLimits(
+                max_speed=self.config.max_speed,
+                max_lateral_acceleration=(
+                    self.config.max_lateral_acceleration
+                ),
+                max_longitudinal_acceleration=(
+                    self.config.max_longitudinal_acceleration
+                ),
+                max_longitudinal_deceleration=(
+                    self.config.max_longitudinal_deceleration
+                ),
+            ),
+            terminal_speed=terminal_speed,
+        )
+        target_speed = nominal_speed
+        if trajectory_samples:
+            target_s = (
+                trajectory_samples[0].path_point.s
+                + self.config.target_speed_lookahead_distance
+            )
+            target_sample = trajectory_samples[-1]
+            for sample in trajectory_samples:
+                if sample.path_point.s >= target_s:
+                    target_sample = sample
+                    break
+            target_speed = min(nominal_speed, target_sample.target_speed)
         return GeneratedTrajectory(
             path_points=path_points,
+            trajectory_samples=trajectory_samples,
             target_speed=target_speed,
             path_status=path_status,
         )

@@ -7,13 +7,14 @@ then driven through the full route.
 ## Current release status: full-system-v1.9.0
 
 The v1.9.0 release completed the production two-event full-route run required within the
-final gate on 2026-08-01. A separate no-event run and a persisted rosbag/config artifact
-set remain part of the complete Gate 4 evidence package. The recorded release checks and
-full-run observations are:
+final gate on 2026-08-01. The post-change run also recorded and audited Team 20's new
+time-parameterized trajectory interface. A separate no-event run and retention of the
+raw rosbag remain part of the complete optional Gate 4 evidence package. Persisted
+metrics and plots are stored in `mission_results/`.
 
-- the shared code-quality gate passed for 51 Python files and the configured C++ sources;
-- all eight ROS 2 packages built successfully;
-- the complete workspace suite passed with 179 tests, 0 errors, 0 failures, and one
+- the shared code-quality gate passed for 53 Python files and the configured C++ sources;
+- all nine ROS 2 packages built successfully;
+- the complete workspace suite passed with 184 tests, 0 errors, 0 failures, and one
   expected skip;
 - Unity and the production ROS graph ran from waypoint 0 through waypoint 63 and reported
   `Route completed at waypoint 63`;
@@ -21,7 +22,8 @@ full-run observations are:
   traffic-light scenarios were exercised;
 - no collision, route departure, runtime error, process death, or duplicate production
   publisher was observed;
-- Unity and every ROS process exited cleanly after the completed route.
+- all ROS nodes exited cleanly after the completed route; Unity required forced
+  termination only during the user-requested teardown.
 
 The validation used the production RGB-D YOLO pipeline with the semantic camera disabled.
 RViz was disabled for the final benchmark to reduce rendering overhead; this did not
@@ -53,6 +55,12 @@ Production sensor requirements:
 The Unity segmentation-camera block remains present only as a disabled simulator
 configuration entry (`enabled: false`). No production node may subscribe to it.
 
+Trajectory planning additionally publishes Team 20's
+`autonomy_interfaces/msg/PlannedTrajectory` on `/planning/trajectory`. Every point
+contains pose, signed curvature, dynamically feasible target speed, and time from start.
+The scalar `/planning/target_speed` used by the existing decision/controller interface
+is selected from this constrained profile rather than independently commanded.
+
 ## Gate 1: static checks
 
 ```bash
@@ -68,6 +76,9 @@ Pass criteria:
 - the model is installed under `share/perception/models/yolov8n.onnx`;
 - `yolo_rgbd_detector_node` starts and logs `Loaded YOLO ONNX model`;
 - all functional tests pass;
+- `ros2 interface show autonomy_interfaces/msg/PlannedTrajectory` succeeds;
+- trajectory tests cover the curvature cap, forward acceleration pass, backward braking
+  pass, terminal stop, and monotonic time;
 - the simulation configuration reports the segmentation camera disabled;
 - no production launch starts the old detector nodes.
 
@@ -124,6 +135,8 @@ Record at least:
 /route/current_waypoint_id
 /route/current_waypoint_distance
 /planning/path
+/planning/trajectory
+/planning/target_speed
 /perception/front_vehicle_detected
 /perception/front_vehicle_distance
 /perception/front_vehicle_debug
@@ -180,10 +193,23 @@ Observed results:
   `WAITING_FOR_GREEN` at effectively zero speed before release.
 - The route manager advanced through all 64 waypoints and published route completion at
   waypoint 63; the decision and controller layers then maintained a safe stop.
+- Mission time was **321.054 s**, defined from the first forward `/car_command`
+  (`throttle > 0.01`, `brake < 0.01`) to the first `route_complete`. First measured
+  motion (> 0.1 m/s) to completion was 319.116 s.
+- The rosbag audit checked 147,717 points across 3,943 `/planning/trajectory` messages.
+  Maximum lateral acceleration, longitudinal acceleration, and longitudinal
+  deceleration were 3.0000, 2.0005, and 3.0000 m/s². The 0.0005 m/s² serialization/chord
+  excess is inside the documented 0.05 m/s² numerical tolerance. There were zero
+  non-monotonic point times and zero invalid numeric points.
 - Startup-only missing-TF/path/velocity warnings and intermittent stale-depth diagnostics
   were handled by safe-stop behavior and recovered when fresh data arrived.
-- Log inspection found no `ERROR`, `FATAL`, process death, segmentation fault, traceback,
-  collision, or route departure.
+- Log inspection found no runtime `ERROR`, `FATAL`, process death, segmentation fault,
+  traceback, collision, or route departure before route completion.
+
+The machine-readable metrics, route trace, speed profile, tracking error, traffic-light
+state, obstacle distance, and command plots are in
+[`mission_results/`](mission_results/README.md). Regenerate them from a retained bag with
+`tools/analyze_mission_run.py`.
 
 ## Tuning order
 

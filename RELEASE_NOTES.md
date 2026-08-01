@@ -7,6 +7,16 @@ Code-quality, documentation, and full closed-loop validation release built on
 
 Improvements:
 
+- Extends `trajectory_generator` from geometric path smoothing to deterministic
+  kinematic/dynamic time parameterization. Curvature limits lateral acceleration; a
+  forward pass limits acceleration; a backward pass limits deceleration and anticipates
+  curves or terminal stops; trapezoidal integration assigns monotonic point times.
+- Adds Team 20's `autonomy_interfaces` package with `TrajectoryPoint` and
+  `PlannedTrajectory` messages. `/planning/trajectory` exposes pose, signed curvature,
+  feasible speed, and time from start, while the existing scalar planning speed is
+  selected from the constrained profile for backward-compatible decision/control use.
+- Adds focused trajectory constraint tests, a rosbag mission-analysis tool, a ROS graph
+  with contribution ownership, and persisted trajectory/mission plots and metrics.
 - Resolves the `route_manager` flake8 and PEP 257 findings, simplifies the
   route-manager node structure, reformats the waypoint recorder, strengthens
   route-map validation, and adds regression coverage for malformed route data.
@@ -29,13 +39,18 @@ Improvements:
 
 Validation:
 
-- Passed the repository code-quality gate across 51 Python files and the
+- Passed the repository code-quality gate across 53 Python files and the
   configured C++ sources with no findings.
-- Built all eight ROS 2 workspace packages successfully.
-- Passed the complete workspace suite: 179 tests, 0 errors, 0 failures, and
+- Built all nine ROS 2 workspace packages successfully.
+- Passed the complete workspace suite: 184 tests, 0 errors, 0 failures, and
   one expected skip.
 - Completed a production Unity run on 2026-08-01 from waypoint 0 through 63
   and logged `Route completed at waypoint 63`.
+- Recorded a mission time of 321.054 seconds from the first forward control command to
+  `route_complete` (319.116 seconds from first measured motion). Audited 147,717 points
+  in 3,943 `/planning/trajectory` messages: maxima were 3.0000 m/s² lateral, 2.0005 m/s²
+  longitudinal acceleration, and 3.0000 m/s² deceleration, with zero non-monotonic times
+  and zero invalid points.
 - Observed adaptive following for the lead-vehicle event, right-side merge
   slowdown around waypoints 47--48, and traffic-light stop/release behavior at
   the four controlled signals at waypoints 25, 32, 52, and 59.
@@ -43,8 +58,8 @@ Validation:
   than the disabled semantic camera; `/car_command` and the traffic-light
   state each had one production publisher.
 - Found no runtime `ERROR`, `FATAL`, process death, segmentation fault,
-  traceback, collision, or route departure in the run logs. Unity and all ROS
-  processes exited cleanly after route completion.
+  traceback, collision, or route departure before route completion. All ROS nodes exited
+  cleanly; Unity was force-terminated only during user-requested teardown.
 
 ## full-system-v1.8.0
 

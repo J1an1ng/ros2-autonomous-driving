@@ -105,6 +105,42 @@ def test_returns_empty_path_and_nominal_speed_without_any_path_source():
     assert trajectory.target_speed == pytest.approx(4.0)
 
 
+def test_outputs_time_parameterized_speed_for_existing_control_interface():
+    generator = TrajectoryGenerator(
+        TrajectoryGeneratorConfig(
+            path_resolution=1.0,
+            min_target_distance=0.5,
+            default_speed=2.0,
+            max_speed=8.0,
+            stop_speed=0.0,
+            max_lateral_acceleration=2.0,
+            max_longitudinal_acceleration=1.0,
+            max_longitudinal_deceleration=1.0,
+            target_speed_lookahead_distance=1.0,
+        )
+    )
+
+    trajectory = generator.generate(
+        ego_pose=Pose2D(x=0.0, y=0.0, yaw=0.0),
+        target_pose=Pose2D(x=3.0, y=0.0),
+        local_path=[],
+        speed_limit=8.0,
+        route_state='normal',
+        current_speed=0.0,
+    )
+
+    assert len(trajectory.trajectory_samples) == len(trajectory.path_points)
+    assert trajectory.target_speed == pytest.approx(2.0 ** 0.5)
+    assert trajectory.trajectory_samples[0].time_from_start == pytest.approx(0.0)
+    assert all(
+        later.time_from_start > earlier.time_from_start
+        for earlier, later in zip(
+            trajectory.trajectory_samples,
+            trajectory.trajectory_samples[1:],
+        )
+    )
+
+
 def test_falls_back_when_local_path_contains_non_finite_coordinates():
     generator = make_generator()
 

@@ -24,6 +24,9 @@ The current implementation can:
 - project the vehicle onto the ordered route and generate `/planning/path` using
   Hermite/Bézier geometric smoothing, equal-arc-length resampling, continuity blending,
   and quality gates;
+- cap point speed by curvature/lateral acceleration, run forward acceleration and
+  backward braking passes, integrate monotonic time, and publish the result in Team 20's
+  custom `/planning/trajectory` message;
 - run a fixed-size YOLOv8n ONNX model in a C++ ROS 2 node with ONNX Runtime;
 - detect the COCO classes `car`, `bus`, `truck`, and `traffic light` in regular RGB images;
 - reconstruct depth pixels in 3-D, transform them with TF, reproject them into YOLO
@@ -55,11 +58,12 @@ The current implementation can:
   unavailable or invalid.
 
 On 2026-08-01, the production configuration completed a closed-loop waypoint 0--63 route
-validation and entered `route_complete`. Event1 adaptive following, the right-side merge
-slowdown around waypoints 47--48, and stop/green-release behaviour at controlled traffic
-lights 25, 32, 52, and 59 were all exercised in the same run. The logs showed no
-collision, route departure, node crash, `ERROR`, or `FATAL`. Unity and all ROS nodes
-exited normally after route completion.
+validation and entered `route_complete`. Mission time was **321.054 s**, measured from
+the first forward `/car_command` to the first `route_complete`. The run exercised Event1
+following, emergency braking near waypoint 39, right-side merge slowdown, red-light
+stops at waypoints 25, 32, and 59, and an already-green passage at waypoint 52. The logs
+showed no collision, route departure, or runtime node crash. All ROS nodes exited cleanly;
+Unity required forced termination only during teardown after completion.
 
 ## 2. Overall Architecture, Models, and Design Choices
 
@@ -74,7 +78,7 @@ Unity / simulation bridge
   ├─ world -> OurCar/INS TF ──> route_manager ──> trajectory_generator
   │                                  │                    │       │
   │                                  └─ route context ────┤       │
-  │                                                       └─ path/nominal speed
+  │                                                       └─ path + feasible profile
   └─ vehicle twist/TF ────────────────────────────────────────────┤
                                                                   v
                                                         decision_making
@@ -92,7 +96,8 @@ Unity / simulation bridge
 
 Package boundaries are part of the design. `perception` reports observations only;
 `route_manager` provides ordered route context; `trajectory_generator` produces the
-nominal path and speed; `decision_making` combines traffic rules and obstacle behaviour;
+validated path and dynamically feasible profile; `decision_making` combines traffic
+rules and obstacle behaviour;
 and `controller` converts the final intent into throttle, steering, and braking.
 `/planning/target_speed` is not the final control speed: the controller accepts only
 `/decision/target_speed`. `/car_command` must have exactly one authoritative publisher so
@@ -103,7 +108,7 @@ that multiple controllers cannot overwrite one another.
 | Design area | Current choice | Rationale | Cost / limitation |
 | --- | --- | --- | --- |
 | Global route | A 64-waypoint YAML route on the fixed map | The course map is fixed, so the route is reproducible, inspectable, and configurable with per-waypoint semantics and speeds. | It cannot automatically perform global replanning when the map or task changes. |
-| Local trajectory | Ego projection + cubic Hermite / quadratic Bézier + resampling and quality gates | Smoother than directly connecting waypoints while remaining simpler, more transparent, and easier to test than MPC. | It performs geometric smoothing only; it does not optimize vehicle dynamics or avoid obstacles. |
+| Local trajectory | Ego projection + Hermite/Bézier smoothing + quality gates + forward/backward time parameterization | Produces a transparent, testable path and feasible speed profile under curvature and longitudinal acceleration/braking limits without MPC complexity. | The point-mass envelope omits jerk, tyre friction circles, steering-rate and drivetrain dynamics; obstacle avoidance remains downstream. |
 | Object-detection model | COCO YOLOv8n ONNX on regular RGB, using C++/ONNX Runtime CPU inference | Does not rely on the Unity semantic camera; the lightweight model can run directly with the project. | Small traffic lights and the Unity domain gap require route gates, HSV evidence, and temporal compensation. |
 | Range and obstacles | RGB-D reprojection + planning-path point-cloud corridor + near-field safety corridor | YOLO provides the class, while depth/point cloud provides range and geometric consistency, reducing false positives in both directions. | Missing sensor data causes conservative stops; selected event windows require a validated direct-vision fallback. |
 | Behaviour decision | Explainable state machine, latches, and explicit priorities | Traffic lights, following, merging, and emergency states are traceable and unit-testable with a clear safety priority. | It does not provide the unknown-scenario generalization of a learned policy. |
@@ -226,10 +231,39 @@ stop boundaries are:
 Traffic-light braking is released after green confirmation. Speed limits on subsequent
 turning waypoints remain effective.
 
-### 2.4 v1.9.0 Code-Quality and Documentation Alignment
+### 2.4 Trajectory-Planning Model and Interface
 
-This release aligned Team 20's code style without changing ROS topic, service, message,
-or launch interfaces:
+The planner separates geometry from time parameterization. After route projection,
+smoothing, arc-length resampling, and quality validation, each point receives a speed
+cap:
+
+```text
+v_cap[i] = min(route_limit, max_speed,
+               sqrt(max_lateral_acceleration / abs(curvature[i])))
+```
+
+A forward pass applies `v[i]^2 <= v[i-1]^2 + 2*a_accel*ds`, and a backward pass applies
+`v[i]^2 <= v[i+1]^2 + 2*a_decel*ds`. The backward pass anticipates both curved sections
+and the zero terminal speed at `route_complete`. Point time is then integrated with
+`dt = 2*ds/(v[i-1]+v[i])`. Production limits are 3.0 m/s² lateral acceleration,
+2.0 m/s² longitudinal acceleration, and 3.0 m/s² deceleration.
+
+Team 20's `autonomy_interfaces/msg/PlannedTrajectory` contains an ordered array of
+`TrajectoryPoint` records: pose, signed curvature, target speed, and time from start. A
+topic was chosen because planning output is a continuously refreshed stream; a service
+would introduce synchronous request/reply coupling. The standard `/planning/path`
+remains the Pure Pursuit reference. The scalar `/planning/target_speed` is taken from the
+constrained profile at a 4 m arc-length lookahead, passes through `decision_making`, and
+then reaches the existing controller as `/decision/target_speed`.
+
+This design keeps `velocity_profile.py` pure and ROS-independent. Focused unit tests
+exercise lateral caps, acceleration reachability, pre-braking, terminal stopping, and
+time monotonicity, while rosbag analysis checks the serialized runtime interface.
+
+### 2.5 v1.9.0 Code-Quality and Documentation Alignment
+
+This release aligned Team 20's code style while documenting the newly added Team 20
+trajectory message and preserving existing controller-facing interfaces:
 
 - fixed `route_manager` flake8 and PEP 257 issues and added malformed-route tests;
 - added the root `.editorconfig` and `project/CODE_STYLE.md` to align readability rules
@@ -253,7 +287,11 @@ src/route_manager/route_manager/route_map.py
 src/route_manager/route_manager/route_progress.py
 src/route_manager/config/route_map.yaml
 src/trajectory_generator/trajectory_generator/path_processor.py
+src/trajectory_generator/trajectory_generator/velocity_profile.py
 src/trajectory_generator/trajectory_generator/trajectory_generator_node.py
+src/trajectory_generator/test/test_time_parameterization.py
+src/autonomy_interfaces/msg/TrajectoryPoint.msg
+src/autonomy_interfaces/msg/PlannedTrajectory.msg
 src/decision_making/decision_making/obstacle_monitor_node.py
 src/decision_making/decision_making/traffic_light_state_machine.py
 src/controller/src/control_core.cpp
@@ -280,6 +318,10 @@ requirements-yolo-training.txt
 ../.editorconfig
 CODE_STYLE.md
 tools/check_code_quality.sh
+tools/analyze_mission_run.py
+docs/ros_graph.svg
+mission_results/README.md
+mission_results/metrics.json
 ../README.md
 src/README.md
 
@@ -307,7 +349,7 @@ compatibility, formatting, or integration changes.
 | Lei Fang | `route_manager` | `src/route_manager`: route YAML, waypoint recorder, route loading/validation, progress tracking, local route, and route tests |
 | Yida Lyu | `decision`, `controller`, part of integration | `src/decision_making`, `src/controller`: state machine, obstacle behaviour, final target speed, Pure Pursuit, PID, safe stop, and decision-to-command interfaces |
 | Tao Zhang | Perception, part of integration | `src/perception`: YOLO RGB-D, traffic-light colour/temporal logic, vehicle range, point cloud/occupancy, model configuration, and perception-to-decision interfaces |
-| Jianing Huang | `Trajectory_Generator`, part of integration | `src/trajectory_generator`: route projection, smoothing/resampling, continuity/quality gates, nominal speed, and route-to-planning interfaces |
+| Jianing Huang | `Trajectory_Generator`, part of integration | `src/trajectory_generator`, `src/autonomy_interfaces`: route projection, smoothing/resampling, continuity/quality gates, constrained time parameterization, custom trajectory messages, and route-to-planning interfaces |
 
 Integration is shared work by Yida Lyu, Tao Zhang, and Jianing Huang. It includes
 topic/config alignment at their module boundaries, `system_bringup` integration,
@@ -319,7 +361,7 @@ finer-grained individual split, so this document does not invent one.
 | Component | Ownership category | Team 20 work / reuse boundary |
 | --- | --- | --- |
 | `route_manager` | Team-written / substantively developed | Route model, recording tool, load validation, progress and pass detection, local route, parameters, tests, and documentation; led by Lei Fang. |
-| `trajectory_generator` | Team-written / substantively developed | Route projection, Hermite/Bézier application, resampling, continuity blending, quality validation, fallback, tests, and documentation; led by Jianing Huang. |
+| `autonomy_interfaces` and `trajectory_generator` | Team-written / substantively developed | Team 20 messages; route projection; Hermite/Bézier application; resampling; continuity/quality validation; curvature and acceleration-constrained time parameterization; fallback, tests, and documentation; led by Jianing Huang. |
 | `decision_making` | Team-written / substantively developed | Traffic-light state machine, obstacle fusion, following/merge/emergency priorities, timeouts/latches, tests, and documentation; led by Yida Lyu. |
 | `controller` | Team-written / substantively developed | Project implementation of Pure Pursuit/PID, input validation, output limits, safe stop, parameters, tests, and documentation; led by Yida Lyu. |
 | YOLO RGB-D and project mapping logic in `perception` | Team-written / substantively developed around a reused model and libraries | ROS nodes, RGB-D reprojection, candidate selection, HSV/temporal rules, occupancy outputs, configuration, tests, and documentation; led by Tao Zhang. |
@@ -333,7 +375,7 @@ Reused algorithms and implementation boundaries:
 | Method / dependency | Reused content | Team 20 implementation |
 | --- | --- | --- |
 | Pure Pursuit / PID | Public control methods and mathematical principles | Yida Lyu's C++ implementation, ROS adaptation, safety checks, and parameter tuning for this project. |
-| Hermite / Bézier interpolation | Public geometric-curve methods | Jianing Huang's route trimming, tangent constraints, curve joining, resampling, quality gates, and continuity logic. |
+| Hermite / Bézier interpolation and constant-acceleration reachability equations | Public geometric and kinematic principles | Jianing Huang's route trimming, tangent constraints, curve joining, resampling, quality gates, continuity logic, forward/backward constraint passes, ROS interface, and project tuning. |
 | Finite-state machine pattern | General software design pattern | Yida Lyu's traffic-light, following, merge, emergency-braking states, priorities, and latches. |
 | YOLOv8n / COCO weights | Ultralytics network, pretrained weights, and class knowledge | Tao Zhang's ROS 2 ONNX inference integration, RGB-D ranging, route gating, and traffic-light postprocessing. |
 | ROS 2 / TF / OpenCV / ONNX Runtime / OctoMap | Third-party frameworks and libraries | Team 20's nodes, topics, parameters, transformations, configuration, and system integration. |
@@ -412,6 +454,28 @@ documentation.
 
 ## 5. Interfaces and Runtime Parameters
 
+Trajectory-planning inputs and outputs:
+
+```text
+inputs:
+  /route/local_path                  nav_msgs/msg/Path
+  /route/target_pose                 geometry_msgs/msg/PoseStamped
+  /route/speed_limit                 std_msgs/msg/Float32
+  /route/route_state                 std_msgs/msg/String
+  /OurCar/INS/twist                  geometry_msgs/msg/TwistStamped
+  TF world -> OurCar/INS
+
+outputs:
+  /planning/path                     nav_msgs/msg/Path
+  /planning/trajectory               autonomy_interfaces/msg/PlannedTrajectory
+  /planning/target_speed             std_msgs/msg/Float32
+```
+
+Each `TrajectoryPoint` contains `pose`, `curvature`, `target_speed`, and
+`time_from_start`. Configured dynamics are `max_lateral_acceleration=3.0`,
+`max_longitudinal_acceleration=2.0`, and `max_longitudinal_deceleration=3.0` in SI units;
+the scalar control lookahead is 4.0 m and measured velocity expires after 1.0 s.
+
 Primary inputs:
 
 ```text
@@ -469,20 +533,22 @@ The complete release check was run against the current source on 2026-08-01:
 
 | Validation item | Result |
 | --- | --- |
-| Project code-quality gate | All 51 Python files and configured C++ sources passed; the inherited simulator bridge uses the documented exemption. |
-| ROS 2 build | All eight workspace packages succeeded. |
-| Complete `colcon test` | 179 tests, 0 errors, 0 failures, 1 expected skip. |
+| Project code-quality gate | All 53 Team 20/configured Python files and configured C++ sources passed; the inherited simulator bridge uses the documented exemption. |
+| ROS 2 build | All nine workspace packages succeeded. |
+| Complete `colcon test` | 184 tests, 0 errors, 0 failures, 1 expected skip. |
 | Unity closed-loop route | Completed waypoints 0--63 and entered `route_complete`. |
-| Runtime stability | No `ERROR`, `FATAL`, unexpected process exit, collision, or route departure. |
-| Shutdown | Unity and all ROS nodes exited cleanly. |
+| Mission time | 321.054 s from first forward command to `route_complete`; 319.116 s from first measured motion. |
+| Runtime stability | No runtime `ERROR`, `FATAL`, unexpected process exit, collision, or route departure before completion. |
+| Shutdown | All ROS nodes exited cleanly; Unity required forced termination during teardown only. |
+| Trajectory audit | 147,717 points / 3,943 messages; all finite, strictly increasing time, and within configured limits plus 0.05 m/s² numeric tolerance. |
 
 The complete run also confirmed that:
 
 - Event1 entered `FOLLOWING_VEHICLE` near waypoint 17 and returned to `CRUISE` after the
   constraint cleared;
 - the merge area at waypoints 47--48 entered `SLOWING_FOR_MERGE` and recovered safely;
-- traffic-light logic at waypoints 25, 32, 52, and 59 stopped and released correctly;
-  waypoints 32 and 59 waited during red and released after green confirmation;
+- traffic-light logic stopped and released at red signals 25, 32, and 59; waypoint 52
+  was already green and was passed without an unnecessary stop;
 - `/car_command` had only one publisher, the production `controller_node`;
 - `/perception/traffic_light_state` had only one publisher, the production YOLO RGB-D
   node; and
@@ -572,12 +638,19 @@ complete historical group of 24 tests cannot currently be rerun directly.
 Current v1.9.0 dynamic results from 2026-08-01:
 
 - the complete waypoint 0--63 route passed and reached `route_complete`;
+- mission time was 321.054 s by the first-forward-command definition, with a 319.116 s
+  first-motion cross-check;
 - Event1 adaptive following and the merge slowdown at waypoints 47--48 activated and
   recovered normally;
-- stop/green-release behaviour at traffic-light waypoints 25, 32, 52, and 59 was correct;
+- emergency braking activated once near waypoint 39 and recovered without collision;
+- red-light stop/green-release behaviour at waypoints 25, 32, and 59 was correct, and
+  waypoint 52 passed on green without an unnecessary stop;
+- 147,717 serialized trajectory points respected the configured lateral and longitudinal
+  constraints; there were zero non-monotonic time pairs and zero invalid values;
 - the system remained safely stopped after route completion and all processes shut down
-  normally; and
-- log keyword scans found no error, crash, collision, or process death.
+  normally except for Unity's teardown-only forced termination; and
+- log keyword scans found no runtime error, crash, collision, or process death before
+  route completion.
 
 Historical dynamic results from 2026-07-27:
 
@@ -632,12 +705,57 @@ ros2 launch system_bringup full_system.launch.py \
 - Traffic lights are very small, so the implementation depends on a low YOLO threshold,
   route gating, and per-intersection ROIs. The complete route has passed, but changing
   camera parameters, resolution, route, or map requires ROI recalibration.
+- Trajectory feasibility uses a point-mass speed envelope. It does not jointly optimize
+  path and speed or model jerk, tyre-force coupling, steering-rate, vehicle mass,
+  drivetrain lag, or moving-obstacle avoidance. Those extensions would require a richer
+  vehicle model and likely an optimization-based planner.
 - v1.9.0 completed one production closed-loop waypoint 0--63 run containing both events.
-  A separate no-event control run and a persisted rosbag/config evidence package are not
-  yet complete, so the project must not claim that the “complete Gate 4 evidence has been
-  archived.” A formal demonstration should retain complete logs, the Event1 following
-  curve, target speeds and stopping distances at all four intersections, debug images,
-  and the model checksum so that a third party can reproduce the result.
+  Metrics and figures from the trajectory validation are persisted in `mission_results`,
+  but the large raw rosbag is not stored in Git. A separate no-event control run and
+  long-term raw bag/config archive remain desirable for complete third-party replay.
 - Final documentation must distinguish “Team 20's YOLO integration contribution” from
   the reused “YOLOv8n/COCO/ONNX Runtime/OpenCV/ROS 2” components. It must not state
   broadly that “YOLO was developed by us.”
+
+## 9. ROS Graph, Result Figures, and Bibliography
+
+The package/topic graph below records both runtime flow and the member responsible for
+each team component. Grey denotes course-supplied simulation; coloured boxes denote Team
+20 modules. The editable source is `docs/ros_graph.dot`.
+
+![Team 20 ROS graph and contribution ownership](docs/ros_graph.svg)
+
+The recorded route trace demonstrates waypoint 0--63 completion. The speed plot shows
+that planning produces a curvature/acceleration-constrained target, after which the
+decision layer may reduce speed for traffic lights and obstacles. These figures are
+generated from the same rosbag as `mission_results/metrics.json`.
+
+![Recorded full-system route trace](mission_results/route_trace.svg)
+
+![Measured, planned, and decision speed](mission_results/speed_profile.svg)
+
+### Bibliography
+
+1. Technical University of Munich, *Introduction to ROS: Autonomous Driving Project
+   Assignment*, `AutonomousDriving.pdf`, 2026. This is the assessment specification used
+   to derive the trajectory, custom-interface, documentation, and validation criteria.
+2. R. C. Coulter, [*Implementation of the Pure Pursuit Path Tracking
+   Algorithm*](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm),
+   Carnegie Mellon University, CMU-RI-TR-92-01, 1992.
+3. G. Farin, *Curves and Surfaces for CAGD: A Practical Guide*, 5th ed., Morgan
+   Kaufmann, 2002, ISBN 978-1-55860-737-8. Hermite and Bézier curves are reused public
+   methods; Team 20 owns the project-specific cropping, blending, gates, and tuning.
+4. K. J. Åström and T. Hägglund, *PID Controllers: Theory, Design, and Tuning*, 2nd ed.,
+   Instrument Society of America, 1995, ISBN 1-55617-516-7.
+5. Open Robotics, [*ROS 2 Jazzy: Interfaces (topics, services,
+   actions)*](https://docs.ros.org/en/jazzy/How-To-Guides/Topics-Services-Actions.html),
+   accessed 2026-08-01.
+6. Ultralytics, [*Model Export with Ultralytics
+   YOLO*](https://docs.ultralytics.com/modes/export/), accessed 2026-08-01.
+7. Microsoft, [*ONNX Runtime C++ getting-started
+   documentation*](https://onnxruntime.ai/docs/get-started/with-cpp.html), accessed
+   2026-08-01.
+8. A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, “OctoMap: An
+   Efficient Probabilistic 3D Mapping Framework Based on Octrees,” *Autonomous Robots*,
+   vol. 34, pp. 189--206, 2013,
+   [doi:10.1007/s10514-012-9321-0](https://doi.org/10.1007/s10514-012-9321-0).

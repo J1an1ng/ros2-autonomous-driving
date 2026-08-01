@@ -101,6 +101,7 @@ or control.
 ## Validation
 
 In full-system-v1.9.0 the launch brought up all production modules, completed waypoint
-0–63, exercised traffic-light/following/merge behavior, and shut down Unity and all ROS
-nodes cleanly. Automated validation passed 179 tests with no errors or failures and one
-expected skip.
+0–63, and exercised traffic-light, following, emergency-braking, and merge behavior.
+Mission time was 321.054 s from the first forward command to `route_complete`. All ROS
+nodes shut down cleanly; Unity required forced termination during teardown only.
+Automated validation passed 184 tests with no errors or failures and one expected skip.

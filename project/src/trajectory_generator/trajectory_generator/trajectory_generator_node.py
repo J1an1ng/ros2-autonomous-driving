@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
+import math
+
+from autonomy_interfaces.msg import PlannedTrajectory, TrajectoryPoint
 from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Path
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -40,6 +44,11 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter('default_speed', 2.0)
         self.declare_parameter('max_speed', 14.0)
         self.declare_parameter('stop_speed', 0.0)
+        self.declare_parameter('max_lateral_acceleration', 3.0)
+        self.declare_parameter('max_longitudinal_acceleration', 2.0)
+        self.declare_parameter('max_longitudinal_deceleration', 3.0)
+        self.declare_parameter('target_speed_lookahead_distance', 4.0)
+        self.declare_parameter('velocity_timeout', 1.0)
 
         self.map_frame = self.get_parameter('map_frame').value
         self.vehicle_frame = self.get_parameter('vehicle_frame').value
@@ -74,14 +83,32 @@ class TrajectoryGeneratorNode(Node):
             default_speed=float(self.get_parameter('default_speed').value),
             max_speed=float(self.get_parameter('max_speed').value),
             stop_speed=float(self.get_parameter('stop_speed').value),
+            max_lateral_acceleration=float(
+                self.get_parameter('max_lateral_acceleration').value
+            ),
+            max_longitudinal_acceleration=float(
+                self.get_parameter('max_longitudinal_acceleration').value
+            ),
+            max_longitudinal_deceleration=float(
+                self.get_parameter('max_longitudinal_deceleration').value
+            ),
+            target_speed_lookahead_distance=float(
+                self.get_parameter('target_speed_lookahead_distance').value
+            ),
         )
         self.trajectory_generator = TrajectoryGenerator(config)
+        self.velocity_timeout = max(
+            float(self.get_parameter('velocity_timeout').value),
+            0.1,
+        )
 
         self.target_pose_msg = None
         self.local_path = []
         self.speed_limit = None
         self.route_state = ''
         self.current_waypoint_id = None
+        self.current_speed = None
+        self.last_velocity_time = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -116,8 +143,19 @@ class TrajectoryGeneratorNode(Node):
             self.current_waypoint_id_callback,
             10,
         )
+        self.create_subscription(
+            TwistStamped,
+            '/OurCar/INS/twist',
+            self.twist_callback,
+            10,
+        )
 
         self.path_pub = self.create_publisher(Path, '/planning/path', 10)
+        self.trajectory_pub = self.create_publisher(
+            PlannedTrajectory,
+            '/planning/trajectory',
+            10,
+        )
         self.target_speed_pub = self.create_publisher(
             Float32,
             '/planning/target_speed',
@@ -147,6 +185,30 @@ class TrajectoryGeneratorNode(Node):
 
     def current_waypoint_id_callback(self, msg):
         self.current_waypoint_id = int(msg.data)
+
+    def twist_callback(self, msg):
+        velocity = msg.twist.linear
+        speed = math.sqrt(
+            float(velocity.x) ** 2
+            + float(velocity.y) ** 2
+            + float(velocity.z) ** 2
+        )
+        if not math.isfinite(speed):
+            self.current_speed = None
+            self.last_velocity_time = None
+            return
+        self.current_speed = speed
+        self.last_velocity_time = self.get_clock().now()
+
+    def fresh_current_speed(self):
+        if self.current_speed is None or self.last_velocity_time is None:
+            return None
+        age = (
+            self.get_clock().now() - self.last_velocity_time
+        ).nanoseconds / 1e9
+        if age < 0.0 or age > self.velocity_timeout:
+            return None
+        return self.current_speed
 
     def get_ego_pose(self):
         try:
@@ -189,9 +251,9 @@ class TrajectoryGeneratorNode(Node):
             yaw=float(yaw),
         )
 
-    def path_points_to_msg(self, path_points):
+    def path_points_to_msg(self, path_points, stamp):
         path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.stamp = stamp
         path_msg.header.frame_id = self.map_frame
 
         for point in path_points:
@@ -207,6 +269,38 @@ class TrajectoryGeneratorNode(Node):
 
         return path_msg
 
+    def trajectory_samples_to_msg(self, samples, stamp):
+        trajectory_msg = PlannedTrajectory()
+        trajectory_msg.header.stamp = stamp
+        trajectory_msg.header.frame_id = self.map_frame
+
+        for sample in samples:
+            point = sample.path_point
+            point_msg = TrajectoryPoint()
+            point_msg.pose.position.x = float(point.x)
+            point_msg.pose.position.y = float(point.y)
+            point_msg.pose.position.z = float(point.z)
+            qx, qy, qz, qw = yaw_to_quaternion(point.yaw)
+            point_msg.pose.orientation = Quaternion(
+                x=qx,
+                y=qy,
+                z=qz,
+                w=qw,
+            )
+            point_msg.curvature = float(point.curvature)
+            point_msg.target_speed = float(sample.target_speed)
+            duration = max(float(sample.time_from_start), 0.0)
+            point_msg.time_from_start.sec = int(duration)
+            point_msg.time_from_start.nanosec = int(
+                round((duration - int(duration)) * 1e9)
+            )
+            if point_msg.time_from_start.nanosec >= 1_000_000_000:
+                point_msg.time_from_start.sec += 1
+                point_msg.time_from_start.nanosec -= 1_000_000_000
+            trajectory_msg.points.append(point_msg)
+
+        return trajectory_msg
+
     def timer_callback(self):
         ego_pose = self.get_ego_pose()
         if ego_pose is None:
@@ -221,6 +315,7 @@ class TrajectoryGeneratorNode(Node):
             local_path=self.local_path,
             speed_limit=self.speed_limit,
             route_state=self.route_state,
+            current_speed=self.fresh_current_speed(),
         )
         if trajectory.path_status:
             self.get_logger().warn(
@@ -228,11 +323,17 @@ class TrajectoryGeneratorNode(Node):
                 throttle_duration_sec=2.0,
             )
 
-        path_msg = self.path_points_to_msg(trajectory.path_points)
+        stamp = self.get_clock().now().to_msg()
+        path_msg = self.path_points_to_msg(trajectory.path_points, stamp)
+        trajectory_msg = self.trajectory_samples_to_msg(
+            trajectory.trajectory_samples,
+            stamp,
+        )
         speed_msg = Float32()
         speed_msg.data = float(trajectory.target_speed)
 
         self.path_pub.publish(path_msg)
+        self.trajectory_pub.publish(trajectory_msg)
         self.target_speed_pub.publish(speed_msg)
 
 

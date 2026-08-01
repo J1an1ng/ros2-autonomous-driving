@@ -1,0 +1,88 @@
+digraph team20_ros_graph {
+  graph [
+    bgcolor="white",
+    fontname="DejaVu Sans",
+    label="Team 20 ROS 2 architecture and contribution ownership",
+    labelloc="t",
+    fontsize=20,
+    pad=0.25,
+    rankdir=LR,
+    splines=polyline
+  ];
+  node [
+    color="#455a64",
+    fillcolor="#f7f9fb",
+    fontname="DejaVu Sans",
+    fontsize=11,
+    margin="0.16,0.10",
+    shape=box,
+    style="rounded,filled"
+  ];
+  edge [
+    color="#546e7a",
+    fontname="DejaVu Sans",
+    fontsize=9
+  ];
+
+  simulation [
+    fillcolor="#eeeeee",
+    label="simulation / Unity bridge\nCourse-supplied and reused"
+  ];
+  perception [
+    fillcolor="#e8f5e9",
+    label="perception\nTao Zhang\nYOLO RGB-D, ranging, mapping"
+  ];
+  route [
+    fillcolor="#fff3e0",
+    label="route_manager\nLei Fang\nroute state, local route, limits"
+  ];
+  trajectory [
+    fillcolor="#e3f2fd",
+    label="trajectory_generator\nJianing Huang\ngeometry + dynamic speed profile"
+  ];
+  interfaces [
+    fillcolor="#e3f2fd",
+    label="autonomy_interfaces\nTeam 20 trajectory messages"
+  ];
+  decision [
+    fillcolor="#f3e5f5",
+    label="decision_making\nYida Lyu\ntraffic and obstacle policy"
+  ];
+  controller [
+    fillcolor="#f3e5f5",
+    label="controller\nYida Lyu\nPure Pursuit + PID + safe stop"
+  ];
+  integration [
+    color="#00838f",
+    fillcolor="#e0f7fa",
+    label="system_bringup + integration\nYida Lyu / Tao Zhang / Jianing Huang"
+  ];
+  evidence [
+    fillcolor="#fafafa",
+    label="mission evidence\n/planning/trajectory audit + plots"
+  ];
+
+  simulation -> perception [label="RGB / Depth / CameraInfo / TF"];
+  simulation -> route [label="world -> OurCar/INS TF"];
+  simulation -> trajectory [label="/OurCar/INS/twist"];
+  simulation -> controller [label="twist + TF"];
+  route -> trajectory [
+    label="/route/local_path\n/target_pose /speed_limit /route_state"
+  ];
+  route -> decision [label="waypoint ID / distance / state"];
+  perception -> decision [label="light state + obstacle range"];
+  interfaces -> trajectory [label="PlannedTrajectory", style=dashed];
+  trajectory -> decision [label="/planning/target_speed"];
+  trajectory -> controller [label="/planning/path"];
+  trajectory -> evidence [label="/planning/trajectory"];
+  decision -> controller [
+    label="/decision/target_speed\n/decision/stop_required"
+  ];
+  controller -> simulation [label="/car_command"];
+
+  integration -> perception [style=dotted, arrowhead=none];
+  integration -> route [style=dotted, arrowhead=none];
+  integration -> trajectory [style=dotted, arrowhead=none];
+  integration -> decision [style=dotted, arrowhead=none];
+  integration -> controller [style=dotted, arrowhead=none];
+}

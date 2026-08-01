@@ -153,6 +153,8 @@ def read_run(bag_path: Path, logs_path: Path):
 
     controller_safe_stops = {}
     fallback_count = 0
+    runtime_fallback_count = 0
+    post_route_complete_fallback_count = 0
     process_died_count = 0
     runtime_process_died_count = 0
     teardown_process_died_count = 0
@@ -160,12 +162,22 @@ def read_run(bag_path: Path, logs_path: Path):
         text = log_path.read_text(errors='replace')
         for reason in re.findall(r'Safe stop: ([^\n\r]+)', text):
             controller_safe_stops[reason] = controller_safe_stops.get(reason, 0) + 1
-        fallback_count += len(re.findall(r'local path rejected|fallback path rejected', text))
-        died_lines = [line for line in text.splitlines() if 'process has died' in line]
-        process_died_count += len(died_lines)
+        fallback_lines = [
+            line for line in text.splitlines()
+            if re.search(r'local path rejected|fallback path rejected', line)
+        ]
+        fallback_count += len(fallback_lines)
         route_complete_seconds = (
             route_complete_ns / 1e9 if route_complete_ns is not None else math.inf
         )
+        for line in fallback_lines:
+            match = re.search(r'\[([0-9]+(?:\.[0-9]+)?)\]', line)
+            if match and float(match.group(1)) > route_complete_seconds:
+                post_route_complete_fallback_count += 1
+            else:
+                runtime_fallback_count += 1
+        died_lines = [line for line in text.splitlines() if 'process has died' in line]
+        process_died_count += len(died_lines)
         for line in died_lines:
             match = re.match(r'([0-9]+(?:\.[0-9]+)?) ', line)
             if match and float(match.group(1)) <= route_complete_seconds:
@@ -212,6 +224,10 @@ def read_run(bag_path: Path, logs_path: Path):
         ),
         'brake_saturation_samples': sum(1 for _, _, _, brake in commands if brake >= 0.999),
         'path_rejection_or_fallback_count': fallback_count,
+        'runtime_path_rejection_or_fallback_count': runtime_fallback_count,
+        'post_route_complete_path_fallback_count': (
+            post_route_complete_fallback_count
+        ),
         'process_died_log_count': process_died_count,
         'runtime_process_died_count': runtime_process_died_count,
         'teardown_process_died_count': teardown_process_died_count,
@@ -288,7 +304,7 @@ def write_stacked_svg(path: Path, title: str, panels, y_range=None):
     path.write_text('\n'.join(parts))
 
 
-def write_route_svg(path: Path, runs):
+def write_route_svg(path: Path, runs, title='Stage 6 route traces'):
     width, height, margin = 1000, 650, 55
     points = [(x, y) for data in runs for _, x, y in data['pose']]
     min_x, max_x = min(x for x, _ in points), max(x for x, _ in points)
@@ -303,7 +319,7 @@ def write_route_svg(path: Path, runs):
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">',
         '<rect width="100%" height="100%" fill="white" />',
         f'<text x="{width / 2}" y="28" text-anchor="middle" font-size="18">'
-        'Stage 6 route traces</text>',
+        f'{title}</text>',
         f'<rect x="{margin}" y="{margin}" width="{width - 2 * margin}" '
         f'height="{height - 2 * margin}" fill="none" stroke="#444" />',
     ]

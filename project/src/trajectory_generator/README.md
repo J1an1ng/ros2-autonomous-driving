@@ -1,16 +1,19 @@
 # Trajectory Generator
 
-ROS 2 reference-path generation package for the autonomous driving project.
+ROS 2 geometric and time-parameterized trajectory-planning package for the
+autonomous driving project.
 
 ## Purpose
 
 `trajectory_generator_node` consumes the local route from `route_manager`,
-looks up the ego vehicle pose from TF, and publishes a resampled forward path
-plus a nominal target speed. If no valid local route is available, it falls
-back to the current short-term route target.
+looks up the ego vehicle pose from TF, reads current vehicle speed, and
+publishes a resampled forward path with a dynamically feasible speed/time
+profile. If no valid local route is available, it falls back to the current
+short-term route target.
 
 It intentionally does not implement MPC, collision avoidance, or traffic-rule
-decisions. Those remain downstream responsibilities.
+decisions. Obstacle and traffic-light authority remains in `decision_making`;
+the planner constrains only path geometry and vehicle motion along that path.
 
 ## Inputs
 
@@ -21,6 +24,7 @@ decisions. Those remain downstream responsibilities.
 | `/route/speed_limit` | `std_msgs/msg/Float32` | Speed limit associated with the route target. |
 | `/route/route_state` | `std_msgs/msg/String` | Semantic route state such as `normal`, `stop_zone`, or `intersection`. |
 | `/route/current_waypoint_id` | `std_msgs/msg/Int32` | Current target waypoint id, used for diagnostics. |
+| `/OurCar/INS/twist` | `geometry_msgs/msg/TwistStamped` | Current speed used as the first boundary condition of the velocity profile. |
 | TF | `map_frame -> vehicle_frame` | Ego pose lookup. Defaults to `world -> OurCar/INS`. |
 
 ## Outputs
@@ -28,7 +32,8 @@ decisions. Those remain downstream responsibilities.
 | Topic | Type | Description |
 | --- | --- | --- |
 | `/planning/path` | `nav_msgs/msg/Path` | Smoothed, validated, forward reference path. |
-| `/planning/target_speed` | `std_msgs/msg/Float32` | Nominal target speed selected from route information. |
+| `/planning/trajectory` | `autonomy_interfaces/msg/PlannedTrajectory` | Team 20 message containing pose, curvature, feasible speed, and time from start at every trajectory point. |
+| `/planning/target_speed` | `std_msgs/msg/Float32` | Dynamically feasible lookahead speed used by the existing decision/controller chain. |
 
 ## Parameters
 
@@ -53,23 +58,90 @@ Configured by `config/trajectory_generator.yaml`.
 | `default_speed` | `2.0` | Speed used before `/route/speed_limit` is received. |
 | `max_speed` | `14.0` | Maximum nominal target speed (50.4 km/h); lower route waypoint limits still take priority where required by path geometry. |
 | `stop_speed` | `0.0` | Terminal target speed for `route_complete`. |
+| `max_lateral_acceleration` | `3.0` | Maximum planned `v² |curvature|` in m/s². |
+| `max_longitudinal_acceleration` | `2.0` | Maximum planned forward acceleration in m/s². |
+| `max_longitudinal_deceleration` | `3.0` | Maximum planned braking magnitude in m/s². |
+| `target_speed_lookahead_distance` | `4.0` | Arc-length lookahead used to expose one feasible speed to the legacy scalar-speed interface. |
+| `velocity_timeout` | `1.0` | Maximum age of measured speed. The planner uses the nominal ceiling as its initial boundary until fresh velocity arrives; the controller independently safe-stops on stale velocity. |
 
-## Speed Logic
+## Kinematic and Dynamic Feasibility
 
-- At `route_complete`, target speed is `stop_speed`.
+Path feasibility is established first: samples must be finite, ordered in arc
+length, close to the ego pose, bounded in curvature and yaw change, and within
+the configured smoothing-deviation envelope. The accepted path is then time
+parameterized in four deterministic passes:
+
+1. Apply route and global speed limits, then cap every point by lateral
+   acceleration:
+
+   ```text
+   v_curve = sqrt(max_lateral_acceleration / abs(curvature))
+   ```
+
+2. Run a forward reachability pass from measured ego speed:
+
+   ```text
+   v[i] <= sqrt(v[i-1]^2 + 2 * max_longitudinal_acceleration * ds)
+   ```
+
+3. Run a backward braking pass, including a zero terminal speed for
+   `route_complete`:
+
+   ```text
+   v[i] <= sqrt(v[i+1]^2 + 2 * max_longitudinal_deceleration * ds)
+   ```
+
+4. Integrate point time with the trapezoidal relation
+   `dt = 2 * ds / (v[i-1] + v[i])`. The denominator has a small numerical floor,
+   so every non-duplicate spatial sample has strictly increasing time.
+
+The implementation is a pure computational module in `velocity_profile.py`.
+It has no ROS dependency and is covered by focused tests for curvature limits,
+acceleration reachability, braking before a curve, terminal stopping, and
+monotonic time. This separation keeps policy, transport, and trajectory
+mathematics independently testable.
+
+## Speed and Control Integration
+
+- At `route_complete`, the profile ends at `stop_speed`.
 - A `stop_zone` remains a nominal route state and uses its speed limit. Dynamic
   traffic-light stops are owned by the decision node, so a stable green can
   release the vehicle without a second planning-layer zero-speed latch.
-- For every non-terminal route state, including intersection states, target
-  speed is `min(speed_limit, max_speed)`. Route semantics do not add a generic
-  intersection slowdown; geometry-specific waypoint limits remain effective.
+- For every non-terminal route state, including intersection states, the
+  nominal ceiling is `min(speed_limit, max_speed)`. Route semantics do not add
+  a generic intersection slowdown; path curvature and longitudinal limits
+  shape the actual profile below that ceiling.
 - If no speed limit has been received, `default_speed` is used.
 
-This speed is nominal planning output. Traffic-light and obstacle decisions are
-applied downstream by `decision_making`, which publishes the final target speed
-and stop requirement. Red/yellow/unknown-light approach braking and both
-optional vehicle events therefore retain authority over the higher nominal
-intersection speed.
+`/planning/trajectory` is the complete controller-facing representation. The
+current controller retains its established `/planning/path` plus scalar-speed
+contract, so `/planning/target_speed` selects the trajectory sample at the
+configured 4 m lookahead. It is therefore derived from, and cannot exceed, the
+feasible profile. `decision_making` may reduce this value further for traffic
+lights and obstacles before the controller receives `/decision/target_speed`.
+The planner cannot override a safety decision.
+
+## Team 20 Custom Interface
+
+The `autonomy_interfaces` package is Team 20 code and supplies the assignment's
+custom ROS message:
+
+```text
+TrajectoryPoint
+  geometry_msgs/Pose pose
+  float32 curvature
+  float32 target_speed
+  builtin_interfaces/Duration time_from_start
+
+PlannedTrajectory
+  std_msgs/Header header
+  autonomy_interfaces/TrajectoryPoint[] points
+```
+
+A topic is appropriate because a trajectory is a continuously refreshed data
+stream, not a synchronous request/reply operation. The standard `Path` output
+is retained for compatibility and RViz; the custom message makes curvature,
+speed, and timing explicit and inspectable.
 
 ## Path Processing
 
@@ -103,9 +175,9 @@ If the local path is unavailable or rejected, `/route/target_pose`
 straight-line interpolation is used. If neither source is usable, an empty
 `/planning/path` is published and continuity state is cleared.
 
-`nav_msgs/msg/Path` carries position and yaw only. Arc length and curvature are
-computed and validated internally; adding them to a controller-facing message
-can be done later without changing this path-generation pipeline.
+`nav_msgs/msg/Path` carries position and yaw only. The parallel Team 20
+`PlannedTrajectory` message exposes the internally computed curvature, feasible
+speed, and timing without breaking existing consumers.
 
 ## Launch
 
@@ -122,10 +194,21 @@ ros2 run trajectory_generator trajectory_generator_node
 ## Current Limitations
 
 - The fallback path uses straight-line spatial interpolation only.
-- The spline is a local geometric smoother, not a vehicle-model-constrained
-  optimizer.
-- Curvature currently gates path quality but does not yet shape target speed.
+- The planner uses a point-mass acceleration envelope; it does not model tyre
+  friction circles, steering actuator rate, jerk, mass, or drivetrain dynamics.
+- Hermite/Bézier geometry is validated and time parameterized, not jointly
+  optimized as an MPC problem.
 - No obstacle avoidance is performed.
 - No MPC or dynamic optimization is implemented.
 - Traffic-light and obstacle decisions are intentionally left to
   `decision_making`.
+
+## Validation Evidence
+
+The 2026-08-01 waypoint 0--63 Unity run audited 147,717 points from 3,943
+`/planning/trajectory` messages. Maximum observed lateral acceleration,
+longitudinal acceleration, and longitudinal deceleration were respectively
+3.0000, 2.0005, and 3.0000 m/s² (the 0.0005 excess is within the documented
+float/chord numerical tolerance); all timestamps were strictly increasing and
+all values were finite. See [`../../mission_results/README.md`](../../mission_results/README.md)
+for the mission time, plots, and machine-readable metrics.

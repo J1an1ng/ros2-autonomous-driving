@@ -11,7 +11,8 @@ simulation bridge
   ├─ RGB/depth/TF ──> perception ── observations/point cloud ────────┐
   ├─ pose TF ──> route_manager ─┬─ local route ─> trajectory_generator
   │                             │                       │              │
-  │                             │                       └─ path/speed ─┤
+  │                             │                  ┌─ path/speed ──────┤
+  │                             │                  └─ timed trajectory ─> evidence/tools
   │                             └─ route state/ID/distance ───────────┤
   └─ vehicle twist ──────────────────────────────────────────────────┤
                                                               v
@@ -41,7 +42,7 @@ controller publishes `/car_command`.
 | Area | Choice | Reason and trade-off |
 | --- | --- | --- |
 | Route | A deterministic 64-waypoint YAML route with semantic types and per-waypoint speed limits | The assessed map is fixed, so a recorded route is reproducible and easy to inspect. It does not provide global replanning for a changed map. |
-| Trajectory | Ego projection followed by Hermite/Bézier smoothing, resampling, validation, and fallback | Produces a smooth local reference without the complexity of MPC. It is geometric and does not optimize vehicle dynamics or avoid obstacles. |
+| Trajectory | Ego projection, Hermite/Bézier smoothing, validation, and forward/backward time parameterization | Produces a smooth path and a feasible velocity profile under curvature and longitudinal acceleration/braking limits without the complexity of MPC. The point-mass envelope does not model tyre friction, jerk, or actuator dynamics and does not avoid obstacles. |
 | Perception model | COCO YOLOv8n ONNX on normal RGB, combined with metric depth and TF | Avoids the Unity semantic-camera shortcut while keeping CPU inference practical. Depth adds range, but small simulator traffic lights require route gates, HSV evidence, and temporal filtering. |
 | Obstacle model | Planning-path point-cloud corridor fused with YOLO RGB-D vehicle range | Visual class identity rejects static geometry; point-cloud agreement checks spatial plausibility. Route-gated fallbacks cover known sensor gaps without weakening the near-field safety guard. |
 | Decision | Explicit state machine with a documented safety priority | Traffic-light, following, merge, and emergency behavior remains traceable and testable. It is less flexible than a learned policy but failures and transitions can be audited. |
@@ -57,7 +58,10 @@ controller publishes `/car_command`.
 - Generate filtered obstacle point clouds, a 3-D OctoMap, and a projected occupancy map.
 - Load and follow a predefined 64-waypoint route from waypoint 0 through waypoint 63.
 - Publish route phase, current waypoint, waypoint distance, local path, and speed limits.
-- Smooth the local route and publish a controller-ready trajectory and nominal speed.
+- Smooth the local route and publish path pose, curvature, dynamically feasible speed,
+  and time at every trajectory point using Team 20's custom ROS message.
+- Enforce configured lateral acceleration, longitudinal acceleration, longitudinal
+  deceleration, route speed, and route-completion terminal-speed constraints.
 - Stop for red, yellow, unknown, or stale traffic-light observations near controlled
   intersections and continue only after a confirmed green signal.
 - Follow a slower vehicle with an adaptive speed command.
@@ -78,7 +82,8 @@ The right-side merge scenario is handled around waypoints 43–48.
 | `simulation` | Unity TCP sensor receiver, UDP command transmitter, sensor messages, static TF, and simulator launch files. |
 | `perception` | YOLO RGB-D traffic-light and vehicle detection, point-cloud filtering, OctoMap, and occupancy maps. |
 | `route_manager` | Route loading, waypoint progress, local route context, route state, and speed-limit publication. |
-| `trajectory_generator` | Local-route validation and smoothing, trajectory generation, and nominal target speed. |
+| `autonomy_interfaces` | Team 20 custom `TrajectoryPoint` and `PlannedTrajectory` ROS messages. |
+| `trajectory_generator` | Local-route validation/smoothing, curvature computation, time parameterization, and feasible target speed. |
 | `decision_making` | Traffic-light state machine, adaptive following, merge handling, obstacle monitoring, and emergency stop. |
 | `controller` | Pure Pursuit lateral control, PID speed control, safety checks, and `/car_command` publication. |
 | `system_bringup` | Single launch entry point for the complete system and RViz visualizations. |
@@ -207,6 +212,9 @@ checks Team 20 Python and C++ code, the simulator launch/test Python, and the si
 bridge C++. The project-supplied `dummy_controller` and vendored third-party sources are
 excluded; simulator C++ is checked with documented copyright/include-path exemptions.
 
+The 2026-08-01 post-change release check built all nine packages and reported 184 tests,
+0 errors, 0 failures, and one expected skip.
+
 ## Run the complete system
 
 ### 1. Safe startup with motion disabled
@@ -268,6 +276,18 @@ Route completed at waypoint 63
 At the endpoint, the decision and controller layers command a safe stop. Use `Ctrl+C` to
 shut down the launch; all ROS nodes and Unity should exit cleanly.
 
+### Recorded full-system result
+
+The trajectory-planning validation on 2026-08-01 completed waypoint 0 through 63. Mission
+time was **321.054 s**, measured from the first forward `/car_command` (`throttle > 0.01`,
+`brake < 0.01`) to the first `route_complete`; the first-measured-motion cross-check was
+319.116 s. The audit checked 147,717 points in 3,943 `/planning/trajectory` messages and
+found no invalid values or non-monotonic timestamps. Observed maxima were 3.0000 m/s²
+lateral acceleration, 2.0005 m/s² longitudinal acceleration, and 3.0000 m/s²
+deceleration, within the configured limits plus the documented 0.05 m/s² numerical
+tolerance. Plots and machine-readable data are in
+[`../mission_results/`](../mission_results/README.md).
+
 ## Validate a live run
 
 In a second terminal, source ROS and the workspace before running these commands:
@@ -276,6 +296,8 @@ In a second terminal, source ROS and the workspace before running these commands
 ros2 node list
 ros2 topic hz /OurCar/INS/twist
 ros2 topic hz /planning/path
+ros2 topic hz /planning/trajectory
+ros2 interface show autonomy_interfaces/msg/PlannedTrajectory
 ros2 topic echo /route/current_waypoint_id
 ros2 topic echo /decision/state
 ros2 topic echo /perception/traffic_light_state
@@ -286,6 +308,7 @@ Expected behavior includes:
 
 - exactly one publisher on `/car_command`, named `controller_node`;
 - continuous pose, velocity, RGB, depth, route, and planning updates;
+- finite `/planning/trajectory` points with increasing `time_from_start`;
 - `FOLLOWING_VEHICLE` when a lead vehicle constrains speed;
 - `STOPPING_FOR_LIGHT` or `WAITING_FOR_GREEN` at a red light;
 - `RELEASED` followed by `CRUISE` after a confirmed green light;
@@ -383,14 +406,19 @@ installed as `share/perception/models/yolov8n.onnx`.
 
 ## Further documentation
 
+- [`../PROJECT_STATUS_SUMMARY.md`](../PROJECT_STATUS_SUMMARY.md): English architecture,
+  design choices, ownership, validation evidence, figures, and bibliography.
+- [`../项目现状.md`](../项目现状.md): Chinese version of the project-status summary.
 - [`../INTEGRATION_README.md`](../INTEGRATION_README.md): staged readiness and scenario
   validation gates.
 - [`perception/README.md`](perception/README.md): RGB-D projection, traffic-light
   detection, model replacement, and optional training.
 - [`route_manager/README.md`](route_manager/README.md): route format, states, parameters,
   and topics.
-- [`trajectory_generator/README.md`](trajectory_generator/README.md): smoothing and path
-  validation.
+- [`trajectory_generator/README.md`](trajectory_generator/README.md): smoothing, dynamic
+  constraints, custom trajectory interface, and path validation.
+- [`autonomy_interfaces/README.md`](autonomy_interfaces/README.md): Team 20 custom message
+  definitions and ownership boundary.
 - [`decision_making/README.md`](decision_making/README.md): state machine, obstacle fusion,
   safety, and tuning.
 - [`controller/README.md`](controller/README.md): Pure Pursuit, PID, timeouts, and control
