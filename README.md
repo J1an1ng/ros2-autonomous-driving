@@ -16,7 +16,7 @@ uses RGB and depth images with YOLO; it does not use the Unity semantic camera.
 | Lei Fang | 03805710 | `route_manager` | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
 | Yida Lyu | 03816236 | `decision`, `controller`, part of integration | Decision state machine, obstacle behavior, Pure Pursuit/PID control, safety handling, and the interfaces from final intent to `/car_command` |
 | Tao Zhang | 03822999 | `Perception`, part of integration | YOLO RGB-D detection, traffic-light classification, vehicle ranging, occupancy mapping, perception configuration, and perception-to-decision interfaces |
-| Jianing Huang | 03814771 | `Trajectory_Generator`, part of integration, project-wide documentation | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, route-to-planning interfaces, and repository-wide project documentation |
+| Jianing Huang | 03814771 | `Trajectory_Generator`, part of integration, project-wide documentation | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, route-to-planning interfaces, and project documentation |
 
 In the repository, `decision` is implemented by the `decision_making` package and
 `Trajectory_Generator` is stored as the `trajectory_generator` package.
