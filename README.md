@@ -64,6 +64,9 @@ The full component-by-component ownership and design rationale are documented in
   contribution ownership.
 - [`project/mission_results/README.md`](project/mission_results/README.md): recorded
   waypoint 0--63 mission time, trajectory-constraint audit, and generated plots.
+- [`project/Rosbag_reproduction/README.md`](project/Rosbag_reproduction/README.md): the
+  retained 15-topic MCAP rosbag and matching ROS logs, their SHA-256 checksums, Git LFS
+  retrieval instructions, and the command for reproducing `mission_results/`.
 - The main Team 20 functional packages contain package-specific READMEs with their
   interfaces, parameters, and design details.
 
@@ -134,3 +137,9 @@ than stopping and restarting. The route-stage availability audit also required n
 trajectory evidence and bounded empty-publication fraction/duration; see the results linked
 above for the exact timing definition, traffic-light record, fallback classification,
 teardown evidence, and the retained rosbag location.
+
+To reproduce this exact report, run `git lfs pull` after cloning and follow
+[`project/Rosbag_reproduction/README.md`](project/Rosbag_reproduction/README.md). The
+retained MCAP contains 48,416 messages over 217.133 s; the documented SHA-256 verifies
+that the professor is analyzing the same bag used to generate the committed figures and
+metrics.
