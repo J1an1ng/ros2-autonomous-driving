@@ -17,6 +17,10 @@ class TrajectorySample:
     time_from_start: float
 
 
+class InfeasibleTrajectoryError(ValueError):
+    """Raised when the measured initial state cannot satisfy the horizon."""
+
+
 def time_parameterize(
     path_points,
     initial_speed,
@@ -38,7 +42,15 @@ def time_parameterize(
     if not speed_caps:
         return []
 
-    speeds = [min(max(float(initial_speed), 0.0), speed_caps[0])]
+    measured_initial_speed = max(float(initial_speed), 0.0)
+    tolerance = 1e-9
+    if measured_initial_speed > speed_caps[0] + tolerance:
+        raise InfeasibleTrajectoryError(
+            'insufficient braking distance: initial speed '
+            f'{measured_initial_speed:.3f} m/s exceeds the first-point cap '
+            f'{speed_caps[0]:.3f} m/s'
+        )
+    speeds = [measured_initial_speed]
     for index in range(1, len(path_points)):
         distance = max(
             0.0,
@@ -51,7 +63,13 @@ def time_parameterize(
         speeds.append(min(speed_caps[index], reachable_speed))
 
     if terminal_speed is not None:
-        speeds[-1] = min(speeds[-1], max(float(terminal_speed), 0.0))
+        requested_terminal_speed = max(float(terminal_speed), 0.0)
+        if len(speeds) == 1 and speeds[0] > requested_terminal_speed + tolerance:
+            raise InfeasibleTrajectoryError(
+                'insufficient braking distance: the terminal constraint is at '
+                'the initial point'
+            )
+        speeds[-1] = min(speeds[-1], requested_terminal_speed)
 
     for index in range(len(path_points) - 2, -1, -1):
         distance = max(
@@ -62,6 +80,12 @@ def time_parameterize(
             speeds[index + 1] ** 2
             + 2.0 * limits.max_longitudinal_deceleration * distance
         )
+        if index == 0 and speeds[index] > braking_speed + tolerance:
+            raise InfeasibleTrajectoryError(
+                'insufficient braking distance: initial speed '
+                f'{speeds[index]:.3f} m/s exceeds the reachable '
+                f'{braking_speed:.3f} m/s boundary'
+            )
         speeds[index] = min(speeds[index], braking_speed)
 
     times = [0.0]

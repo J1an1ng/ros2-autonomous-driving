@@ -9,6 +9,7 @@ from trajectory_generator.path_processor import (
 )
 from trajectory_generator.velocity_profile import (
     DynamicLimits,
+    InfeasibleTrajectoryError,
     select_target_speed,
     time_parameterize,
 )
@@ -34,6 +35,8 @@ class TrajectoryGeneratorConfig:
     max_longitudinal_acceleration: float = 2.0
     max_longitudinal_deceleration: float = 3.0
     target_speed_lookahead_distance: float = 3.0
+    wheelbase: float = 2.63
+    maximum_steering_angle: float = 0.52
 
     def __post_init__(self):
         values = {
@@ -60,6 +63,8 @@ class TrajectoryGeneratorConfig:
             'target_speed_lookahead_distance': (
                 self.target_speed_lookahead_distance
             ),
+            'wheelbase': self.wheelbase,
+            'maximum_steering_angle': self.maximum_steering_angle,
         }
         invalid_value = next(
             (name for name, value in values.items() if not math.isfinite(value)),
@@ -86,6 +91,8 @@ class TrajectoryGeneratorConfig:
             'max_longitudinal_deceleration': (
                 self.max_longitudinal_deceleration
             ),
+            'wheelbase': self.wheelbase,
+            'maximum_steering_angle': self.maximum_steering_angle,
         }
         invalid_value = next(
             (name for name, value in positive_limits.items() if value <= 0.0),
@@ -93,6 +100,17 @@ class TrajectoryGeneratorConfig:
         )
         if invalid_value is not None:
             raise ValueError(f'{invalid_value} must be greater than zero')
+        if self.maximum_steering_angle >= math.pi / 2.0:
+            raise ValueError(
+                'maximum_steering_angle must be less than pi / 2'
+            )
+
+    @property
+    def effective_max_curvature(self):
+        steering_curvature = math.tan(
+            self.maximum_steering_angle
+        ) / self.wheelbase
+        return min(self.max_curvature, steering_curvature)
 
 
 @dataclass(frozen=True)
@@ -125,7 +143,7 @@ class TrajectoryGenerator:
             ego_pose=ego_pose,
             path_resolution=self.config.path_resolution,
             smoothing_strength=self.config.smoothing_strength,
-            max_curvature=self.config.max_curvature,
+            max_curvature=self.config.effective_max_curvature,
             max_yaw_step=self.config.max_yaw_step,
             max_start_distance=self.config.max_start_distance,
             max_spline_deviation=self.config.max_spline_deviation,
@@ -149,7 +167,7 @@ class TrajectoryGenerator:
         rejection_reason = get_path_rejection_reason(
             path_points,
             self.config.path_resolution,
-            self.config.max_curvature,
+            self.config.effective_max_curvature,
             self.config.max_yaw_step,
             self.config.max_start_distance,
             self.config.max_spline_deviation,
@@ -173,7 +191,7 @@ class TrajectoryGenerator:
                 path_resolution=self.config.path_resolution,
                 blend_distance=self.config.continuity_blend_distance,
                 candidate_weight=self.config.continuity_candidate_weight,
-                max_curvature=self.config.max_curvature,
+                max_curvature=self.config.effective_max_curvature,
                 max_yaw_step=self.config.max_yaw_step,
                 max_start_distance=self.config.max_start_distance,
                 max_spline_deviation=self.config.max_spline_deviation,
@@ -188,32 +206,54 @@ class TrajectoryGenerator:
             max_speed=self.config.max_speed,
             stop_speed=self.config.stop_speed,
         )
-        initial_speed = (
-            nominal_speed if current_speed is None else float(current_speed)
-        )
         terminal_speed = (
             self.config.stop_speed
             if (route_state or '').lower() == 'route_complete'
             else None
         )
-        trajectory_samples = time_parameterize(
-            path_points=path_points,
-            initial_speed=initial_speed,
-            speed_limit=nominal_speed,
-            limits=DynamicLimits(
-                max_speed=self.config.max_speed,
-                max_lateral_acceleration=(
-                    self.config.max_lateral_acceleration
-                ),
-                max_longitudinal_acceleration=(
-                    self.config.max_longitudinal_acceleration
-                ),
-                max_longitudinal_deceleration=(
-                    self.config.max_longitudinal_deceleration
-                ),
-            ),
-            terminal_speed=terminal_speed,
-        )
+        trajectory_samples = []
+        if path_points and current_speed is None:
+            dynamic_status = (
+                'dynamic profile unavailable (measured speed unavailable); '
+                'commanding safe stop'
+            )
+            path_status = (
+                f'{path_status}; {dynamic_status}'
+                if path_status
+                else dynamic_status
+            )
+        else:
+            try:
+                trajectory_samples = time_parameterize(
+                    path_points=path_points,
+                    initial_speed=(
+                        0.0 if current_speed is None else float(current_speed)
+                    ),
+                    speed_limit=nominal_speed,
+                    limits=DynamicLimits(
+                        max_speed=self.config.max_speed,
+                        max_lateral_acceleration=(
+                            self.config.max_lateral_acceleration
+                        ),
+                        max_longitudinal_acceleration=(
+                            self.config.max_longitudinal_acceleration
+                        ),
+                        max_longitudinal_deceleration=(
+                            self.config.max_longitudinal_deceleration
+                        ),
+                    ),
+                    terminal_speed=terminal_speed,
+                )
+            except InfeasibleTrajectoryError as error:
+                dynamic_status = (
+                    f'dynamic profile infeasible ({error}); '
+                    'commanding safe stop'
+                )
+                path_status = (
+                    f'{path_status}; {dynamic_status}'
+                    if path_status
+                    else dynamic_status
+                )
         target_speed = nominal_speed
         if trajectory_samples:
             target_s = (
@@ -226,6 +266,8 @@ class TrajectoryGenerator:
                     target_sample = sample
                     break
             target_speed = min(nominal_speed, target_sample.target_speed)
+        elif path_points:
+            target_speed = self.config.stop_speed
         return GeneratedTrajectory(
             path_points=path_points,
             trajectory_samples=trajectory_samples,

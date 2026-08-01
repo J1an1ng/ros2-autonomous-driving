@@ -3,6 +3,9 @@
 project/build/
 project/install/
 project/log/
+project/validation_evidence/
+/build/
+/install/
 /log/
 
 # Python runtime and test caches

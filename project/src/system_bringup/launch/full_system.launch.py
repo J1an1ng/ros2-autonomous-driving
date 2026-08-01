@@ -33,6 +33,10 @@ def generate_launch_description():
     route_initial_waypoint_index = LaunchConfiguration(
         'route_initial_waypoint_index'
     )
+    wheelbase = LaunchConfiguration('wheelbase')
+    maximum_steering_angle = LaunchConfiguration(
+        'maximum_steering_angle'
+    )
 
     default_simulation_config = PathJoinSubstitution(
         [
@@ -74,6 +78,10 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 'route_initial_waypoint_index', default_value='0'
             ),
+            DeclareLaunchArgument('wheelbase', default_value='2.63'),
+            DeclareLaunchArgument(
+                'maximum_steering_angle', default_value='0.52'
+            ),
             IncludeLaunchDescription(
                 package_launch('simulation', 'simulation.launch.py'),
                 launch_arguments={
@@ -114,6 +122,10 @@ def generate_launch_description():
                 package_launch(
                     'trajectory_generator', 'trajectory_generator.launch.py'
                 ),
+                launch_arguments={
+                    'wheelbase': wheelbase,
+                    'maximum_steering_angle': maximum_steering_angle,
+                }.items(),
                 condition=IfCondition(enable_trajectory),
             ),
             IncludeLaunchDescription(
@@ -130,7 +142,13 @@ def generate_launch_description():
                     {
                         'enable_motion': ParameterValue(
                             enable_motion, value_type=bool
-                        )
+                        ),
+                        'wheelbase': ParameterValue(
+                            wheelbase, value_type=float
+                        ),
+                        'maximum_steering_angle': ParameterValue(
+                            maximum_steering_angle, value_type=float
+                        ),
                     },
                 ],
                 condition=IfCondition(enable_controller),

@@ -1,12 +1,16 @@
+"""Launch the Unity simulator bridge and vehicle sensor transforms."""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def static_tf(name, args):
+    """Create a named static transform publisher node."""
     return Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -17,6 +21,7 @@ def static_tf(name, args):
 
 
 def vehicle_sensor_transforms():
+    """Return the fixed transforms between the vehicle and its sensors."""
     return [
         static_tf(
             'tf_nominal_center',
@@ -54,6 +59,7 @@ def vehicle_sensor_transforms():
 
 
 def generate_launch_description():
+    """Build the simulation launch description."""
     config_file = LaunchConfiguration('config_file')
     start_unity = LaunchConfiguration('start_unity')
     sensor_bind_host = LaunchConfiguration('sensor_bind_host')
@@ -98,9 +104,8 @@ def generate_launch_description():
         ExecuteProcess(
             cmd=[PathJoinSubstitution([
                 FindPackageShare('simulation'),
-                'unity_sim',
-                'Build_Ubuntu',
-                'AD_Sim.x86_64',
+                'scripts',
+                'run_unity.sh',
             ])],
             output='screen',
             condition=IfCondition(start_unity),

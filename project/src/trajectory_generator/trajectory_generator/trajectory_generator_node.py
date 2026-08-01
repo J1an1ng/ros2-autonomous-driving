@@ -49,6 +49,8 @@ class TrajectoryGeneratorNode(Node):
         self.declare_parameter('max_longitudinal_deceleration', 3.0)
         self.declare_parameter('target_speed_lookahead_distance', 4.0)
         self.declare_parameter('velocity_timeout', 1.0)
+        self.declare_parameter('wheelbase', 2.63)
+        self.declare_parameter('maximum_steering_angle', 0.52)
 
         self.map_frame = self.get_parameter('map_frame').value
         self.vehicle_frame = self.get_parameter('vehicle_frame').value
@@ -94,6 +96,10 @@ class TrajectoryGeneratorNode(Node):
             ),
             target_speed_lookahead_distance=float(
                 self.get_parameter('target_speed_lookahead_distance').value
+            ),
+            wheelbase=float(self.get_parameter('wheelbase').value),
+            maximum_steering_angle=float(
+                self.get_parameter('maximum_steering_angle').value
             ),
         )
         self.trajectory_generator = TrajectoryGenerator(config)

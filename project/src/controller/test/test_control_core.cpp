@@ -25,10 +25,12 @@ TEST(ControlCore, FindsForwardLookaheadAlongPath)
 {
   const std::vector<Point2D> path{{-1.0, 0.0}, {0.0, 0.0}, {2.0, 0.0}, {4.0, 1.0}};
   Point2D target;
+  std::size_t target_index = 0;
   ASSERT_TRUE(controller::find_lookahead_point(
-      path, 1, 3.0, Point2D{0.0, 0.0}, 0.0, 0.2, target));
+      path, 1, 3.0, Point2D{0.0, 0.0}, 0.0, 0.2, target, &target_index));
   EXPECT_NEAR(target.x, 4.0, 1.0e-9);
   EXPECT_NEAR(target.y, 1.0, 1.0e-9);
+  EXPECT_EQ(target_index, 3U);
 }
 
 TEST(ControlCore, RejectsPathWithoutForwardPoint)
@@ -65,6 +67,22 @@ TEST(ControlCore, SpeedControllerUsesThrottleBelowTarget)
   const auto command = controller.update(4.0, 1.0, 0.1);
   EXPECT_DOUBLE_EQ(command.throttle, 0.7);
   EXPECT_DOUBLE_EQ(command.brake, 0.0);
+}
+
+TEST(ControlCore, DecisionAndTrajectorySpeedUseMostRestrictiveLimit)
+{
+  EXPECT_DOUBLE_EQ(controller::combine_target_speeds(6.0, 4.0, 14.0), 4.0);
+  EXPECT_DOUBLE_EQ(controller::combine_target_speeds(3.0, 4.0, 14.0), 3.0);
+  EXPECT_DOUBLE_EQ(controller::combine_target_speeds(20.0, 20.0, 14.0), 14.0);
+}
+
+TEST(ControlCore, CurvatureLimitUsesBicycleModel)
+{
+  EXPECT_NEAR(
+    controller::maximum_kinematic_curvature(2.63, 0.52),
+    0.21770411796641384, 1.0e-12);
+  EXPECT_DOUBLE_EQ(controller::maximum_kinematic_curvature(0.0, 0.52), 0.0);
+  EXPECT_DOUBLE_EQ(controller::maximum_kinematic_curvature(2.63, NAN), 0.0);
 }
 
 TEST(ControlCore, SpeedControllerUsesBrakeAboveTarget)

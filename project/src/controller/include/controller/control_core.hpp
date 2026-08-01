@@ -59,7 +59,17 @@ bool find_lookahead_point(
   const Point2D & vehicle_position,
   double vehicle_yaw,
   double minimum_forward_distance,
-  Point2D & target_in_vehicle_frame);
+  Point2D & target_in_vehicle_frame,
+  std::size_t * target_index = nullptr);
+
+double combine_target_speeds(
+  double decision_speed,
+  double trajectory_speed,
+  double maximum_speed);
+
+double maximum_kinematic_curvature(
+  double wheelbase,
+  double maximum_steering_angle);
 
 double pure_pursuit_steering(
   const Point2D & target_in_vehicle_frame,

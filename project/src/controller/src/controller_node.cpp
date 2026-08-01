@@ -3,13 +3,15 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "autonomy_interfaces/msg/planned_trajectory.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "simulation/msg/vehicle_control.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -35,9 +37,10 @@ public:
     declare_parameters();
     load_parameters();
 
-    path_subscription_ = create_subscription<nav_msgs::msg::Path>(
-      "/planning/path", 10,
-      std::bind(&ControllerNode::path_callback, this, std::placeholders::_1));
+    trajectory_subscription_ =
+      create_subscription<autonomy_interfaces::msg::PlannedTrajectory>(
+      "/planning/trajectory", 10,
+      std::bind(&ControllerNode::trajectory_callback, this, std::placeholders::_1));
     target_speed_subscription_ = create_subscription<std_msgs::msg::Float32>(
       "/decision/target_speed", 10,
       std::bind(&ControllerNode::target_speed_callback, this, std::placeholders::_1));
@@ -58,7 +61,7 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "Controller ready: path=/planning/path speed=/decision/target_speed "
+      "Controller ready: trajectory=/planning/trajectory speed=/decision/target_speed "
       "stop=/decision/stop_required twist=/OurCar/INS/twist output=/car_command");
     RCLCPP_INFO(
       get_logger(), "Frames: %s -> %s; motion=%s",
@@ -93,7 +96,7 @@ private:
     declare_parameter<double>("maximum_throttle", 0.70);
     declare_parameter<double>("maximum_brake", 1.0);
     declare_parameter<double>("safe_stop_brake", 1.0);
-    declare_parameter<double>("path_timeout", 1.0);
+    declare_parameter<double>("trajectory_timeout", 1.0);
     declare_parameter<double>("decision_timeout", 0.75);
     declare_parameter<double>("twist_timeout", 1.0);
   }
@@ -115,7 +118,7 @@ private:
     maximum_steering_rate_ =
       std::max(get_parameter("maximum_steering_rate").as_double(), 0.01);
     safe_stop_brake_ = clamp_value(get_parameter("safe_stop_brake").as_double(), 0.0, 1.0);
-    path_timeout_ = std::max(get_parameter("path_timeout").as_double(), 0.1);
+    trajectory_timeout_ = std::max(get_parameter("trajectory_timeout").as_double(), 0.1);
     decision_timeout_ = std::max(get_parameter("decision_timeout").as_double(), 0.1);
     twist_timeout_ = std::max(get_parameter("twist_timeout").as_double(), 0.1);
 
@@ -124,6 +127,12 @@ private:
     pursuit_config_.steering_sign = get_parameter("steering_sign").as_double();
     pursuit_config_.maximum_steering_angle =
       get_parameter("maximum_steering_angle").as_double();
+    maximum_trajectory_curvature_ = maximum_kinematic_curvature(
+      pursuit_config_.wheelbase, pursuit_config_.maximum_steering_angle);
+    if (maximum_trajectory_curvature_ <= 0.0) {
+      throw std::invalid_argument(
+              "wheelbase and maximum_steering_angle must be finite and positive");
+    }
 
     SpeedControllerConfig speed_config;
     speed_config.kp = get_parameter("speed_kp").as_double();
@@ -136,33 +145,50 @@ private:
     speed_controller_ = std::make_unique<SpeedController>(speed_config);
   }
 
-  void path_callback(const nav_msgs::msg::Path::SharedPtr message)
+  void trajectory_callback(
+    const autonomy_interfaces::msg::PlannedTrajectory::SharedPtr message)
   {
-    last_path_time_ = std::chrono::steady_clock::now();
+    last_trajectory_time_ = std::chrono::steady_clock::now();
     path_.clear();
+    trajectory_speeds_.clear();
 
     if (message->header.frame_id != map_frame_) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
-        "Ignoring path frame '%s'; expected '%s'",
+        "Ignoring trajectory frame '%s'; expected '%s'",
         message->header.frame_id.c_str(), map_frame_.c_str());
-      has_path_ = false;
+      has_trajectory_ = false;
       return;
     }
 
-    path_.reserve(message->poses.size());
-    for (const auto & pose : message->poses) {
-      const double x = pose.pose.position.x;
-      const double y = pose.pose.position.y;
-      if (!std::isfinite(x) || !std::isfinite(y)) {
+    path_.reserve(message->points.size());
+    trajectory_speeds_.reserve(message->points.size());
+    int64_t previous_time_ns = -1;
+    for (const auto & point : message->points) {
+      const double x = point.pose.position.x;
+      const double y = point.pose.position.y;
+      const double speed = point.target_speed;
+      const double curvature = point.curvature;
+      const int64_t time_ns =
+        static_cast<int64_t>(point.time_from_start.sec) * 1000000000LL +
+        static_cast<int64_t>(point.time_from_start.nanosec);
+      if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(speed) ||
+        !std::isfinite(curvature) || speed < 0.0 ||
+        std::abs(curvature) > maximum_trajectory_curvature_ + 1.0e-4 ||
+        time_ns < 0 ||
+        (previous_time_ns >= 0 && time_ns <= previous_time_ns))
+      {
         path_.clear();
-        has_path_ = false;
-        RCLCPP_WARN(get_logger(), "Ignoring path containing non-finite coordinates");
+        trajectory_speeds_.clear();
+        has_trajectory_ = false;
+        RCLCPP_WARN(get_logger(), "Ignoring invalid planned trajectory");
         return;
       }
       path_.push_back(Point2D{x, y});
+      trajectory_speeds_.push_back(speed);
+      previous_time_ns = time_ns;
     }
-    has_path_ = !path_.empty();
+    has_trajectory_ = !path_.empty();
   }
 
   void target_speed_callback(const std_msgs::msg::Float32::SharedPtr message)
@@ -260,8 +286,10 @@ private:
       safe_stop("motion disabled by parameter");
       return;
     }
-    if (!has_path_ || !fresh(now, last_path_time_, path_timeout_)) {
-      safe_stop("path missing or stale");
+    if (!has_trajectory_ ||
+      !fresh(now, last_trajectory_time_, trajectory_timeout_))
+    {
+      safe_stop("trajectory missing or stale");
       return;
     }
     if (!has_target_speed_ || !fresh(now, last_target_speed_time_, decision_timeout_)) {
@@ -290,9 +318,10 @@ private:
       lookahead_base_ + lookahead_speed_gain_ * current_speed_,
       lookahead_min_, lookahead_max_);
     Point2D target;
+    std::size_t target_index = 0;
     if (!find_lookahead_point(
         path_, nearest_index, lookahead, vehicle_position_, vehicle_yaw_,
-        minimum_forward_distance_, target))
+        minimum_forward_distance_, target, &target_index))
     {
       safe_stop("no forward lookahead point");
       return;
@@ -305,19 +334,24 @@ private:
       previous_steering_ + maximum_change);
     previous_steering_ = steering;
 
-    const double limited_target_speed = clamp_value(target_speed_, 0.0, maximum_target_speed_);
+    const double profile_target_speed = trajectory_speeds_.at(target_index);
+    const double limited_target_speed = combine_target_speeds(
+      target_speed_, profile_target_speed, maximum_target_speed_);
     const LongitudinalCommand longitudinal =
       speed_controller_->update(limited_target_speed, current_speed_, dt);
     publish_command(longitudinal.throttle, steering, longitudinal.brake);
 
     RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), 1000,
-      "v=%.2f target=%.2f lookahead=%.2f steering=%.3f throttle=%.2f brake=%.2f",
-      current_speed_, limited_target_speed, lookahead, steering,
+      "v=%.2f decision=%.2f profile=%.2f target=%.2f lookahead=%.2f "
+      "steering=%.3f throttle=%.2f brake=%.2f",
+      current_speed_, target_speed_, profile_target_speed, limited_target_speed,
+      lookahead, steering,
       longitudinal.throttle, longitudinal.brake);
   }
 
-  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscription_;
+  rclcpp::Subscription<autonomy_interfaces::msg::PlannedTrajectory>::SharedPtr
+    trajectory_subscription_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr target_speed_subscription_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr twist_subscription_;
@@ -327,18 +361,19 @@ private:
   tf2_ros::TransformListener tf_listener_;
 
   std::vector<Point2D> path_;
+  std::vector<double> trajectory_speeds_;
   Point2D vehicle_position_;
   double vehicle_yaw_{0.0};
   double target_speed_{0.0};
   double current_speed_{0.0};
   double previous_steering_{0.0};
   bool stop_required_{true};
-  bool has_path_{false};
+  bool has_trajectory_{false};
   bool has_target_speed_{false};
   bool has_stop_state_{false};
   bool has_twist_{false};
 
-  SteadyTime last_path_time_{};
+  SteadyTime last_trajectory_time_{};
   SteadyTime last_target_speed_time_{};
   SteadyTime last_stop_time_{};
   SteadyTime last_twist_time_{};
@@ -355,8 +390,9 @@ private:
   double minimum_forward_distance_{0.2};
   double maximum_target_speed_{14.0};
   double maximum_steering_rate_{2.0};
+  double maximum_trajectory_curvature_{0.0};
   double safe_stop_brake_{1.0};
-  double path_timeout_{1.0};
+  double trajectory_timeout_{1.0};
   double decision_timeout_{0.75};
   double twist_timeout_{1.0};
   PurePursuitConfig pursuit_config_;

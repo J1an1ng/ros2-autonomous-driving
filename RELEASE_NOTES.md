@@ -11,12 +11,27 @@ Improvements:
   kinematic/dynamic time parameterization. Curvature limits lateral acceleration; a
   forward pass limits acceleration; a backward pass limits deceleration and anticipates
   curves or terminal stops; trapezoidal integration assigns monotonic point times.
+- Links path curvature to the production bicycle model with
+  `min(max_curvature, tan(maximum_steering_angle) / wheelbase)`, and preserves measured
+  initial speed as a hard boundary. An insufficient braking horizon is reported as
+  infeasible and produces a safe stop instead of a falsely feasible profile.
 - Adds Team 20's `autonomy_interfaces` package with `TrajectoryPoint` and
   `PlannedTrajectory` messages. `/planning/trajectory` exposes pose, signed curvature,
-  feasible speed, and time from start, while the existing scalar planning speed is
-  selected from the constrained profile for backward-compatible decision/control use.
+  feasible speed, and time from start. The controller now consumes this message directly,
+  uses the speed attached to its Pure Pursuit lookahead point, and caps it with the final
+  decision-layer speed.
 - Adds focused trajectory constraint tests, a rosbag mission-analysis tool, a ROS graph
   with contribution ownership, and persisted trajectory/mission plots and metrics.
+- Adds `tools/run_full_mission.py` as the standard moving-run entry point. It records
+  each run, waits for route completion, audits the bag, and atomically regenerates
+  `mission_results`; failed runs preserve the previous valid result.
+- Injects one vehicle-model parameter pair into planner and controller, makes the
+  controller independently reject over-curvature trajectories, and adds a ROS launch
+  regression for valid, malformed, empty, over-curvature, and stale trajectory inputs.
+- Tightens the rosbag acceptance gate so route completion cannot pass without nonempty
+  trajectory evidence. It now records runtime empty-message fraction and continuous
+  unavailability, classifies fallback reasons, and exits nonzero on route/trajectory
+  audit failure.
 - Resolves the `route_manager` flake8 and PEP 257 findings, simplifies the
   route-manager node structure, reformats the waypoint recorder, strengthens
   route-map validation, and adds regression coverage for malformed route data.
@@ -32,6 +47,11 @@ Improvements:
 - Keeps the project-supplied `dummy_controller` at its v1.8.0 baseline and out
   of Team 20 style ownership. Editor rules also protect vendored third-party
   sources from automatic formatting.
+- Fixes Event1 adaptive following so a brief vehicle-detection dropout retains
+  the last safe target exactly instead of recomputing it from a slowing ego
+  speed. A stable lead with surplus clearance may now recover gradually, which
+  prevents the previous stop-and-restart behaviour without weakening the
+  independent emergency-braking thresholds.
 - Expands the root and workspace READMEs with exact team contributions,
   supported functions, dependency setup, release-branch clone/pull commands,
   build and test instructions, safe startup, full-route launch, live
@@ -39,27 +59,45 @@ Improvements:
 
 Validation:
 
-- Passed the repository code-quality gate across 53 Python files and the
+The values below record one release-acceptance run. They are traceable evidence for this
+version, not fixed timing, distance, or message-count guarantees for every simulation.
+
+- Passed the repository code-quality gate across 57 Python files and the
   configured C++ sources with no findings.
 - Built all nine ROS 2 workspace packages successfully.
-- Passed the complete workspace suite: 184 tests, 0 errors, 0 failures, and
+- Passed the complete workspace suite: 216 tests, 0 errors, 0 failures, and
   one expected skip.
 - Completed a production Unity run on 2026-08-01 from waypoint 0 through 63
   and logged `Route completed at waypoint 63`.
-- Recorded a mission time of 321.054 seconds from the first forward control command to
-  `route_complete` (319.116 seconds from first measured motion). Audited 147,717 points
-  in 3,943 `/planning/trajectory` messages: maxima were 3.0000 m/s² lateral, 2.0005 m/s²
+- Recorded a mission time of 211.065 seconds from the first forward control command to
+  `route_complete` (210.925 seconds from first measured motion). Audited 68,355 points
+  in 2,123 `/planning/trajectory` messages: maximum curvature was 0.215946 1/m against
+  the 0.217704 1/m vehicle limit; maxima were 3.0000 m/s² lateral, 2.0003 m/s²
   longitudinal acceleration, and 3.0000 m/s² deceleration, with zero non-monotonic times
-  and zero invalid points.
-- Observed adaptive following for the lead-vehicle event, right-side merge
-  slowdown around waypoints 47--48, and traffic-light stop/release behavior at
-  the four controlled signals at waypoints 25, 32, 52, and 59.
+  and zero invalid points. Before completion, 2,098 of 2,112 trajectory messages were
+  nonempty; the 0.66% empty fraction and 0.902 s longest empty interval passed the
+  documented 5% / 10 s availability gate. Maximum message gap was 0.162 s against
+  the controller-timeout-derived 1.05 s limit.
+- Classified 105 pre-completion local-path rejections: 104 curvature-limit rejections
+  and one path with fewer than two points.
+  The planner used its straight target-pose degradation, reapplied the complete
+  feasibility gate, and otherwise would have published an empty trajectory for safe stop.
+- Observed adaptive following for both vehicle events. During Event1, measured speed
+  remained at or above 2.536 m/s and the decision target remained at or above 2.949 m/s,
+  with no near-zero samples; the previous run reached 0.000 m/s. Event2 reached a
+  measured minimum distance of 7.535 m and did not need
+  emergency braking or the merge-slowdown state. No collision occurred. Traffic-light
+  stop/release behavior was recorded at waypoints 25, 32, and 59; waypoint 52 did not
+  require a stop in this signal cycle.
 - Confirmed that production perception used RGB, depth, TF, and YOLO rather
-  than the disabled semantic camera; `/car_command` and the traffic-light
-  state each had one production publisher.
-- Found no runtime `ERROR`, `FATAL`, process death, segmentation fault,
-  traceback, collision, or route departure before route completion. All ROS nodes exited
-  cleanly; Unity was force-terminated only during user-requested teardown.
+  than the disabled semantic camera. The bag contains 1,459 UInt8 traffic-light
+  messages (1,170 unknown, 196 red, 7 yellow, and 86 green), and `/car_command` had one
+  production publisher.
+- Found no autonomy-node runtime `ERROR`, `FATAL`, process death, segmentation fault,
+  traceback, collision, or route departure before route completion. RViz emitted one
+  visualization-only GLSL shader error. After completion, the runner initiated teardown;
+  all 30 logged process-death entries were classified as teardown-only, and Unity was
+  terminated after the launch shutdown grace period.
 
 ## full-system-v1.8.0
 
@@ -251,8 +289,8 @@ Validation:
   launched controller loads `maximum_target_speed=14.0` and
   `maximum_throttle=0.50`.
 - Full closed-loop Unity validation of the new waypoint 60--63 extension
-  remains required; the existing Stage 6 benchmark evidence covers the prior
-  waypoint 0--59 route.
+  remains required; earlier benchmark evidence covers the prior waypoint
+  0--59 route.
 
 ## full-system-v1.2.0
 

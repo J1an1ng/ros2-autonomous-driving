@@ -5,6 +5,8 @@ controller_node:
     enable_motion: true
     control_rate: 20.0
 
+    # Standalone defaults. full_system.launch.py overrides both values from
+    # the same shared vehicle model used by trajectory_generator.
     wheelbase: 2.63
     lookahead_base: 3.0
     lookahead_speed_gain: 0.5
@@ -31,9 +33,9 @@ controller_node:
     maximum_brake: 1.0
     safe_stop_brake: 1.0
 
-    path_timeout: 1.0
+    trajectory_timeout: 1.0
     decision_timeout: 0.75
-    # Unity serializes state and sensor streams on the same TCP connection. In
-    # the waypoint-52 area, measured state gaps can slightly exceed one second;
-    # retain a bounded margin without masking a sustained state loss.
-    twist_timeout: 1.5
+    # Unity serializes state and sensor streams on the same TCP connection.
+    # The 2026-08-01 full-stack diagnostic bag measured a 2.5905 s maximum
+    # twist gap under YOLO/mapping load; retain a bounded 0.1595 s margin.
+    twist_timeout: 2.75

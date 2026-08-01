@@ -51,33 +51,33 @@ The launch file starts:
 
 | Direction | Topic | Type | Meaning |
 | --- | --- | --- | --- |
-| input | `/OurCar/Sensors/RGBCameraLeft/image_raw` | `sensor_msgs/Image` | YOLO/colour image |
-| input | `/OurCar/Sensors/RGBCameraLeft/camera_info` | `sensor_msgs/CameraInfo` | RGB intrinsics |
-| input | `/OurCar/Sensors/DepthCamera/image_raw` | `sensor_msgs/Image` | Metric depth |
-| input | `/OurCar/Sensors/DepthCamera/camera_info` | `sensor_msgs/CameraInfo` | Depth intrinsics |
-| output | `/perception/front_vehicle_detected` | `std_msgs/Bool` | Accepted vehicle box with valid range |
-| output | `/perception/front_vehicle_distance` | `std_msgs/Float32` | 20th-percentile box depth in metres, otherwise `inf` |
-| output | `/perception/traffic_light_state` | `std_msgs/UInt8` | `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN` |
-| output | `/perception/traffic_light_scores` | `std_msgs/Int32MultiArray` | Decision evidence `[red, green]`; yellow remains in the debug string |
-| output | `/perception/yolo/debug_image` | `sensor_msgs/Image` | Boxes, class IDs, confidence and range |
-| output | `/perception/front_vehicle_debug` | `std_msgs/String` | Vehicle rejection/measurement details |
-| output | `/perception/traffic_light_debug` | `std_msgs/String` | Light selection and colour details |
+| input | `/OurCar/Sensors/RGBCameraLeft/image_raw` | `sensor_msgs/msg/Image` | YOLO/colour image |
+| input | `/OurCar/Sensors/RGBCameraLeft/camera_info` | `sensor_msgs/msg/CameraInfo` | RGB intrinsics |
+| input | `/OurCar/Sensors/DepthCamera/image_raw` | `sensor_msgs/msg/Image` | Metric depth |
+| input | `/OurCar/Sensors/DepthCamera/camera_info` | `sensor_msgs/msg/CameraInfo` | Depth intrinsics |
+| output | `/perception/front_vehicle_detected` | `std_msgs/msg/Bool` | Accepted vehicle box with valid range |
+| output | `/perception/front_vehicle_distance` | `std_msgs/msg/Float32` | 20th-percentile box depth in metres, otherwise `inf` |
+| output | `/perception/traffic_light_state` | `std_msgs/msg/UInt8` | `0 UNKNOWN`, `1 RED`, `2 YELLOW`, `3 GREEN` |
+| output | `/perception/traffic_light_scores` | `std_msgs/msg/Int32MultiArray` | Decision evidence `[red, green]`; yellow remains in the debug string |
+| output | `/perception/yolo/debug_image` | `sensor_msgs/msg/Image` | Boxes, class IDs, confidence and range |
+| output | `/perception/front_vehicle_debug` | `std_msgs/msg/String` | Vehicle rejection/measurement details |
+| output | `/perception/traffic_light_debug` | `std_msgs/msg/String` | Light selection and colour details |
 
 `occupancy_map_node` publishes the depth-derived point-cloud and 2-D mapping interfaces:
 
 | Direction | Topic | Type | Meaning |
 | --- | --- | --- | --- |
-| output | `/perception/pcl/points` | `sensor_msgs/PointCloud2` | Raw valid depth points transformed to `world`. |
-| output | `/perception/pcl/points_preprocessed` | `sensor_msgs/PointCloud2` | Height-filtered obstacle points used by `obstacle_monitor_node`. |
-| output | `/perception/depth/projected_map` | `nav_msgs/OccupancyGrid` | Direct 2-D projection of depth-derived obstacle cells. |
-| output | `/perception/extended_map` | `nav_msgs/OccupancyGrid` | Inflated 2-D obstacle map for visualization. |
+| output | `/perception/pcl/points` | `sensor_msgs/msg/PointCloud2` | Raw valid depth points transformed to `world`. |
+| output | `/perception/pcl/points_preprocessed` | `sensor_msgs/msg/PointCloud2` | Height-filtered obstacle points used by `obstacle_monitor_node`. |
+| output | `/perception/depth/projected_map` | `nav_msgs/msg/OccupancyGrid` | Direct 2-D projection of depth-derived obstacle cells. |
+| output | `/perception/extended_map` | `nav_msgs/msg/OccupancyGrid` | Inflated 2-D obstacle map for visualization. |
 
 When `enable_octomap:=true`, the separately launched `octomap_server_node` consumes the
 preprocessed cloud and publishes these additional visualization/diagnostic products:
 
 | Direction | Topic | Type | Meaning |
 | --- | --- | --- | --- |
-| output | `/perception/octomap/projected_map` | `nav_msgs/OccupancyGrid` | OctoMap server's projected occupied cells. |
+| output | `/perception/octomap/projected_map` | `nav_msgs/msg/OccupancyGrid` | OctoMap server's projected occupied cells. |
 | output | `/perception/octomap/octomap_binary` | `octomap_msgs/Octomap` | Binary 3-D map from `octomap_server_node`. |
 
 The vehicle classes are COCO `car`, `bus`, and `truck`. A measurement is

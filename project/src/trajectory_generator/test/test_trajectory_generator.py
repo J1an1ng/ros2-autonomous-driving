@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from trajectory_generator.geometry_utils import Pose2D
@@ -17,6 +19,23 @@ def make_generator():
             max_speed=8.0,
             stop_speed=0.0,
         )
+    )
+
+
+def test_curvature_limit_is_bounded_by_controller_steering_kinematics():
+    config = TrajectoryGeneratorConfig(
+        path_resolution=1.0,
+        min_target_distance=0.5,
+        default_speed=2.0,
+        max_speed=8.0,
+        stop_speed=0.0,
+        max_curvature=2.0,
+        wheelbase=2.63,
+        maximum_steering_angle=0.52,
+    )
+
+    assert config.effective_max_curvature == pytest.approx(
+        math.tan(0.52) / 2.63
     )
 
 
@@ -63,6 +82,7 @@ def test_prefers_valid_local_path_over_target_pose():
         local_path=[Pose2D(x=0.0, y=0.0), Pose2D(x=2.0, y=0.0)],
         speed_limit=5.0,
         route_state='normal',
+        current_speed=5.0,
     )
 
     assert [point.x for point in trajectory.path_points] == pytest.approx(
@@ -139,6 +159,53 @@ def test_outputs_time_parameterized_speed_for_existing_control_interface():
             trajectory.trajectory_samples[1:],
         )
     )
+
+
+def test_commands_safe_stop_when_dynamic_profile_is_unreachable():
+    generator = TrajectoryGenerator(
+        TrajectoryGeneratorConfig(
+            path_resolution=1.0,
+            min_target_distance=0.5,
+            default_speed=2.0,
+            max_speed=8.0,
+            stop_speed=0.0,
+            max_lateral_acceleration=2.0,
+            max_longitudinal_acceleration=1.0,
+            max_longitudinal_deceleration=1.0,
+        )
+    )
+
+    trajectory = generator.generate(
+        ego_pose=Pose2D(x=0.0, y=0.0, yaw=0.0),
+        target_pose=Pose2D(x=1.0, y=0.0),
+        local_path=[],
+        speed_limit=2.0,
+        route_state='normal',
+        current_speed=8.0,
+    )
+
+    assert trajectory.path_points
+    assert trajectory.trajectory_samples == []
+    assert trajectory.target_speed == pytest.approx(0.0)
+    assert 'insufficient braking distance' in trajectory.path_status
+
+
+def test_commands_safe_stop_without_fresh_measured_speed():
+    generator = make_generator()
+
+    trajectory = generator.generate(
+        ego_pose=Pose2D(x=0.0, y=0.0, yaw=0.0),
+        target_pose=Pose2D(x=3.0, y=0.0),
+        local_path=[],
+        speed_limit=5.0,
+        route_state='normal',
+        current_speed=None,
+    )
+
+    assert trajectory.path_points
+    assert trajectory.trajectory_samples == []
+    assert trajectory.target_speed == pytest.approx(0.0)
+    assert 'measured speed unavailable' in trajectory.path_status
 
 
 def test_falls_back_when_local_path_contains_non_finite_coordinates():
@@ -327,6 +394,8 @@ def test_does_not_blend_same_origin_reroute():
         ('smoothing_strength', float('nan')),
         ('max_curvature', -1.0),
         ('continuity_blend_distance', -1.0),
+        ('wheelbase', 0.0),
+        ('maximum_steering_angle', 0.0),
     ],
 )
 def test_rejects_invalid_configuration(field, value):

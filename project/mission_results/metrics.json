@@ -1,73 +1,122 @@
 {
   "route_complete": true,
-  "mission_duration_s": 322.516,
+  "mission_duration_s": 215.064,
   "max_waypoint": 63,
-  "max_speed_mps": 5.846,
-  "mean_speed_mps": 3.006,
-  "tracking_rmse_m": 1.0025,
-  "tracking_p95_m": 2.6278,
-  "tracking_max_m": 4.3391,
-  "max_twist_gap_s": 9.8909,
-  "max_planning_path_gap_s": 0.2057,
-  "max_decision_speed_gap_s": 0.3262,
-  "event1_min_front_m": 16.726,
-  "event2_min_merge_m": 8.837,
-  "event2_min_front_m": 8.975,
-  "emergency_entries": 1,
-  "merge_slowdown_entries": 1,
+  "max_speed_mps": 5.88,
+  "mean_speed_mps": 3.621,
+  "traffic_light_messages": 1459,
+  "traffic_light_state_counts": {
+    "unknown": 1170,
+    "red": 196,
+    "yellow": 7,
+    "green": 86
+  },
+  "tracking_rmse_m": 0.7684,
+  "tracking_p95_m": 1.761,
+  "tracking_max_m": 4.8528,
+  "max_twist_gap_s": 2.3541,
+  "max_planning_path_gap_s": 0.1624,
+  "max_decision_speed_gap_s": 0.3382,
+  "event1_min_front_m": 14.547,
+  "event2_min_merge_m": 7.535,
+  "event2_min_front_m": 7.535,
+  "following_entries": 3,
+  "emergency_entries": 0,
+  "merge_slowdown_entries": 0,
   "simultaneous_throttle_brake": 0,
-  "throttle_saturation_samples": 4094,
-  "brake_saturation_samples": 2184,
-  "path_rejection_or_fallback_count": 39,
-  "runtime_path_rejection_or_fallback_count": 0,
-  "post_route_complete_path_fallback_count": 39,
-  "process_died_log_count": 1,
+  "throttle_saturation_samples": 2842,
+  "brake_saturation_samples": 592,
+  "path_rejection_or_fallback_count": 105,
+  "runtime_path_rejection_or_fallback_count": 105,
+  "post_route_complete_path_fallback_count": 0,
+  "path_rejection_or_fallback_reasons": {
+    "path exceeds the curvature limit": 104,
+    "path has fewer than two points": 1
+  },
+  "runtime_path_rejection_or_fallback_reasons": {
+    "path exceeds the curvature limit": 104,
+    "path has fewer than two points": 1
+  },
+  "process_died_log_count": 30,
   "runtime_process_died_count": 0,
-  "teardown_process_died_count": 1,
+  "teardown_process_died_count": 30,
   "safe_stop_reasons": {
-    "path missing or stale": 2,
-    "vehicle velocity missing or stale": 11,
-    "stop requested by decision layer": 56
+    "trajectory missing or stale": 12,
+    "decision target speed missing or stale": 14,
+    "stop requested by decision layer": 24
   },
   "stop_events": [
     {
       "waypoint": 25,
-      "distance": 1.7970595359802246,
-      "time_s": 124.252195195
+      "distance": 1.9279741048812866,
+      "time_s": 82.670325309
     },
     {
       "waypoint": 32,
-      "distance": 3.4457669258117676,
-      "time_s": 156.649844414
-    },
-    {
-      "waypoint": 39,
-      "distance": 5.213840484619141,
-      "time_s": 178.308085422
+      "distance": 3.963749885559082,
+      "time_s": 104.971539973
     },
     {
       "waypoint": 59,
-      "distance": 3.4268548488616943,
-      "time_s": 297.252812241
+      "distance": 3.8075103759765625,
+      "time_s": 198.069949592
     }
   ],
-  "recording_to_route_complete_s": 322.516,
-  "mission_time_s": 321.054,
-  "first_motion_to_route_complete_s": 319.116,
+  "recording_to_route_complete_s": 215.064,
+  "mission_time_s": 211.065,
+  "first_motion_to_route_complete_s": 210.925,
   "mission_time_definition": "first forward /car_command (throttle > 0.01, brake < 0.01) to first route_complete",
-  "trajectory_messages": 3943,
-  "trajectory_points": 147717,
+  "trajectory_messages": 2123,
+  "trajectory_points": 68355,
   "max_points_per_trajectory": 90,
+  "max_abs_curvature_per_m": 0.215946,
   "max_lateral_acceleration_mps2": 3.0,
-  "max_longitudinal_acceleration_mps2": 2.0005,
+  "max_longitudinal_acceleration_mps2": 2.0003,
   "max_longitudinal_deceleration_mps2": 3.0,
   "non_monotonic_time_pairs": 0,
   "invalid_numeric_points": 0,
+  "runtime_trajectory_messages": 2112,
+  "runtime_nonempty_trajectory_messages": 2098,
+  "runtime_empty_trajectory_messages": 14,
+  "runtime_trajectory_points": 68355,
+  "runtime_empty_trajectory_fraction": 0.006629,
+  "maximum_continuous_empty_trajectory_s": 0.902058,
+  "maximum_runtime_trajectory_message_gap_s": 0.161968,
+  "maximum_runtime_empty_trajectory_fraction": 0.05,
+  "maximum_allowed_continuous_empty_trajectory_s": 10.0,
+  "maximum_allowed_runtime_trajectory_message_gap_s": 1.05,
+  "trajectory_availability_results": {
+    "nonempty_trajectory_evidence": true,
+    "runtime_empty_trajectory_fraction": true,
+    "continuous_runtime_availability": true,
+    "runtime_trajectory_message_gap": true
+  },
   "configured_limits_mps2": {
     "lateral": 3.0,
     "longitudinal_acceleration": 2.0,
     "longitudinal_deceleration": 3.0
   },
+  "configured_max_curvature_per_m": 0.21770411796641384,
+  "configured_wheelbase_m": 2.63,
+  "configured_maximum_steering_angle_rad": 0.52,
+  "configured_controller_trajectory_timeout_s": 1.0,
+  "configuration_source": "src/trajectory_generator/config/trajectory_generator.yaml",
+  "controller_configuration_source": "src/controller/config/controller.yaml",
+  "trajectory_message_gap_tolerance_s": 0.05,
   "constraint_tolerance_mps2": 0.05,
-  "trajectory_constraint_audit_passed": true
+  "curvature_tolerance_per_m": 0.0001,
+  "trajectory_constraint_results": {
+    "kinematic_curvature": true,
+    "lateral_acceleration": true,
+    "longitudinal_acceleration": true,
+    "longitudinal_deceleration": true,
+    "monotonic_time": true,
+    "finite_values": true,
+    "nonempty_trajectory_evidence": true,
+    "runtime_empty_trajectory_fraction": true,
+    "continuous_runtime_availability": true,
+    "runtime_trajectory_message_gap": true
+  },
+  "trajectory_constraint_audit_passed": true,
+  "route_and_trajectory_audit_passed": true
 }

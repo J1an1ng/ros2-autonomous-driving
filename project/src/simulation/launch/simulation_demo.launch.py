@@ -1,11 +1,15 @@
+"""Launch the Unity simulator bridge with RViz visualization."""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def static_tf(name, args):
+    """Create a named static transform publisher node."""
     return Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -16,6 +20,7 @@ def static_tf(name, args):
 
 
 def generate_launch_description():
+    """Build the simulation demo launch description."""
     config_file = LaunchConfiguration('config_file')
     default_config = PathJoinSubstitution([
         FindPackageShare('simulation'),
@@ -103,9 +108,8 @@ def generate_launch_description():
         ExecuteProcess(
             cmd=[PathJoinSubstitution([
                 FindPackageShare('simulation'),
-                'unity_sim',
-                'Build_Ubuntu',
-                'AD_Sim.x86_64',
+                'scripts',
+                'run_unity.sh',
             ])],
             output='screen',
         ),

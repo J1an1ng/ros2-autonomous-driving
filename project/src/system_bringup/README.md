@@ -19,7 +19,7 @@ simulation
   ├─ sensors ──> perception ─────────────────────────> decision_making
   ├─ pose TF ──> route_manager ──> trajectory_generator
   │                                      ├─ /planning/target_speed ──> decision_making
-  │                                      └─ /planning/path ───────────────────┐
+  │                                      └─ /planning/trajectory ─────────────┐
   └─ vehicle twist/TF ────────────────────────────────────────────────────────┤
 decision_making ── /decision/target_speed + stop intent ─────────────────────┤
                                                                                v
@@ -34,6 +34,10 @@ decision_making ── /decision/target_speed + stop intent ──────�
 The controller is the only production publisher of `/car_command`. Do not start the
 project-supplied `dummy_controller` at the same time.
 
+The obstacle monitor still consumes `/planning/path` as a geometric corridor, while the
+controller consumes the richer Team 20 `/planning/trajectory` message. The latter ties
+the Pure Pursuit point to its curvature-constrained, time-parameterized speed.
+
 ## Design choices
 
 - `enable_motion` defaults to `false`, so a normal launch starts the complete graph but
@@ -41,6 +45,8 @@ project-supplied `dummy_controller` at the same time.
 - Each subsystem has an enable flag for staged integration and fault isolation.
 - Default model, route, controller configuration, Unity configuration, and RViz files are
   resolved from installed package shares rather than source-tree paths.
+- One shared `wheelbase` / `maximum_steering_angle` pair is injected into trajectory
+  planning and control, keeping the bicycle-model feasibility boundary consistent.
 - Unity startup and RViz visualization are independent: `enable_visualization=false`
   reduces rendering load without disabling Unity or autonomy.
 - The full benchmark always uses `route_initial_waypoint_index:=0`; a different index is a
@@ -64,6 +70,8 @@ project-supplied `dummy_controller` at the same time.
 | `simulation_config` | installed default | Unity sensor/event configuration. |
 | `yolo_model` | installed `yolov8n.onnx` | Perception model path. |
 | `route_file` | installed `route_map.yaml` | Production route path. |
+| `wheelbase` | `2.63` | Shared planner/controller bicycle-model wheelbase in metres. |
+| `maximum_steering_angle` | `0.52` | Shared planner/controller steering-angle limit in radians. |
 
 ## Run
 
@@ -79,11 +87,12 @@ ros2 launch system_bringup full_system.launch.py \
 Full route after readiness checks:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py \
-  route_initial_waypoint_index:=0 \
-  enable_motion:=true \
-  enable_visualization:=false
+python3 tools/run_full_mission.py
 ```
+
+Add `--visualization` when RViz is needed. The runner records one complete mission and,
+only after route and trajectory validation pass, atomically replaces
+`mission_results/`. Direct launch is intended for motion-disabled diagnostics.
 
 See `project/INTEGRATION_README.md` for the staged gate and required topic checks.
 
@@ -101,7 +110,8 @@ or control.
 ## Validation
 
 In full-system-v1.9.0 the launch brought up all production modules, completed waypoint
-0–63, and exercised traffic-light, following, emergency-braking, and merge behavior.
-Mission time was 321.054 s from the first forward command to `route_complete`. All ROS
-nodes shut down cleanly; Unity required forced termination during teardown only.
-Automated validation passed 184 tests with no errors or failures and one expected skip.
+0--63, and exercised traffic-light and adaptive-following behavior in both vehicle
+events. Mission time was 210.546 s from the first forward command to `route_complete`.
+No runtime process death occurred; after completion, 24 process-death log entries were
+classified as teardown-only. Automated validation passed 214 tests with no errors or
+failures and one expected skip.

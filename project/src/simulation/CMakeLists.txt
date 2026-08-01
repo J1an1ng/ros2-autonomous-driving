@@ -17,6 +17,10 @@ find_package(tf2_ros REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+endif()
+
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VehicleControl.msg"
   DEPENDENCIES std_msgs
@@ -73,6 +77,13 @@ install(PROGRAMS
   unity_sim/Build_Ubuntu/AD_Sim.x86_64
   DESTINATION share/${PROJECT_NAME}/unity_sim/Build_Ubuntu
 )
+
+if(BUILD_TESTING)
+  ament_add_pytest_test(
+    test_unity_launcher
+    test/test_unity_launcher.py
+  )
+endif()
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()

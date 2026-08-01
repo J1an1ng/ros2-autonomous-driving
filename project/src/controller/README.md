@@ -1,17 +1,17 @@
 # Vehicle Controller
 
 This ROS 2 Jazzy package implements task 2.5 of the autonomous-driving assignment. It
-receives the planned path and the final decision-layer speed, follows the path with Pure
-Pursuit, regulates speed with PID, and publishes throttle, steering, and brake commands to
-the Unity bridge.
+receives Team 20's time-parameterized trajectory and the final decision-layer speed,
+follows the trajectory with Pure Pursuit, regulates speed with PID, and publishes
+throttle, steering, and brake commands to the Unity bridge.
 
 ## Scope and design
 
-The package deliberately reuses the interfaces already present in the integration branch.
-It adds no custom message type and no external control library.
+The package reuses Team 20's `autonomy_interfaces/msg/PlannedTrajectory` message and adds
+no external control library.
 
 ```text
-route_manager --> trajectory_generator --> /planning/path --------+
+route_manager --> trajectory_generator --> /planning/trajectory --+
                                                                   |
 perception ----> decision_making ------> /decision/target_speed ---+--> controller
                                          /decision/stop_required --+       |
@@ -38,14 +38,17 @@ The implementation is split into:
 
 | Topic / source | Type | Producer | Use |
 | --- | --- | --- | --- |
-| `/planning/path` | `nav_msgs/msg/Path` | `trajectory_generator` | Smoothed forward path in `world`. |
+| `/planning/trajectory` | `autonomy_interfaces/msg/PlannedTrajectory` | `trajectory_generator` | Validated forward poses with curvature, feasible speed, and time from start in `world`. |
 | `/decision/target_speed` | `std_msgs/msg/Float32` | `decision_making` | Final permitted speed in m/s. |
 | `/decision/stop_required` | `std_msgs/msg/Bool` | `decision_making` | Explicit traffic-light or emergency stop. |
 | `/OurCar/INS/twist` | `geometry_msgs/msg/TwistStamped` | `simulation` | Measured vehicle speed. |
 | `world -> OurCar/INS` | TF | `simulation` | Vehicle position and heading. |
 
 The controller intentionally does not subscribe to `/planning/target_speed`: doing so
-would bypass traffic-light, merge, and emergency decisions.
+would bypass traffic-light, merge, and emergency decisions. It instead combines the
+trajectory speed at the selected Pure Pursuit point with `/decision/target_speed` and
+uses the lower value, so neither planning feasibility nor decision-layer safety can be
+overridden.
 
 ### Output
 
@@ -62,9 +65,9 @@ the same time.
 
 ### Lateral control
 
-The node finds the path point nearest to the vehicle, walks forward by the configured
-lookahead distance, transforms that point into the vehicle frame, and applies the Pure
-Pursuit steering law. The lookahead distance increases with measured speed:
+The node finds the trajectory point nearest to the vehicle, walks forward by the
+configured lookahead distance, transforms that point into the vehicle frame, and applies
+the Pure Pursuit steering law. The lookahead distance increases with measured speed:
 
 ```text
 lookahead = clamp(lookahead_base + lookahead_speed_gain * speed,
@@ -76,19 +79,24 @@ closed-loop-validated Unity convention in which positive Unity steering turns ri
 
 ### Longitudinal control
 
-PID uses `/OurCar/INS/twist` as feedback instead of estimating speed from pose changes.
-Positive PID output becomes throttle and negative output becomes brake. Output saturation,
-integral limiting, a speed-error deadband, and basic anti-windup are included.
+The target speed is `min(decision_target_speed, trajectory_speed_at_lookahead,
+maximum_target_speed)`. This joins lateral and longitudinal control at the same selected
+trajectory point: the controller cannot follow a bend while using an unrelated scalar
+sample. PID uses `/OurCar/INS/twist` as feedback instead of estimating speed from pose
+changes. Positive PID output becomes throttle and negative output becomes brake. Output
+saturation, integral limiting, a speed-error deadband, and basic anti-windup are included.
 
 ### Fail-safe behavior
 
 The controller publishes zero throttle, zero steering, and `safe_stop_brake` when:
 
 - motion is disabled by parameter;
-- the path, decision target speed, stop state, or vehicle twist is missing or stale;
+- the trajectory, decision target speed, stop state, or vehicle twist is missing or stale;
 - TF is unavailable;
 - decision making requests a stop or publishes a non-positive target speed;
-- the path has the wrong frame, contains non-finite points, or has no forward lookahead;
+- the trajectory has the wrong frame, contains non-finite/negative values, has
+  non-increasing point times, exceeds the controller's own bicycle-model curvature
+  limit, or has no forward lookahead;
 - a control input or calculation is non-finite.
 
 Safe stop also resets PID and previous steering state. The controller starts in a stopped
@@ -100,7 +108,7 @@ From the repository's `project` directory:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select simulation controller
+colcon build --packages-select simulation autonomy_interfaces controller
 source install/setup.bash
 ```
 
@@ -108,7 +116,8 @@ Build the complete current stack with:
 
 ```bash
 colcon build --packages-select \
-  simulation perception route_manager trajectory_generator decision_making controller
+  simulation perception route_manager autonomy_interfaces trajectory_generator \
+  decision_making controller system_bringup
 ```
 
 Run controller unit tests with:
@@ -118,9 +127,10 @@ colcon test --packages-select controller
 colcon test-result --verbose
 ```
 
-The tests exercise coordinate transformation, lookahead selection, straight/left/right
-Pure Pursuit behavior, steering-sign reversal, throttle/brake selection and mutual
-exclusion, and invalid-input braking.
+The tests exercise coordinate transformation, lookahead-point index selection,
+straight/left/right Pure Pursuit behavior, steering-sign reversal, the most-restrictive
+decision/trajectory speed rule, throttle/brake selection and mutual exclusion, and
+invalid-input braking.
 
 ## Full-stack startup
 
@@ -166,7 +176,7 @@ Build and source the workspace first. Use separate terminals and source
 6. Check inputs before allowing motion:
 
    ```bash
-   ros2 topic hz /planning/path
+   ros2 topic hz /planning/trajectory
    ros2 topic echo /decision/target_speed
    ros2 topic echo /decision/stop_required
    ros2 topic hz /OurCar/INS/twist
@@ -195,9 +205,15 @@ ros2 topic echo /car_command
 
 Defaults are stored in `config/controller.yaml`.
 
+For production, `system_bringup/full_system.launch.py` owns the vehicle-model values and
+injects the same `wheelbase` and `maximum_steering_angle` into controller and trajectory
+planner. The YAML values are standalone defaults. The controller independently computes
+`tan(maximum_steering_angle) / wheelbase` and rejects any trajectory point beyond that
+limit, so a planner/controller configuration mismatch fails safe.
+
 | Parameter | Default | Meaning |
 | --- | ---: | --- |
-| `map_frame` | `world` | Frame used by `/planning/path`. |
+| `map_frame` | `world` | Required frame of `/planning/trajectory`. |
 | `vehicle_frame` | `OurCar/INS` | TF frame used as the planar vehicle reference. |
 | `enable_motion` | `true` | `false` keeps publishing the safe-stop command. |
 | `control_rate` | `20.0` | Command rate in Hz. |
@@ -213,9 +229,9 @@ Defaults are stored in `config/controller.yaml`.
 | `maximum_throttle` | `0.70` | Maximum acceleration command. Half throttle plateaued near 4.56 m/s in Unity; the moderate increase improves straight-line speed while route and decision limits remain authoritative. |
 | `maximum_brake` | `1.0` | PID brake ceiling. |
 | `safe_stop_brake` | `1.0` | Brake used for missing data and stop requests. |
-| `path_timeout` | `1.0` | Maximum path age in seconds. |
+| `trajectory_timeout` | `1.0` | Maximum planned-trajectory age in seconds. |
 | `decision_timeout` | `0.75` | Maximum speed/stop-decision age in seconds. |
-| `twist_timeout` | `1.5` | Maximum measured-speed age in seconds; includes margin for Unity TCP jitter. |
+| `twist_timeout` | `2.75` | Maximum measured-speed age in seconds. A diagnostic full-stack bag measured a 2.5905 s maximum twist gap under YOLO/mapping load; this leaves a bounded 0.1595 s margin. |
 
 Tune in this order and at low speed:
 
@@ -234,3 +250,8 @@ The current defaults are the full-system-v1.9.0 closed-loop-validated production
 Changing vehicle geometry, simulator physics, route speed, PID/lookahead gains, steering
 normalization, or braking strength requires a new motion-disabled check followed by
 closed-loop regression testing.
+
+The launch integration regression test publishes valid, empty, wrong-frame,
+non-monotonic, over-curvature, and stale `PlannedTrajectory` inputs through the public ROS
+topic. Only the valid message permits throttle; every other case must produce full-brake
+safe stop.

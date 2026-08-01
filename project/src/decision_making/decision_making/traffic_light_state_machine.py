@@ -839,6 +839,14 @@ class TrafficLightStateMachine:
             or following_dropout_held
         )
         if following_active:
+            held_following_target = (
+                min(permitted_speed, self._following_command_speed)
+                if (
+                    following_dropout_held
+                    and self._following_command_speed is not None
+                )
+                else None
+            )
             following_distance = (
                 self._following_last_distance
                 if following_dropout_held
@@ -873,13 +881,21 @@ class TrafficLightStateMachine:
                     estimated_lead_speed
                     + self.following_distance_gain * distance_error
                 )
+                safe_surplus_recovery = (
+                    following_range_rate
+                    >= -self.following_range_rate_deadband
+                    and distance_error
+                    >= self.following_min_rolling_clearance
+                )
                 if (
                     following_range_rate
                     <= self.following_range_rate_deadband
+                    and not safe_surplus_recovery
                 ):
-                    # Do not accelerate toward a lead vehicle while the gap is
-                    # stable or closing. Acceleration is permitted again once
-                    # the measured gap is clearly opening.
+                    # Do not accelerate into a closing or insufficient gap.
+                    # A stable gap with explicit surplus clearance may recover
+                    # gradually; otherwise low-speed following can lock at
+                    # zero even though the lead vehicle remains far away.
                     raw_following_target = min(
                         raw_following_target, current_speed
                     )
@@ -948,6 +964,13 @@ class TrafficLightStateMachine:
                     maximum_target=permitted_speed,
                     seed_from_current=smooth_following,
                 )
+            if held_following_target is not None:
+                # A dropout hold means exactly that: retain the last safe
+                # command. Recomputing it from a decelerating ego speed caused
+                # the target to ratchet to zero during brief Event I gaps.
+                following_target = held_following_target
+                self._following_command_speed = held_following_target
+                self._following_command_time = now
             self.following_target_speed = following_target
         else:
             self._following_command_speed = None

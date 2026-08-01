@@ -11,12 +11,12 @@ uses RGB and depth images with YOLO; it does not use the Unity semantic camera.
 
 ## Team contributions
 
-| Team member | Main contribution | Traceable project artifacts |
-| --- | --- | --- |
-| Lei Fang | `route_manager` | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
-| Yida Lyu | `decision`, `controller`, part of integration | Decision state machine, obstacle behavior, Pure Pursuit/PID control, safety handling, and the interfaces from final intent to `/car_command` |
-| Tao Zhang | Perception, part of integration | YOLO RGB-D detection, traffic-light classification, vehicle ranging, occupancy mapping, perception configuration, and perception-to-decision interfaces |
-| Jianing Huang | `Trajectory_Generator`, part of integration | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, and route-to-planning interfaces |
+| Team member | Student ID | Main contribution | Traceable project artifacts |
+| --- | --- | --- | --- |
+| Lei Fang | 03805710 | `route_manager` | Route YAML model, waypoint recording/progress, route context, speed limits, tests, and package documentation |
+| Yida Lyu | 03816236 | `decision`, `controller`, part of integration | Decision state machine, obstacle behavior, Pure Pursuit/PID control, safety handling, and the interfaces from final intent to `/car_command` |
+| Tao Zhang | 03822999 | `Perception`, part of integration | YOLO RGB-D detection, traffic-light classification, vehicle ranging, occupancy mapping, perception configuration, and perception-to-decision interfaces |
+| Jianing Huang | 03814771 | `Trajectory_Generator`, part of integration | Route projection, path smoothing/validation, curvature and acceleration-constrained time parameterization, custom trajectory messages, and route-to-planning interfaces |
 
 In the repository, `decision` is implemented by the `decision_making` package and
 `Trajectory_Generator` is stored as the `trajectory_generator` package.
@@ -85,16 +85,39 @@ TF, sensor topics, perception, planning, and decision making are ready, start a 
 from waypoint 0 with:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py \
-  route_initial_waypoint_index:=0 \
-  enable_motion:=true \
-  enable_visualization:=true
+python3 tools/run_full_mission.py --visualization
 ```
+
+This is the standard moving-run entry point. It launches the production stack,
+records the required topics and logs, waits for `route_complete`, audits the
+trajectory, and atomically replaces `mission_results/` with figures and metrics
+from that run. A failed or interrupted run preserves the previous valid result.
 
 Never run `dummy_controller` and the real `controller` together: `/car_command` must have
 exactly one publisher.
 
-The recorded 2026-08-01 production run completed waypoint 0--63 in **321.054 s** from the
-first forward control command to `route_complete`. Its `/planning/trajectory` audit
-passed the configured lateral and longitudinal acceleration constraints; see the mission
-results linked above for the exact timing definition and evidence.
+## Validation requirements
+
+A release is accepted only after the code-quality gate and complete ROS 2 test suite
+pass, all nine packages build, and the production stack completes waypoint 0--63 in
+Unity. The full run must record mission time, scenario-state evidence, trajectory
+availability and dynamic constraints, traffic-light observations, and runtime logs.
+
+The acceptance audit also requires one production `/car_command` publisher, no collision
+or route departure, no autonomy-node failure before route completion, and operation with
+the semantic camera disabled. These are project requirements; their measured values may
+vary slightly between simulator runs.
+
+## Latest complete-test example
+
+The following numbers are evidence from the most recent retained run, not fixed behavior
+or guaranteed constants of the system.
+
+The recorded 2026-08-01 production run completed waypoint 0--63 in **211.065 s** from the
+first forward control command to `route_complete`. Its 68,355 serialized trajectory
+points passed the steering-derived curvature and lateral/longitudinal acceleration
+constraints. Event1 remained in continuous following motion at or above 2.536 m/s rather
+than stopping and restarting. The route-stage availability audit also required nonempty
+trajectory evidence and bounded empty-publication fraction/duration; see the results linked
+above for the exact timing definition, traffic-light record, fallback classification,
+and teardown evidence.

@@ -47,7 +47,9 @@ Configured by `config/trajectory_generator.yaml`.
 | `path_resolution` | `1.0` | Approximate spacing between resampled path points in meters. |
 | `min_target_distance` | `0.5` | Minimum distance threshold for very close targets. |
 | `smoothing_strength` | `0.25` | Fraction of each adjacent segment trimmed when forming the bounded quadratic Bézier spline; clamped to `0.45`. |
-| `max_curvature` | `2.0` | Maximum allowed absolute path curvature in `1/m`. |
+| `max_curvature` | `2.0` | Additional configured absolute-curvature ceiling in `1/m`. |
+| `wheelbase` | `2.63` | Bicycle-model wheelbase in meters; shared with the production controller. |
+| `maximum_steering_angle` | `0.52` | Physical steering-angle ceiling in radians; shared with the production controller. |
 | `max_yaw_step` | `1.1` | Maximum allowed wrapped yaw change between adjacent samples in radians. |
 | `max_start_distance` | `5.0` | Maximum distance in meters between ego and the first generated point. |
 | `max_spline_deviation` | `2.5` | Maximum allowed smoothing deviation from the cropped input polyline in meters. |
@@ -62,14 +64,22 @@ Configured by `config/trajectory_generator.yaml`.
 | `max_longitudinal_acceleration` | `2.0` | Maximum planned forward acceleration in m/s². |
 | `max_longitudinal_deceleration` | `3.0` | Maximum planned braking magnitude in m/s². |
 | `target_speed_lookahead_distance` | `4.0` | Arc-length lookahead used to expose one feasible speed to the legacy scalar-speed interface. |
-| `velocity_timeout` | `1.0` | Maximum age of measured speed. The planner uses the nominal ceiling as its initial boundary until fresh velocity arrives; the controller independently safe-stops on stale velocity. |
+| `velocity_timeout` | `2.75` | Maximum age of measured speed, matching the controller. A diagnostic bag measured a 2.5905 s maximum gap under full load; without a fresh measurement the planner publishes no trajectory and the controller safe-stops. |
 
 ## Kinematic and Dynamic Feasibility
 
 Path feasibility is established first: samples must be finite, ordered in arc
 length, close to the ego pose, bounded in curvature and yaw change, and within
-the configured smoothing-deviation envelope. The accepted path is then time
-parameterized in four deterministic passes:
+the configured smoothing-deviation envelope. The curvature limit is linked to
+the same bicycle model used by the controller:
+
+```text
+kappa_vehicle = tan(maximum_steering_angle) / wheelbase
+kappa_effective = min(max_curvature, kappa_vehicle)
+```
+
+With the production values, `kappa_effective = 0.2177 1/m`. The accepted path
+is then time parameterized in four deterministic passes:
 
 1. Apply route and global speed limits, then cap every point by lateral
    acceleration:
@@ -95,6 +105,14 @@ parameterized in four deterministic passes:
    `dt = 2 * ds / (v[i-1] + v[i])`. The denominator has a small numerical floor,
    so every non-duplicate spatial sample has strictly increasing time.
 
+The measured speed at point zero is a hard boundary condition, not a value that
+the backward pass may silently reduce. If the available distance cannot satisfy
+a lower curvature, route, or terminal cap at the configured deceleration, the
+profile is reported as infeasible. The node publishes an empty trajectory and a
+zero scalar target for that planning cycle; the controller then safe-stops until
+a reachable profile is available. This makes an unsafe boundary mismatch visible
+instead of claiming a dynamically impossible trajectory.
+
 The implementation is a pure computational module in `velocity_profile.py`.
 It has no ROS dependency and is covered by focused tests for curvature limits,
 acceleration reachability, braking before a curve, terminal stopping, and
@@ -114,12 +132,12 @@ mathematics independently testable.
 - If no speed limit has been received, `default_speed` is used.
 
 `/planning/trajectory` is the complete controller-facing representation. The
-current controller retains its established `/planning/path` plus scalar-speed
-contract, so `/planning/target_speed` selects the trajectory sample at the
-configured 4 m lookahead. It is therefore derived from, and cannot exceed, the
-feasible profile. `decision_making` may reduce this value further for traffic
-lights and obstacles before the controller receives `/decision/target_speed`.
-The planner cannot override a safety decision.
+controller selects one Pure Pursuit lookahead point and uses the speed stored on
+that same point. It caps this speed with `/decision/target_speed`, so the dynamic
+profile and traffic-light/obstacle decision are both authoritative. The scalar
+`/planning/target_speed` still selects the profile sample at the configured 4 m
+lookahead for `decision_making`; `/planning/path` remains available to the
+obstacle corridor and RViz. The planner cannot override a safety decision.
 
 ## Team 20 Custom Interface
 
@@ -185,6 +203,10 @@ speed, and timing without breaking existing consumers.
 ros2 launch trajectory_generator trajectory_generator.launch.py
 ```
 
+The standalone launch exposes `wheelbase` and `maximum_steering_angle`. Production
+`full_system.launch.py` passes one shared pair to both trajectory planner and controller;
+changing either vehicle-model value therefore cannot silently update only one side.
+
 Or run the node directly:
 
 ```bash
@@ -194,21 +216,35 @@ ros2 run trajectory_generator trajectory_generator_node
 ## Current Limitations
 
 - The fallback path uses straight-line spatial interpolation only.
-- The planner uses a point-mass acceleration envelope; it does not model tyre
-  friction circles, steering actuator rate, jerk, mass, or drivetrain dynamics.
+- The planner uses a bicycle-model curvature ceiling and a point-mass
+  acceleration envelope; it does not model tyre friction circles, steering
+  actuator rate, jerk, mass, or drivetrain dynamics.
 - Hermite/Bézier geometry is validated and time parameterized, not jointly
   optimized as an MPC problem.
 - No obstacle avoidance is performed.
 - No MPC or dynamic optimization is implemented.
 - Traffic-light and obstacle decisions are intentionally left to
   `decision_making`.
+- Route completion is declared by `route_manager` only after the vehicle enters the final
+  waypoint reach radius. If it is still moving at that instant, zero terminal speed is
+  no longer reachable over the remaining zero-length horizon; the planner explicitly
+  rejects that profile and the controller safe-stops. Anticipatory stopping would require
+  an upstream final-waypoint semantic before the reach event.
 
 ## Validation Evidence
 
-The 2026-08-01 waypoint 0--63 Unity run audited 147,717 points from 3,943
-`/planning/trajectory` messages. Maximum observed lateral acceleration,
-longitudinal acceleration, and longitudinal deceleration were respectively
-3.0000, 2.0005, and 3.0000 m/s² (the 0.0005 excess is within the documented
-float/chord numerical tolerance); all timestamps were strictly increasing and
-all values were finite. See [`../../mission_results/README.md`](../../mission_results/README.md)
-for the mission time, plots, and machine-readable metrics.
+The 2026-08-01 waypoint 0--63 Unity run audited 73,566 points from 2,119
+`/planning/trajectory` messages. Maximum absolute curvature was 0.212908 1/m against the
+steering-derived 0.217704 1/m limit. Maximum observed lateral acceleration,
+longitudinal acceleration, and longitudinal deceleration were respectively 3.0000,
+2.0009, and 3.0000 m/s². Before route completion, 2,098 of 2,108 trajectory
+publications were nonempty; the 0.47% empty fraction, 0.802 s longest continuous empty
+interval, and 0.167 s maximum message gap passed the documented 5% / 10 s / 1.05 s
+availability gates. All 98 runtime local
+path rejections were classified as curvature-gate rejections. Each used the straight
+target-pose fallback, which was rechecked against the same feasibility rules before
+publication; an invalid fallback would instead trigger controller safe stop.
+The 0.0009 m/s² acceleration excess is within the documented float/chord numerical
+tolerance; all timestamps were strictly increasing and all values were finite. See
+[`../../mission_results/README.md`](../../mission_results/README.md) for mission time,
+plots, and machine-readable metrics.

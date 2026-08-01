@@ -23,4 +23,10 @@ trajectory_generator_node:
     max_longitudinal_acceleration: 2.0
     max_longitudinal_deceleration: 3.0
     target_speed_lookahead_distance: 4.0
-    velocity_timeout: 1.0
+    # Match the controller's measured, bounded Unity TCP-jitter allowance.
+    velocity_timeout: 2.75
+    # Standalone defaults. full_system.launch.py injects one shared vehicle
+    # model into both planner and controller. The effective path-curvature
+    # limit is min(max_curvature, tan(maximum_steering_angle) / wheelbase).
+    wheelbase: 2.63
+    maximum_steering_angle: 0.52

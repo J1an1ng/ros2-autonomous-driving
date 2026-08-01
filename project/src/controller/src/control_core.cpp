@@ -68,7 +68,8 @@ bool find_lookahead_point(
   const Point2D & vehicle_position,
   const double vehicle_yaw,
   const double minimum_forward_distance,
-  Point2D & target_in_vehicle_frame)
+  Point2D & target_in_vehicle_frame,
+  std::size_t * target_index)
 {
   if (path.empty() || nearest_index >= path.size()) {
     return false;
@@ -87,11 +88,42 @@ bool find_lookahead_point(
     const Point2D candidate = world_to_vehicle(path[index], vehicle_position, vehicle_yaw);
     if (candidate.x >= minimum_forward_distance) {
       target_in_vehicle_frame = candidate;
+      if (target_index != nullptr) {
+        *target_index = index;
+      }
       return true;
     }
   }
 
   return false;
+}
+
+double combine_target_speeds(
+  const double decision_speed,
+  const double trajectory_speed,
+  const double maximum_speed)
+{
+  if (!std::isfinite(decision_speed) || !std::isfinite(trajectory_speed) ||
+    !std::isfinite(maximum_speed))
+  {
+    return 0.0;
+  }
+  return clamp_value(
+    std::min(decision_speed, trajectory_speed),
+    0.0,
+    std::max(maximum_speed, 0.0));
+}
+
+double maximum_kinematic_curvature(
+  const double wheelbase,
+  const double maximum_steering_angle)
+{
+  if (!std::isfinite(wheelbase) || !std::isfinite(maximum_steering_angle) ||
+    wheelbase <= 0.0 || maximum_steering_angle <= 0.0)
+  {
+    return 0.0;
+  }
+  return std::tan(maximum_steering_angle) / wheelbase;
 }
 
 double pure_pursuit_steering(

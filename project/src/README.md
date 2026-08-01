@@ -12,14 +12,14 @@ simulation bridge
   ├─ pose TF ──> route_manager ─┬─ local route ─> trajectory_generator
   │                             │                       │              │
   │                             │                  ┌─ path/speed ──────┤
-  │                             │                  └─ timed trajectory ─> evidence/tools
+  │                             │                  └─ timed trajectory ──────────────┐
   │                             └─ route state/ID/distance ───────────┤
   └─ vehicle twist ──────────────────────────────────────────────────┤
                                                               v
                                                        decision_making
                                                    final speed/stop intent
 
-trajectory_generator ── planning path ────────────────────────┐
+trajectory_generator ── timed trajectory ─────────────────────┐
 decision_making ─────── final speed/stop intent ──────────────┼─> controller
 simulation bridge ───── vehicle twist/TF ─────────────────────┘       |
                                                                      v
@@ -33,21 +33,27 @@ Production perception uses the left RGB camera, metric depth, camera calibration
 The Unity semantic/segmentation camera is disabled and is not required to run the project.
 
 The arrows express ownership as well as data flow: route management supplies route
-context, trajectory generation owns the nominal path and speed, perception supplies
-observations, decision making owns the final permitted speed/stop intent, and only the
-controller publishes `/car_command`.
+context, trajectory generation owns the feasible geometry/speed/time profile, perception
+supplies observations, decision making owns the final permitted speed/stop intent, and
+only the controller publishes `/car_command`. The controller uses the speed attached to
+its selected trajectory lookahead point and caps it with the decision speed.
 
 ## Architecture and design rationale
 
 | Area | Choice | Reason and trade-off |
 | --- | --- | --- |
 | Route | A deterministic 64-waypoint YAML route with semantic types and per-waypoint speed limits | The assessed map is fixed, so a recorded route is reproducible and easy to inspect. It does not provide global replanning for a changed map. |
-| Trajectory | Ego projection, Hermite/Bézier smoothing, validation, and forward/backward time parameterization | Produces a smooth path and a feasible velocity profile under curvature and longitudinal acceleration/braking limits without the complexity of MPC. The point-mass envelope does not model tyre friction, jerk, or actuator dynamics and does not avoid obstacles. |
+| Trajectory | Ego projection, Hermite/Bézier smoothing, bicycle-model curvature validation, and forward/backward time parameterization | Produces a smooth path and a feasible velocity profile under steering, lateral-acceleration, and longitudinal acceleration/braking limits without MPC complexity. It rejects an unreachable initial-speed boundary instead of silently changing measured speed. The envelope does not model tyre friction circles, jerk, steering rate, or drivetrain dynamics and does not avoid obstacles. |
 | Perception model | COCO YOLOv8n ONNX on normal RGB, combined with metric depth and TF | Avoids the Unity semantic-camera shortcut while keeping CPU inference practical. Depth adds range, but small simulator traffic lights require route gates, HSV evidence, and temporal filtering. |
 | Obstacle model | Planning-path point-cloud corridor fused with YOLO RGB-D vehicle range | Visual class identity rejects static geometry; point-cloud agreement checks spatial plausibility. Route-gated fallbacks cover known sensor gaps without weakening the near-field safety guard. |
 | Decision | Explicit state machine with a documented safety priority | Traffic-light, following, merge, and emergency behavior remains traceable and testable. It is less flexible than a learned policy but failures and transitions can be audited. |
-| Control | Pure Pursuit steering plus PID speed control | A transparent, low-complexity controller is sufficient for the fixed course and easy to tune. It is not a model-predictive controller and depends on fresh TF, twist, path, and decision inputs. |
+| Control | Pure Pursuit steering plus PID speed control on `PlannedTrajectory` | A single lookahead index selects both geometry and the trajectory speed, which is capped by the safety decision. The transparent controller is easy to tune but is not MPC and depends on fresh TF, twist, trajectory, and decision inputs. |
 | Safety | Input timeouts, latched stops, bounded commands, and one authoritative publisher | Missing/stale data produces braking instead of stale motion. This can cause conservative temporary stops during sensor gaps, which is preferred to uncontrolled continuation. |
+
+The production bringup owns one vehicle model: it sends the same wheelbase and maximum
+steering angle to planning and control. The controller still validates received curvature
+independently, so a launch override or configuration mistake cannot make it follow a
+trajectory outside its steering boundary.
 
 ## What the project can do
 
@@ -60,13 +66,15 @@ controller publishes `/car_command`.
 - Publish route phase, current waypoint, waypoint distance, local path, and speed limits.
 - Smooth the local route and publish path pose, curvature, dynamically feasible speed,
   and time at every trajectory point using Team 20's custom ROS message.
-- Enforce configured lateral acceleration, longitudinal acceleration, longitudinal
-  deceleration, route speed, and route-completion terminal-speed constraints.
+- Enforce the controller's wheelbase/maximum-steering curvature limit, configured lateral
+  acceleration, longitudinal acceleration/deceleration, route speed, and route-completion
+  terminal-speed constraints.
 - Stop for red, yellow, unknown, or stale traffic-light observations near controlled
   intersections and continue only after a confirmed green signal.
 - Follow a slower vehicle with an adaptive speed command.
 - Slow down for a vehicle merging from the right and apply emergency braking when needed.
-- Track the path with Pure Pursuit steering and regulate speed with PID control.
+- Track the planned trajectory with Pure Pursuit and regulate the most restrictive of
+  trajectory and decision speed with PID control.
 - Fail safely when required paths, transforms, sensor data, or decision messages are
   missing or stale.
 - Visualize the route, trajectory, perception results, decision state, and telemetry in
@@ -212,8 +220,9 @@ checks Team 20 Python and C++ code, the simulator launch/test Python, and the si
 bridge C++. The project-supplied `dummy_controller` and vendored third-party sources are
 excluded; simulator C++ is checked with documented copyright/include-path exemptions.
 
-The 2026-08-01 post-change release check built all nine packages and reported 184 tests,
-0 errors, 0 failures, and one expected skip.
+Acceptance requires all nine packages to build, the quality gate to report no findings,
+and the complete test suite to report zero errors and zero failures. The latest retained
+result is shown separately below as an example.
 
 ## Run the complete system
 
@@ -248,23 +257,19 @@ Stop the safe startup with `Ctrl+C` before starting the moving run.
 
 ### 2. Full drive from waypoint 0
 
-Run the same launch with motion explicitly enabled:
+Use the standard mission runner. It always enables the production controller,
+records the audit topics and logs, waits for route completion, and generates
+`mission_results/` from that run:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py \
-  route_initial_waypoint_index:=0 \
-  enable_motion:=true \
-  enable_visualization:=true
+python3 tools/run_full_mission.py --visualization
 ```
 
 For better performance on a machine where RViz is not needed, keep Unity running but
 disable the RViz windows:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py \
-  route_initial_waypoint_index:=0 \
-  enable_motion:=true \
-  enable_visualization:=false
+python3 tools/run_full_mission.py
 ```
 
 A successful complete run progresses from waypoint 0 to waypoint 63 and logs:
@@ -273,20 +278,43 @@ A successful complete run progresses from waypoint 0 to waypoint 63 and logs:
 Route completed at waypoint 63
 ```
 
-At the endpoint, the decision and controller layers command a safe stop. Use `Ctrl+C` to
-shut down the launch; all ROS nodes and Unity should exit cleanly.
+At the endpoint, the decision and controller layers command a safe stop. The runner then
+stops recording and the launch, validates the completed bag, and atomically replaces
+`mission_results/`. A failed, interrupted, or audit-failing run keeps the previous valid
+result. Raw bags and logs are retained under the Git-ignored `validation_evidence/`
+directory. Direct `ros2 launch` remains useful for diagnostics, but does not publish a
+mission report automatically.
 
-### Recorded full-system result
+### Latest complete-test example
+
+This subsection records one retained validation run. It demonstrates that the acceptance
+procedure has been completed, but its timing, message counts, obstacle distances, and
+state counts are measurements from that run rather than fixed project guarantees.
 
 The trajectory-planning validation on 2026-08-01 completed waypoint 0 through 63. Mission
-time was **321.054 s**, measured from the first forward `/car_command` (`throttle > 0.01`,
+time was **211.065 s**, measured from the first forward `/car_command` (`throttle > 0.01`,
 `brake < 0.01`) to the first `route_complete`; the first-measured-motion cross-check was
-319.116 s. The audit checked 147,717 points in 3,943 `/planning/trajectory` messages and
-found no invalid values or non-monotonic timestamps. Observed maxima were 3.0000 m/s²
-lateral acceleration, 2.0005 m/s² longitudinal acceleration, and 3.0000 m/s²
-deceleration, within the configured limits plus the documented 0.05 m/s² numerical
-tolerance. Plots and machine-readable data are in
+210.925 s. The audit checked 68,355 points in 2,123 `/planning/trajectory` messages and
+found no invalid values or non-monotonic timestamps. Maximum curvature was 0.215946 1/m
+against the steering-derived 0.217704 1/m limit. Observed maxima were 3.0000 m/s² lateral
+acceleration, 2.0003 m/s² longitudinal acceleration, and 3.0000 m/s² deceleration, within
+the configured limits plus the documented numerical tolerances. Plots and
+machine-readable data are in
 [`../mission_results/`](../mission_results/README.md).
+
+The route-stage audit additionally found 2,098 nonempty messages out of 2,112 before
+completion (0.66% empty; longest continuous empty interval 0.902 s; maximum message gap
+0.162 s), within the documented 5% / 10 s / 1.05 s availability gates. Of 105 runtime
+path rejections, 104 were classified as `path exceeds the curvature limit` and one as
+`path has fewer than two points`; each straight target-pose fallback was subjected to
+the same feasibility checks before publication. The bag also recorded 1,459 UInt8
+traffic-light messages (1,170 unknown, 196 red, 7 yellow, and 86 green), so the generated
+traffic-light plot contains an actual state trace.
+
+In Event1, adaptive following stayed continuous: measured speed remained at or above
+2.536 m/s and the decision target at or above 2.949 m/s, with no near-zero samples. Event2
+reached a minimum measured obstacle distance of 7.535 m without collision, emergency
+braking, or merge slowdown.
 
 ## Validate a live run
 

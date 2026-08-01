@@ -10,6 +10,8 @@ This Team 20 package defines the custom ROS 2 message used by the trajectory pla
 - dynamically feasible target speed in `m/s`; and
 - monotonic `time_from_start`.
 
-The trajectory generator publishes this message on `/planning/trajectory`. The existing
-`/planning/path` and `/planning/target_speed` topics remain available for visualization
-and compatibility with the decision and controller packages.
+The trajectory generator publishes this message on `/planning/trajectory`, and the
+production controller consumes it directly for both Pure Pursuit geometry and the speed
+stored at the selected lookahead point. `/planning/path` remains available to the
+obstacle corridor and RViz; `/planning/target_speed` remains the planning input to the
+decision state machine.

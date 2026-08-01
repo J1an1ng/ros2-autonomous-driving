@@ -1483,6 +1483,71 @@ def test_event1_following_holds_across_short_detection_dropout():
     assert released.target_speed == pytest.approx(14.0)
 
 
+def test_event1_dropout_retains_last_safe_command_while_ego_slows():
+    """A short vision gap must not ratchet the follow command to zero."""
+    machine = make_machine(
+        obstacle_timeout=1.0,
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_target_acceleration=1.0,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+        smooth_following_release_margin=2.0,
+        smooth_following_dropout_hold_time=1.3,
+    )
+    machine.update_route('normal', 20)
+    machine.update_planning_speed(4.5, 0.0)
+    machine.update_vehicle_speed(1.2, 0.0)
+    machine.update_obstacle_distances(14.4, math.inf, 0.0)
+    initial = machine.evaluate(0.0)
+
+    held = initial
+    for now, speed in ((0.2, 0.8), (0.4, 0.4), (0.6, 0.1)):
+        machine.update_planning_speed(4.5, now)
+        machine.update_vehicle_speed(speed, now)
+        machine.update_obstacle_distances(math.inf, math.inf, now)
+        held = machine.evaluate(now)
+
+    assert initial.state == DecisionState.FOLLOWING_VEHICLE
+    assert held.state == DecisionState.FOLLOWING_VEHICLE
+    assert held.reason == 'adaptive_vehicle_following_hold'
+    assert held.target_speed == pytest.approx(initial.target_speed)
+    assert not held.stop_required
+
+
+def test_event1_safe_surplus_gap_recovers_from_low_speed():
+    """A far, stable lead must allow gradual recovery instead of zero lock."""
+    machine = make_machine(
+        stopped_speed_threshold=0.15,
+        emergency_standstill_distance=6.0,
+        emergency_trigger_max_distance=10.0,
+        following_time_headway=2.2,
+        following_distance_gain=0.1,
+        following_range_rate_deadband=0.2,
+        following_target_acceleration=1.0,
+        smooth_following_waypoint_ids=[17, 18, 19, 20],
+        smooth_following_target_deceleration=2.0,
+    )
+    machine.update_route('normal', 20)
+    machine.update_planning_speed(4.5, 0.0)
+    machine.update_vehicle_speed(0.1, 0.0)
+    machine.update_obstacle_distances(19.5, math.inf, 0.0)
+    initial = machine.evaluate(0.0)
+
+    machine.update_planning_speed(4.5, 0.2)
+    machine.update_vehicle_speed(0.1, 0.2)
+    machine.update_obstacle_distances(19.5, math.inf, 0.2)
+    recovering = machine.evaluate(0.2)
+
+    assert initial.target_speed == pytest.approx(0.1)
+    assert recovering.state == DecisionState.FOLLOWING_VEHICLE
+    assert recovering.target_speed > initial.target_speed
+    assert recovering.target_speed == pytest.approx(0.3)
+    assert not recovering.stop_required
+
+
 def test_event1_following_release_margin_prevents_twenty_metre_chatter():
     machine = make_machine(
         emergency_standstill_distance=6.0,

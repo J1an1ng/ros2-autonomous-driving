@@ -59,6 +59,32 @@ Start the ROS bridge and Unity simulation window:
 ros2 launch simulation simulation.launch.py
 ```
 
+### WSL2 GPU rendering
+
+On WSL2, the package launcher selects Mesa's D3D12 Gallium driver and the NVIDIA
+adapter for Unity. This prevents Mesa from silently falling back to the CPU-based
+`llvmpipe` renderer. The setting applies only to the Unity child process; it does
+not modify the global shell or native-Ubuntu behavior.
+
+Verify the active OpenGL renderer before launching:
+
+```bash
+GALLIUM_DRIVER=d3d12 \
+MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA \
+glxinfo -B | grep -E 'Device:|Accelerated:|OpenGL renderer'
+```
+
+For an RTX 4060, the output should contain `D3D12 (NVIDIA GeForce RTX 4060...)`
+and `Accelerated: yes`; `llvmpipe` means software rendering. Unity records its
+actual choice in:
+
+```text
+~/.config/unity3d/DefaultCompany/Autonomous Driving Sim/Player.log
+```
+
+Advanced users can override `GALLIUM_DRIVER` or
+`MESA_D3D12_DEFAULT_ADAPTER_NAME` before launching.
+
 This also publishes the static vehicle sensor transforms:
 
 ```text

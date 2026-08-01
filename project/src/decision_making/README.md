@@ -14,8 +14,9 @@ brake commands. It accepts the speed proposed by trajectory planning and publish
 speed that the controller is allowed to follow.
 
 ```text
-route_manager --------> trajectory_generator ---- /planning/path ------------> controller
+route_manager --------> trajectory_generator ---- /planning/trajectory ------> controller
        |                         |
+       |                         +---- /planning/path -----> obstacle_monitor
        |                         +---- /planning/target_speed ---+
        |                                                        |
        +---- route state and waypoint ID -----------------------+--> decision_making
@@ -118,7 +119,7 @@ and brake remains the controller's responsibility.
 | `RELEASED` | Resume planning speed with a one-time passage authorization. Light loss or a later phase change cannot stop the vehicle inside the intersection. | Leaving the controlled route state/waypoint clears the authorization and returns to `CRUISE`. |
 | `SLOWING_FOR_MERGE` | Limit the planning speed to `merge_target_speed` while a point is detected in the right-front ROI. A latch older than `merge_stale_timeout` commands a full stop. | Release only after a fresh obstacle observation exceeds the trigger distance plus its hysteresis margin. |
 | `EMERGENCY_BRAKING` | Publish zero and request an immediate stop. | Complete a full ego stop, satisfy the minimum hold time, and release only after the front distance exceeds the static following gap plus its hysteresis margin. |
-| `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Hold current speed inside the desired-gap deadband; Event1 also retains the last safe command across a short sensor gap. | Return to planning speed after the lead vehicle exceeds the release margin or the Event1 dropout hold expires. |
+| `FOLLOWING_VEHICLE` | Continuously adjust target speed from gap error and filtered range rate. Avoid acceleration into a closing or insufficient gap; a stable gap with explicit surplus clearance may recover gradually. Event1 retains the last safe command exactly across a short sensor gap. | Return to planning speed after the lead vehicle exceeds the release margin or the Event1 dropout hold expires. |
 
 The vehicle-related states are output behaviors. The underlying traffic-light state
 remains active, so following or emergency control cannot clear a red-light stop latch.
@@ -384,13 +385,10 @@ ros2 topic pub -r 10 /decision/front_obstacle_distance std_msgs/msg/Float32 \
 ```
 
 The retained production Unity configuration uses spawn 0 with both NPC events enabled.
-Run the complete route with:
+Run the complete route and regenerate the evidence report with:
 
 ```bash
-ros2 launch system_bringup full_system.launch.py \
-  route_initial_waypoint_index:=0 \
-  enable_motion:=true \
-  enable_visualization:=false
+python3 tools/run_full_mission.py
 ```
 
 ## Current limitations and future work
@@ -408,9 +406,11 @@ ros2 launch system_bringup full_system.launch.py \
 - Global vehicle following requires a fresh vision/point-cloud range match outside the
   validated Event2 direct-control window; a vehicle temporarily hidden from either sensor
   can therefore be released after the configured timeout.
-- The full-system-v1.9.0 YOLO RGB-D production path completed a fresh Unity closed-loop
-  run from waypoint 0 through 63 with traffic-light, following, and merge behavior. Model,
-  camera, route, or threshold changes still require a new regression.
+- Full-system acceptance requires adaptive following in both vehicle events, continuous
+  Event1 following without an avoidable stop-and-restart cycle, and safe Event2 recovery
+  through the documented following/emergency priority. Measured speeds and obstacle
+  distances are run-dependent and belong in `mission_results`, not in this behavioral
+  contract. Model, camera, route, or threshold changes require a new regression.
 
 When decision behaviors are tuned or extended, update the topic tables, priority rules,
 parameters, tests and limitations in this README.
