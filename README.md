@@ -35,7 +35,7 @@ not listed as Team 20 contributions.
 
 ## Quick start
 
-After checking out `release/full-system-v1.8.0` and installing ROS 2 Jazzy:
+After checking out `release/full-system-v1.9.0` and installing ROS 2 Jazzy:
 
 ```bash
 cd project

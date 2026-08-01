@@ -4,6 +4,29 @@ This is the integration gate for the non-segmentation-camera solution. The compl
 system must first be inspected with motion disabled, then validated by event, and only
 then driven through the full route.
 
+## Current release status: full-system-v1.9.0
+
+The v1.9.0 release completed the production two-event full-route run required within the
+final gate on 2026-08-01. A separate no-event run and a persisted rosbag/config artifact
+set remain part of the complete Gate 4 evidence package. The recorded release checks and
+full-run observations are:
+
+- the shared code-quality gate passed for 51 Python files and the configured C++ sources;
+- all eight ROS 2 packages built successfully;
+- the complete workspace suite passed with 179 tests, 0 errors, 0 failures, and one
+  expected skip;
+- Unity and the production ROS graph ran from waypoint 0 through waypoint 63 and reported
+  `Route completed at waypoint 63`;
+- adaptive lead-vehicle following, the right-side merge slowdown, and the four controlled
+  traffic-light scenarios were exercised;
+- no collision, route departure, runtime error, process death, or duplicate production
+  publisher was observed;
+- Unity and every ROS process exited cleanly after the completed route.
+
+The validation used the production RGB-D YOLO pipeline with the semantic camera disabled.
+RViz was disabled for the final benchmark to reduce rendering overhead; this did not
+disable Unity, perception, mapping, planning, decision making, or control.
+
 ## System contract
 
 ```text
@@ -34,6 +57,7 @@ configuration entry (`enabled: false`). No production node may subscribe to it.
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+bash tools/check_code_quality.sh
 colcon build --symlink-install
 colcon test
 colcon test-result --verbose
@@ -133,6 +157,33 @@ Run both no-event and two-event configurations from waypoint 0 through 63. Save 
 simulation config, perception/decision configs, exact ONNX model checksum, test date and
 rosbag with the result. Results produced by the former camera pipeline are historical
 decision/controller evidence, not validation of this YOLO perception version.
+
+### v1.9.0 benchmark record
+
+The 2026-08-01 production run used:
+
+```bash
+ros2 launch system_bringup full_system.launch.py \
+  route_initial_waypoint_index:=0 \
+  enable_motion:=true \
+  enable_visualization:=false
+```
+
+Observed results:
+
+- Event1 entered `FOLLOWING_VEHICLE` and returned to `CRUISE` after the lead-vehicle
+  constraint cleared.
+- The merge section entered `SLOWING_FOR_MERGE` around waypoints 47--48 and recovered
+  without a collision.
+- The controlled signals at waypoints 25, 32, 52, and 59 entered the applicable stopping
+  state and released on confirmed green. The red phases at waypoints 32 and 59 reached
+  `WAITING_FOR_GREEN` at effectively zero speed before release.
+- The route manager advanced through all 64 waypoints and published route completion at
+  waypoint 63; the decision and controller layers then maintained a safe stop.
+- Startup-only missing-TF/path/velocity warnings and intermittent stale-depth diagnostics
+  were handled by safe-stop behavior and recovered when fresh data arrived.
+- Log inspection found no `ERROR`, `FATAL`, process death, segmentation fault, traceback,
+  collision, or route departure.
 
 ## Tuning order
 

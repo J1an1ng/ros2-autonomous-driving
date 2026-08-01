@@ -106,7 +106,7 @@ repository access, clone the release directly:
 
 ```bash
 git lfs install
-git clone --branch release/full-system-v1.8.0 --single-branch \
+git clone --branch release/full-system-v1.9.0 --single-branch \
   git@gitlab.lrz.de:00000000014c3605/i2ros-project-ss26-team20.git \
   introduction-to-ros-2026
 cd introduction-to-ros-2026
@@ -119,8 +119,8 @@ From the repository root:
 
 ```bash
 git fetch origin
-git switch release/full-system-v1.8.0
-git pull --ff-only origin release/full-system-v1.8.0
+git switch release/full-system-v1.9.0
+git pull --ff-only origin release/full-system-v1.9.0
 git lfs pull
 ```
 

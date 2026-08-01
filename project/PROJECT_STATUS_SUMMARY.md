@@ -1,6 +1,6 @@
-# 项目状态：YOLO 感知、Event1 跟车与路口制动优化
+# 项目状态：full-system-v1.9.0
 
-更新日期：2026-07-29
+更新日期：2026-08-01
 
 > 本文记录本项目的 YOLO 感知更新，以及与其直接相关的 Event1 前车检测/跟车、
 > 红绿灯路口速度规划和停车制动更新。规划、决策与控制的完整代码归属仍不在本文
@@ -31,11 +31,11 @@
   waypoint 25 的局部路线到达半径保证 2 m 停车线的距离参考不会提前切换；
 - 在检测、模型、TF 或深度数据异常时发布保守的安全状态。
 
-此前动态联调中，车辆完成了 waypoint 0--63 全路线并进入 `route_complete`。
-waypoint 25、52、59 的本车道交通灯均在同一次完整路线中通过。waypoint 25
-真实绿灯的补充绿色证据约为 90--103，高于严格放行阈值 30。2026-07-29 新增的
-Event1 连续跟车、路口平滑减速和停车线调整已通过相关自动化测试；仍应再执行一次
-完整路线动态复验并保存日志。
+2026-08-01 已使用当前生产配置完成 waypoint 0--63 全路线闭环复验并进入
+`route_complete`。Event1 自适应跟车、waypoint 47--48 右侧汇入减速以及 waypoint
+25、32、52、59 四个受控交通灯的停车/绿灯放行均在同一次运行中触发。日志未发现
+碰撞、驶离路线、节点崩溃、`ERROR` 或 `FATAL`；路线完成后 Unity 和全部 ROS 节点
+正常退出。
 
 ## 2. 感知与纵向行为链路
 
@@ -131,6 +131,22 @@ remaining_distance = waypoint_distance - active_stop_distance
 
 绿灯确认后解除交通灯制动限制，后续弯道 waypoint 自身的速度限制仍然有效。
 
+### 2.6 v1.9.0 代码质量与文档统一
+
+本版本在不改变 ROS topic、service、message 和 launch 接口的前提下统一了 Team 20
+代码风格：
+
+- 修复 `route_manager` 的 flake8 和 PEP 257 问题，并补充异常路线输入测试；
+- 使用根目录 `.editorconfig` 和 `project/CODE_STYLE.md` 统一 Python、C++、launch、
+  测试和工具代码的可读性规则；
+- 新增 `project/tools/check_code_quality.sh`，集中执行 Python flake8/PEP 257 与 C++
+  cpplint/uncrustify；
+- 将项目自带的 `dummy_controller` 保持为 v1.8.0 基线，不归入 Team 20 风格修改；
+- 对 vendored ONNX Runtime、JSON 头文件和其他第三方内容设置编辑器保护，避免保存时
+  产生无关格式变化；
+- 完善总 README 和 `src/README.md`，记录四位成员分工、项目功能、依赖安装、
+  clone/pull、构建、测试、完整运行和故障排查步骤。
+
 ## 3. 关键文件
 
 ```text
@@ -148,6 +164,13 @@ tools/train_yolo_sim.py
 datasets/team20_yolo.yaml
 datasets/team20_yolo/README.md
 requirements-yolo-training.txt
+
+# v1.9.0 代码质量与项目级文档
+../.editorconfig
+CODE_STYLE.md
+tools/check_code_quality.sh
+../README.md
+src/README.md
 
 # Event1、路口速度与制动
 src/decision_making/decision_making/traffic_light_state_machine.py
@@ -286,7 +309,37 @@ traffic_light_state = UNKNOWN
 
 ## 6. 验证状态
 
-2026-07-29 对当前源码执行了路线管理与红绿灯/车辆决策的非 linter 自动化测试：
+### 6.1 full-system-v1.9.0 当前验证
+
+2026-08-01 对当前源码执行了完整发布检查：
+
+| 验证项 | 结果 |
+| --- | --- |
+| 项目代码质量门禁 | 51 个 Python 文件及配置范围内 C++ 全部通过；继承的 simulator bridge 使用文档化豁免 |
+| ROS 2 构建 | 8 个 workspace package 全部成功 |
+| 完整 `colcon test` | 179 tests，0 errors，0 failures，1 expected skip |
+| Unity 闭环路线 | waypoint 0--63 完成，进入 `route_complete` |
+| 运行时稳定性 | 无 `ERROR`、`FATAL`、进程异常退出、碰撞或驶离路线 |
+| 关闭流程 | Unity 和全部 ROS 节点 clean exit |
+
+完整运行还确认：
+
+- Event1 在 waypoint 17 附近进入 `FOLLOWING_VEHICLE`，约束解除后恢复 `CRUISE`；
+- waypoint 47--48 汇入区域进入 `SLOWING_FOR_MERGE` 并安全恢复；
+- waypoint 25、32、52、59 的交通灯逻辑均停车/放行，其中 waypoint 32、59 在
+  红灯阶段停车等待，确认绿灯后释放；
+- `/car_command` 只有生产 `controller_node` 一个 publisher；
+- `/perception/traffic_light_state` 只有生产 YOLO RGB-D 节点一个 publisher；
+- RGB、Depth、TF、YOLO、占据地图、路线、轨迹、决策与控制链路持续工作，未使用
+  semantic camera。
+
+启动初期可能出现缺少 TF/path/velocity 的告警，运行中也可能出现短时 stale-depth
+诊断。控制器会在输入不完整时安全停车，并在新数据到达后恢复；本次运行中这些告警
+均未导致路线中断。
+
+### 6.2 full-system-v1.8.0 历史静态验证
+
+2026-07-29 对当时源码执行了路线管理与红绿灯/车辆决策的非 linter 自动化测试：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -309,7 +362,7 @@ pytest -q -m 'not linter' \
 上述结果验证了状态转换、速度计算、路线配置和 waypoint 推进逻辑，但不能代替
 Unity 中的闭环制动距离测试。
 
-发布前又通过 `colcon` 重新构建并测试了 5 个受影响的包：
+v1.8.0 发布前又通过 `colcon` 重新构建并测试了 5 个受影响的包：
 
 | 当前测试组 | 用例数 | 结果 |
 | --- | ---: | --- |
@@ -347,20 +400,25 @@ Unity 中的闭环制动距离测试。
 route-gate、稳定器和真实模型运行测试源码仍未恢复，因此当前不能直接重跑表中的
 完整 24 项历史测试。
 
-此前版本的动态结果：
+### 6.3 动态验证记录
+
+2026-08-01 当前 v1.9.0 动态结果：
+
+- waypoint 0--63 完整路线通过并到达 `route_complete`；
+- Event1 自适应跟车和 waypoint 47--48 汇入减速正常触发并恢复；
+- waypoint 25、32、52、59 的交通灯停车/绿灯释放均正常；
+- 路线完成后保持安全停车，所有进程正常关闭；
+- 日志关键字扫描未发现错误、崩溃、碰撞或进程死亡。
+
+2026-07-27 历史动态结果：
 
 - waypoint 0--63 完整路线通过并到达 `route_complete`；
 - waypoint 25 修复后真实绿灯补充分数约为 90--103，严格阈值为 30；
 - waypoint 25、52、59 均选择了画面中控制本车道的信号灯并通过；
 - 最终测试结束后停止了临时单独启动的 YOLO 节点，没有遗留重复进程。
 
-2026-07-29 的 Event1 连续跟车、四路口平滑减速和最新停车线配置是在上述完整路线
-之后完成的。下一次动态测试应重点确认：
-
-- Event1 首次检测前车时不产生急刹，短时漏检时不恢复到 14 m/s；
-- waypoint 25 在约 2.0 m 处停车，且不会提前切换到 waypoint 26；
-- waypoint 32、52、59 在进入 `stop_zone` 后不再立即跳到固定 3 m/s；
-- 红灯停车、绿灯释放和后续弯道限速均能连续衔接。
+2026-07-29 后新增的 Event1 连续跟车、四路口平滑减速和停车线配置，已由上述
+2026-08-01 v1.9.0 完整闭环路线复验覆盖。
 
 曾发现两个同名 YOLO 节点同时发布灯色，造成 RED/GREEN 结果互相覆盖。运行时必须
 保证 `/perception/traffic_light_state` 和其他 perception 输出只有一个 YOLO
@@ -370,9 +428,11 @@ publisher。该问题属于启动/进程重复，不是模型分类问题。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select \
-  perception decision_making route_manager \
-  --symlink-install
+bash tools/check_code_quality.sh
+colcon build --symlink-install
+source install/setup.bash
+colcon test
+colcon test-result --verbose
 
 # 首次启动先禁止运动，检查框、距离和灯色
 ros2 launch system_bringup full_system.launch.py \
@@ -398,10 +458,8 @@ ros2 launch system_bringup full_system.launch.py \
   或标签。
 - 交通灯很小，因此依赖低 YOLO 阈值、路线门控和分路口 ROI。全路线已经跑通，
   但换相机参数、分辨率、路线或地图后必须重新标定 ROI。
-- 目前的完整路线结果来自现场联调记录。为了让最终报告可复现，建议保留一次最终
-  版本 rosbag、完整日志、Event1 跟车曲线、四个路口的目标速度/停车距离、debug
-  截图和模型校验值。
-- 最新停车线和减速包络已经通过自动化测试，但尚未在本文中记录一次修改后的
-  waypoint 0--63 完整闭环路线；发布前必须补做该测试。
+- v1.9.0 已完成一次 waypoint 0--63 最终闭环运行。为了让最终报告可由第三方复现，
+  仍建议将后续正式演示的 rosbag、完整日志、Event1 跟车曲线、四个路口的目标速度/
+  停车距离、debug 截图和模型校验值保存到持久化结果目录。
 - 最终文档应分别写清楚“Team 20 的 YOLO 集成贡献”和“复用的 YOLOv8n/COCO/
   ONNX Runtime/OpenCV/ROS 2”，不要笼统写成“YOLO was developed by us”。

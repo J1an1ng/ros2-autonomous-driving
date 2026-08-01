@@ -1,5 +1,51 @@
 # Release notes
 
+## full-system-v1.9.0
+
+Code-quality, documentation, and full closed-loop validation release built on
+`full-system-v1.8.0`.
+
+Improvements:
+
+- Resolves the `route_manager` flake8 and PEP 257 findings, simplifies the
+  route-manager node structure, reformats the waypoint recorder, strengthens
+  route-map validation, and adds regression coverage for malformed route data.
+- Introduces a shared repository style through `.editorconfig`,
+  `project/CODE_STYLE.md`, and `project/tools/check_code_quality.sh`. The gate
+  checks Team 20 Python and C++ plus the maintained simulator bridge while
+  preserving documented simulator exemptions.
+- Applies consistent naming, imports, formatting, and documentation across
+  perception, route management, trajectory generation, decision making,
+  controller, simulation launch code, system bringup, tests, and project tools.
+  Cleans package metadata in the affected Team 20 manifests and setup files
+  without changing their ROS interfaces.
+- Keeps the project-supplied `dummy_controller` at its v1.8.0 baseline and out
+  of Team 20 style ownership. Editor rules also protect vendored third-party
+  sources from automatic formatting.
+- Expands the root and workspace READMEs with exact team contributions,
+  supported functions, dependency setup, release-branch clone/pull commands,
+  build and test instructions, safe startup, full-route launch, live
+  validation, and troubleshooting.
+
+Validation:
+
+- Passed the repository code-quality gate across 51 Python files and the
+  configured C++ sources with no findings.
+- Built all eight ROS 2 workspace packages successfully.
+- Passed the complete workspace suite: 179 tests, 0 errors, 0 failures, and
+  one expected skip.
+- Completed a production Unity run on 2026-08-01 from waypoint 0 through 63
+  and logged `Route completed at waypoint 63`.
+- Observed adaptive following for the lead-vehicle event, right-side merge
+  slowdown around waypoints 47--48, and traffic-light stop/release behavior at
+  the four controlled signals at waypoints 25, 32, 52, and 59.
+- Confirmed that production perception used RGB, depth, TF, and YOLO rather
+  than the disabled semantic camera; `/car_command` and the traffic-light
+  state each had one production publisher.
+- Found no runtime `ERROR`, `FATAL`, process death, segmentation fault,
+  traceback, collision, or route departure in the run logs. Unity and all ROS
+  processes exited cleanly after route completion.
+
 ## full-system-v1.8.0
 
 Event1 detection, speed-profile, and braking update built on
