@@ -22,18 +22,30 @@ indent_size = 2
 
 # Do not let editor defaults rewrite bundled/generated third-party content.
 [project/src/perception/third_party/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
 indent_style = unset
 indent_size = unset
+max_line_length = unset
 trim_trailing_whitespace = unset
 
 [project/src/simulation/src/json_nlohmann/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
 indent_style = unset
 indent_size = unset
+max_line_length = unset
 trim_trailing_whitespace = unset
 
 [project/src/simulation/unity_sim/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
 indent_style = unset
 indent_size = unset
+max_line_length = unset
 trim_trailing_whitespace = unset
 
 [Makefile]
