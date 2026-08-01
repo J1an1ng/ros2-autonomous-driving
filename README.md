@@ -49,6 +49,11 @@ The full component-by-component ownership and design rationale are documented in
 
 ## Documentation
 
+- [`project/PROJECT_STATUS_SUMMARY.md`](project/PROJECT_STATUS_SUMMARY.md): English
+  written summary of the full architecture, model and design choices, validation status,
+  team contributions, and own/reused code boundaries.
+- [`project/项目现状.md`](project/项目现状.md): Chinese version of the same project-status
+  summary.
 - [`project/src/README.md`](project/src/README.md): supported functions, dependencies,
   build and test commands, full-system startup, validation, and troubleshooting.
 - [`project/INTEGRATION_README.md`](project/INTEGRATION_README.md): staged integration and
