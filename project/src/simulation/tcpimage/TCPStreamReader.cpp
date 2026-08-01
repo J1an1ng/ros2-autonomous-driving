@@ -1,17 +1,20 @@
 #include "TCPStreamReader.h"
 
-#include <algorithm>
-#include <cerrno>
-#include <cstring>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-namespace {
+#include <algorithm>
+#include <cerrno>
+#include <cstring>
+
+namespace
+{
 constexpr size_t CHUNK_SIZE = 4096;
 
-void close_fd(int &fd) {
+void close_fd(int & fd)
+{
   if (fd >= 0) {
     ::close(fd);
     fd = -1;
@@ -19,8 +22,9 @@ void close_fd(int &fd) {
 }
 }  // namespace
 
-TCPStreamReader::TCPStreamReader(const std::string &host, const std::string &port)
-    : host_(host), port_(port) {
+TCPStreamReader::TCPStreamReader(const std::string & host, const std::string & port)
+: host_(host), port_(port)
+{
   addrinfo hints{};
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -52,13 +56,15 @@ TCPStreamReader::TCPStreamReader(const std::string &host, const std::string &por
   ::freeaddrinfo(result);
 
   if (server_fd_ < 0) {
-    throw TCPStreamReaderException("failed to bind/listen on " + host_ + ":" + port_ + ": " + std::strerror(errno));
+    throw TCPStreamReaderException("failed to bind/listen on " + host_ + ":" + port_ + ": " +
+      std::strerror(errno));
   }
 }
 
-TCPStreamReader::~TCPStreamReader() { Shutdown(); }
+TCPStreamReader::~TCPStreamReader() {Shutdown();}
 
-void TCPStreamReader::WaitConnect() {
+void TCPStreamReader::WaitConnect()
+{
   DisconnectClient();
   sockaddr_storage peer_addr{};
   socklen_t peer_len = sizeof(peer_addr);
@@ -69,19 +75,22 @@ void TCPStreamReader::WaitConnect() {
   good_ = true;
 }
 
-void TCPStreamReader::DisconnectClient() {
+void TCPStreamReader::DisconnectClient()
+{
   good_ = false;
   close_fd(client_fd_);
 }
 
-bool TCPStreamReader::Good() const { return good_; }
+bool TCPStreamReader::Good() const {return good_;}
 
-void TCPStreamReader::Shutdown() {
+void TCPStreamReader::Shutdown()
+{
   DisconnectClient();
   close_fd(server_fd_);
 }
 
-void TCPStreamReader::ReadExact(void *buffer, size_t num_bytes) {
+void TCPStreamReader::ReadExact(void *buffer, size_t num_bytes)
+{
   auto *dst = static_cast<uint8_t *>(buffer);
   size_t total = 0;
   while (total < num_bytes) {
@@ -101,31 +110,36 @@ void TCPStreamReader::ReadExact(void *buffer, size_t num_bytes) {
   }
 }
 
-int32_t TCPStreamReader::ReadInt() {
+int32_t TCPStreamReader::ReadInt()
+{
   int32_t value{};
   ReadExact(&value, sizeof(value));
   return value;
 }
 
-uint32_t TCPStreamReader::ReadUInt() {
+uint32_t TCPStreamReader::ReadUInt()
+{
   uint32_t value{};
   ReadExact(&value, sizeof(value));
   return value;
 }
 
-uint64_t TCPStreamReader::ReadUInt64() {
+uint64_t TCPStreamReader::ReadUInt64()
+{
   uint64_t value{};
   ReadExact(&value, sizeof(value));
   return value;
 }
 
-float TCPStreamReader::ReadFloat() {
+float TCPStreamReader::ReadFloat()
+{
   float value{};
   ReadExact(&value, sizeof(value));
   return value;
 }
 
-std::string TCPStreamReader::ReadString() {
+std::string TCPStreamReader::ReadString()
+{
   std::string value;
   while (true) {
     char c = 0;
@@ -138,7 +152,8 @@ std::string TCPStreamReader::ReadString() {
   return value;
 }
 
-std::shared_ptr<uint8_t> TCPStreamReader::ReadBytes(size_t num_bytes) {
+std::shared_ptr<uint8_t> TCPStreamReader::ReadBytes(size_t num_bytes)
+{
   auto bytes = std::shared_ptr<uint8_t>(new uint8_t[num_bytes], std::default_delete<uint8_t[]>());
   size_t remaining = num_bytes;
   size_t offset = 0;

@@ -2,7 +2,9 @@
 
 This document defines the style for Team 20 maintained code under `project/src`.
 Generated files, bundled Unity assets, `simulation/src/json_nlohmann`, and
-`perception/third_party` are third-party code and are not reformatted.
+`perception/third_party` are third-party code and are not reformatted. The inherited
+simulator bridge is formatted with the project but is exempt from cpplint's copyright and
+include-subdirectory checks until its upstream licence and public-header layout are documented.
 
 ## Architecture
 
@@ -22,7 +24,8 @@ Generated files, bundled Unity assets, `simulation/src/json_nlohmann`, and
 - Follow the ROS 2 Jazzy `ament_flake8` and `ament_pep257` profiles.
 - Use four spaces, a maximum line length of 99, single quotes for strings, and
   triple double quotes for docstrings.
-- Order imports as standard library, third-party/ROS, then package-local imports.
+- Use the deterministic import ordering enforced by `ament_flake8`; keep the standard
+  library group separate from installed ROS and package imports.
 - Use `snake_case` for modules, functions, variables, parameters, and topics;
   `PascalCase` for classes; and `UPPER_CASE` for constants.
 - Add docstrings where they explain a public interface, invariant, or non-obvious

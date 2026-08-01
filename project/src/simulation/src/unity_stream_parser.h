@@ -4,7 +4,8 @@
 #include <string>
 #include "TCPStreamReader.h"
 
-enum UnityMessageType : uint32_t {
+enum UnityMessageType : uint32_t
+{
   UNITY_STATE = 0,
   UNITY_CAMERA = 1,
   UNITY_IMU = 2,
@@ -14,7 +15,8 @@ enum UnityMessageType : uint32_t {
   MESSAGE_TYPE_COUNT = 6
 };
 
-struct UnityHeader {
+struct UnityHeader
+{
   UnityMessageType type;
   double timestamp;
   std::string name;
@@ -23,7 +25,8 @@ struct UnityHeader {
 class UnityStreamParser {
 public:
   virtual ~UnityStreamParser() = default;
-  virtual bool ParseMessage(const UnityHeader &header,
-                            TCPStreamReader &stream_reader,
-                            double time_offset = 0.0) = 0;
+  virtual bool ParseMessage(
+    const UnityHeader & header,
+    TCPStreamReader & stream_reader,
+    double time_offset = 0.0) = 0;
 };

@@ -40,12 +40,12 @@ def show_image_live(image_bytes, width, height, name):
 def parse_rgbcamera(conn, name, timestamp):
     is_mono = struct.unpack('<i', read_exact(conn, 4))[0]
     fov = struct.unpack('<f', read_exact(conn, 4))[0]
-    far = struct.unpack('<f', read_exact(conn, 4))[0]
+    _ = struct.unpack('<f', read_exact(conn, 4))[0]
     width = struct.unpack('<i', read_exact(conn, 4))[0]
     height = struct.unpack('<i', read_exact(conn, 4))[0]
     print(
         f'[RGB] {name} @ {timestamp:.3f}s | {width}x{height} | '
-        f'fov: {fov} | far: {far} | mono: {is_mono}'
+        f'fov: {fov} | mono: {is_mono}'
     )
 
     image_length = width * height * 3
@@ -69,7 +69,7 @@ def parse_imu(conn, name, timestamp):
         f'z={acceleration[2]:.3f}'
     )
     print(
-        '  Angular velocity [rad/s]: '
+        '  Angular vel [rad/s]: '
         f'x={gyro[0]:.3f}, y={gyro[1]:.3f}, z={gyro[2]:.3f}'
     )
 
@@ -99,7 +99,7 @@ def visualize_depth_grayscale_fixed(depth, max_range=65.535):
 
 
 def parse_depthcamera(conn, name, timestamp):
-    is_mono = struct.unpack('<i', read_exact(conn, 4))[0]
+    _ = struct.unpack('<i', read_exact(conn, 4))[0]
     fov = struct.unpack('<f', read_exact(conn, 4))[0]
     far = struct.unpack('<f', read_exact(conn, 4))[0]
     width = struct.unpack('<i', read_exact(conn, 4))[0]
@@ -107,7 +107,7 @@ def parse_depthcamera(conn, name, timestamp):
 
     print(
         f'[DEPTH RGB] {name} @ {timestamp:.3f}s | {width}x{height} | '
-        f'fov: {fov} | far: {far} | mono: {is_mono}'
+        f'fov: {fov} | far: {far}'
     )
 
     image_length = width * height * 3
@@ -141,11 +141,11 @@ def parse_truestate(
         f'{rotation[2]:.3f}, {rotation[3]:.3f})'
     )
     print(
-        f'  Linear velocity: ({velocity[0]:.2f}, {velocity[1]:.2f}, '
+        f'  Linear Velocity: ({velocity[0]:.2f}, {velocity[1]:.2f}, '
         f'{velocity[2]:.2f})'
     )
     print(
-        '  Angular velocity: '
+        '  Angular Velocity: '
         f'({angular_velocity[0]:.2f}, {angular_velocity[1]:.2f}, '
         f'{angular_velocity[2]:.2f})'
     )

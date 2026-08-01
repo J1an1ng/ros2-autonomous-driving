@@ -1,5 +1,7 @@
 #pragma once
 
+#include <tf2_ros/transform_broadcaster.h>
+
 #include <cmath>
 #include <memory>
 #include <string>
@@ -9,19 +11,20 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/transform_broadcaster.h>
-
 #include "rgb_camera_parser.h"
 #include "unity_stream_parser.h"
 
-class TrueStateParser : public UnityStreamParser {
+class TrueStateParser: public UnityStreamParser {
 public:
   explicit TrueStateParser(rclcpp::Node *node)
-      : node_(node), tf_broadcaster_(std::make_unique<tf2_ros::TransformBroadcaster>(*node)) {}
+  : node_(node), tf_broadcaster_(std::make_unique < tf2_ros::TransformBroadcaster > (*node)) {
+  }
 
-  bool ParseMessage(const UnityHeader &header,
-                    TCPStreamReader &stream_reader,
-                    double time_offset) override {
+  bool ParseMessage(
+    const UnityHeader & header,
+    TCPStreamReader & stream_reader,
+    double time_offset) override
+  {
     const float px = stream_reader.ReadFloat();
     const float py = stream_reader.ReadFloat();
     const float pz = stream_reader.ReadFloat();
@@ -43,13 +46,13 @@ public:
     // ROS stack and the dynamic TF contract use the INS frame.  Keep the wire
     // protocol name internal and expose one canonical ROS interface.
     const std::string topic_name =
-        header.name == "OurCar/CoM" ? "OurCar/INS" : header.name;
+      header.name == "OurCar/CoM" ? "OurCar/INS" : header.name;
 
     if (pose_publishers_.find(topic_name) == pose_publishers_.end()) {
-      pose_publishers_[topic_name] = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
-          topic_name + "/pose", rclcpp::QoS(10));
-      twist_publishers_[topic_name] = node_->create_publisher<geometry_msgs::msg::TwistStamped>(
-          topic_name + "/twist", rclcpp::QoS(10));
+      pose_publishers_[topic_name] = node_->create_publisher < geometry_msgs::msg::PoseStamped > (
+        topic_name + "/pose", rclcpp::QoS(10));
+      twist_publishers_[topic_name] = node_->create_publisher < geometry_msgs::msg::TwistStamped > (
+        topic_name + "/twist", rclcpp::QoS(10));
       RCLCPP_INFO(
           node_->get_logger(), "Publishing true state '%s' as '%s'",
           header.name.c_str(), topic_name.c_str());
@@ -97,9 +100,11 @@ public:
   }
 
 private:
-  rclcpp::Node *node_;
-  std::unordered_map<std::string, rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr> pose_publishers_;
-  std::unordered_map<std::string, rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr> twist_publishers_;
-  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  double last_time_stamp_{0.0};
+  rclcpp::Node * node_;
+  std::unordered_map < std::string,
+  rclcpp::Publisher < geometry_msgs::msg::PoseStamped > ::SharedPtr > pose_publishers_;
+  std::unordered_map < std::string,
+  rclcpp::Publisher < geometry_msgs::msg::TwistStamped > ::SharedPtr > twist_publishers_;
+  std::unique_ptr < tf2_ros::TransformBroadcaster > tf_broadcaster_;
+  double last_time_stamp_ {0.0};
 };

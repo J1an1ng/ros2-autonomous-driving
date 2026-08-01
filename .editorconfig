@@ -20,5 +20,21 @@ max_line_length = 100
 indent_style = space
 indent_size = 2
 
+# Do not let editor defaults rewrite bundled/generated third-party content.
+[project/src/perception/third_party/**]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset
+
+[project/src/simulation/src/json_nlohmann/**]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset
+
+[project/src/simulation/unity_sim/**]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset
+
 [Makefile]
 indent_style = tab

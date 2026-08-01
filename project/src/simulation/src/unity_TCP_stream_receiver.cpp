@@ -17,8 +17,10 @@
 
 using json = nlohmann::json;
 
-namespace {
-std::string default_config_path() {
+namespace
+{
+std::string default_config_path()
+{
   try {
     return ament_index_cpp::get_package_share_directory("simulation") +
            "/unity_sim/Build_Ubuntu/AD_Sim_Data/StreamingAssets/simulation_config.json";
@@ -27,37 +29,42 @@ std::string default_config_path() {
   }
 }
 
-double now_in_unity_tick_seconds(const rclcpp::Clock &clock) {
+double now_in_unity_tick_seconds(const rclcpp::Clock & clock)
+{
   return static_cast<double>(clock.now().nanoseconds()) * 1e-9;
 }
-}
+}  // namespace
 
 class UnityTCPStreamReceiver : public rclcpp::Node {
 public:
-  UnityTCPStreamReceiver() : Node("Unity_ROS_message_Rx") {
+  UnityTCPStreamReceiver()
+  : Node("Unity_ROS_message_Rx")
+  {
     declare_parameter<std::string>("bind_host", "0.0.0.0");
     declare_parameter<int>("port", 9998);
     declare_parameter<std::string>("config_file", default_config_path());
     LoadConfigParameters();
   }
 
-  void Run() {
+  void Run()
+  {
     const std::string bind_host = get_parameter("bind_host").as_string();
     const int port = get_parameter("port").as_int();
 
     std::unique_ptr<TCPStreamReader> stream_reader;
     try {
       stream_reader = std::make_unique<TCPStreamReader>(bind_host, std::to_string(port));
-    } catch (const TCPStreamReaderException &e) {
+    } catch (const TCPStreamReaderException & e) {
       RCLCPP_ERROR(get_logger(), "%s", e.what());
       return;
     }
 
     while (rclcpp::ok()) {
-      RCLCPP_INFO(get_logger(), "Waiting for Unity TCP connection on %s:%d", bind_host.c_str(), port);
+      RCLCPP_INFO(get_logger(), "Waiting for Unity TCP connection on %s:%d", bind_host.c_str(),
+        port);
       try {
         stream_reader->WaitConnect();
-      } catch (const TCPStreamReaderException &e) {
+      } catch (const TCPStreamReaderException & e) {
         if (rclcpp::ok()) {
           RCLCPP_ERROR(get_logger(), "%s", e.what());
         }
@@ -66,7 +73,7 @@ public:
       RCLCPP_INFO(get_logger(), "Got a Unity TCP connection");
 
       std::vector<std::shared_ptr<UnityStreamParser>> stream_parsers(
-          UnityMessageType::MESSAGE_TYPE_COUNT);
+        UnityMessageType::MESSAGE_TYPE_COUNT);
       stream_parsers[UnityMessageType::UNITY_STATE] = std::make_shared<TrueStateParser>(this);
       stream_parsers[UnityMessageType::UNITY_IMU] = std::make_shared<IMUParser>(this);
       stream_parsers[UnityMessageType::UNITY_CAMERA] = std::make_shared<RGBCameraParser>(this);
@@ -98,14 +105,16 @@ public:
           if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT && stream_parsers[header.type]) {
             stream_parsers[header.type]->ParseMessage(header, *stream_reader, time_offset);
           } else if (header.type < UnityMessageType::MESSAGE_TYPE_COUNT) {
-            RCLCPP_WARN(get_logger(), "Message type %u is known but not implemented in this bridge", static_cast<unsigned>(header.type));
+            RCLCPP_WARN(get_logger(), "Message type %u is known but not implemented in this bridge",
+              static_cast<unsigned>(header.type));
           } else {
-            RCLCPP_ERROR(get_logger(), "Received unknown Unity message type %u", static_cast<unsigned>(header.type));
+            RCLCPP_ERROR(get_logger(), "Received unknown Unity message type %u",
+              static_cast<unsigned>(header.type));
           }
-        } catch (const TCPStreamReaderException &e) {
+        } catch (const TCPStreamReaderException & e) {
           RCLCPP_WARN(get_logger(), "TCP stream ended: %s", e.what());
           break;
-        } catch (const std::exception &e) {
+        } catch (const std::exception & e) {
           RCLCPP_ERROR(get_logger(), "Parser error: %s", e.what());
           break;
         }
@@ -118,14 +127,16 @@ public:
   }
 
 private:
-  void LoadConfigParameters() {
+  void LoadConfigParameters()
+  {
     const std::string config_path = get_parameter("config_file").as_string();
     if (config_path.empty()) {
       return;
     }
     std::ifstream file(config_path);
     if (!file.is_open()) {
-      RCLCPP_WARN(get_logger(), "Config file not found at %s; using node parameters/defaults", config_path.c_str());
+      RCLCPP_WARN(get_logger(), "Config file not found at %s; using node parameters/defaults",
+        config_path.c_str());
       return;
     }
 
@@ -134,17 +145,20 @@ private:
       file >> config;
       if (config.contains("sensorConfig")) {
         if (config["sensorConfig"].contains("port")) {
-          set_parameter(rclcpp::Parameter("port", static_cast<int>(config["sensorConfig"]["port"])));
+          set_parameter(rclcpp::Parameter("port",
+            static_cast<int>(config["sensorConfig"]["port"])));
         }
         // Unity connects to ROS. For the ROS server, bind_host should usually stay 0.0.0.0.
       }
-    } catch (const std::exception &e) {
-      RCLCPP_WARN(get_logger(), "Could not parse config file %s: %s", config_path.c_str(), e.what());
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(get_logger(), "Could not parse config file %s: %s", config_path.c_str(),
+        e.what());
     }
   }
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   rclcpp::init(argc, argv);
   auto node = std::make_shared<UnityTCPStreamReceiver>();
   node->Run();

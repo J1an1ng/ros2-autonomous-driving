@@ -1,15 +1,16 @@
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
 #include <array>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <string>
 #include <stdexcept>
+#include <string>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <netdb.h>
 #include <rclcpp/rclcpp.hpp>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include "json_nlohmann/json.hpp"
 #include "simulation/msg/vehicle_control.hpp"
@@ -17,8 +18,10 @@
 using json = nlohmann::json;
 using VehicleControl = simulation::msg::VehicleControl;
 
-namespace {
-std::string default_config_path() {
+namespace
+{
+std::string default_config_path()
+{
   try {
     return ament_index_cpp::get_package_share_directory("simulation") +
            "/unity_sim/Build_Ubuntu/AD_Sim_Data/StreamingAssets/simulation_config.json";
@@ -29,7 +32,8 @@ std::string default_config_path() {
 
 class UDPClient {
 public:
-  UDPClient(const std::string &host, int port) {
+  UDPClient(const std::string & host, int port)
+  {
     addrinfo hints{};
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
@@ -56,13 +60,15 @@ public:
     }
   }
 
-  ~UDPClient() {
+  ~UDPClient()
+  {
     if (fd_ >= 0) {
       ::close(fd_);
     }
   }
 
-  void send_command(const std::array<float, 4> &command) {
+  void send_command(const std::array<float, 4> & command)
+  {
     ::sendto(fd_, command.data(), sizeof(float) * command.size(), 0,
              reinterpret_cast<sockaddr *>(&addr_), addr_len_);
   }
@@ -76,7 +82,9 @@ private:
 
 class ROSCommandTransmitter : public rclcpp::Node {
 public:
-  ROSCommandTransmitter() : Node("ROS_Unity_command_Tx") {
+  ROSCommandTransmitter()
+  : Node("ROS_Unity_command_Tx")
+  {
     declare_parameter<std::string>("address", "127.0.0.1");
     declare_parameter<int>("port", 6657);
     declare_parameter<std::string>("command_topic", "car_command");
@@ -86,20 +94,22 @@ public:
     const auto topic = get_parameter("command_topic").as_string();
     subscription_ = create_subscription<VehicleControl>(
         topic, rclcpp::QoS(1),
-        [this](const VehicleControl::SharedPtr msg) {
-          current_command_[0] = msg->throttle;
-          current_command_[1] = msg->steering;
-          current_command_[2] = msg->brake;
-          current_command_[3] = msg->reserved;
+      [this](const VehicleControl::SharedPtr msg) {
+        current_command_[0] = msg->throttle;
+        current_command_[1] = msg->steering;
+        current_command_[2] = msg->brake;
+        current_command_[3] = msg->reserved;
         });
   }
 
-  void Run() {
+  void Run()
+  {
     const auto address = get_parameter("address").as_string();
     const int port = get_parameter("port").as_int();
     const auto topic = get_parameter("command_topic").as_string();
 
-    RCLCPP_INFO(get_logger(), "Starting command transmit to Unity via UDP %s:%d", address.c_str(), port);
+    RCLCPP_INFO(get_logger(), "Starting command transmit to Unity via UDP %s:%d", address.c_str(),
+      port);
     RCLCPP_INFO(get_logger(), "Listening to command topic: %s", topic.c_str());
 
     UDPClient client(address, port);
@@ -123,14 +133,16 @@ public:
   }
 
 private:
-  void LoadConfigParameters() {
+  void LoadConfigParameters()
+  {
     const std::string config_path = get_parameter("config_file").as_string();
     if (config_path.empty()) {
       return;
     }
     std::ifstream file(config_path);
     if (!file.is_open()) {
-      RCLCPP_WARN(get_logger(), "Config file not found at %s; using node parameters/defaults", config_path.c_str());
+      RCLCPP_WARN(get_logger(), "Config file not found at %s; using node parameters/defaults",
+        config_path.c_str());
       return;
     }
     try {
@@ -138,14 +150,17 @@ private:
       file >> config;
       if (config.contains("controlConfig")) {
         if (config["controlConfig"].contains("address")) {
-          set_parameter(rclcpp::Parameter("address", static_cast<std::string>(config["controlConfig"]["address"])));
+          set_parameter(rclcpp::Parameter("address",
+            static_cast<std::string>(config["controlConfig"]["address"])));
         }
         if (config["controlConfig"].contains("port")) {
-          set_parameter(rclcpp::Parameter("port", static_cast<int>(config["controlConfig"]["port"])));
+          set_parameter(rclcpp::Parameter("port",
+            static_cast<int>(config["controlConfig"]["port"])));
         }
       }
-    } catch (const std::exception &e) {
-      RCLCPP_WARN(get_logger(), "Could not parse config file %s: %s", config_path.c_str(), e.what());
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(get_logger(), "Could not parse config file %s: %s", config_path.c_str(),
+        e.what());
     }
   }
 
@@ -153,12 +168,13 @@ private:
   rclcpp::Subscription<VehicleControl>::SharedPtr subscription_;
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   rclcpp::init(argc, argv);
   auto node = std::make_shared<ROSCommandTransmitter>();
   try {
     node->Run();
-  } catch (const std::exception &e) {
+  } catch (const std::exception & e) {
     RCLCPP_ERROR(node->get_logger(), "%s", e.what());
   }
   rclcpp::shutdown();

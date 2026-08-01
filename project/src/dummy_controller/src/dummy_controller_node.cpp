@@ -1,3 +1,5 @@
+// Copyright 2026 Team 20
+
 #include <chrono>
 #include <cmath>
 #include <memory>

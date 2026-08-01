@@ -4,8 +4,8 @@
   <version>0.0.6657</version>
   <description>A simple ROS 2 controller that publishes vehicle commands.</description>
 
-  <maintainer email="jiaming.zhang@tum.de">Jiaming zhang</maintainer>
-  <license>TODO</license>
+  <maintainer email="go29hir@tum.de">Team 20</maintainer>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

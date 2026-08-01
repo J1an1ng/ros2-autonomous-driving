@@ -20,14 +20,25 @@ python_paths=(
   "${project_root}/tools"
 )
 
-mapfile -t cpp_paths < <(
+mapfile -t team_cpp_paths < <(
   find \
     "${project_root}/src/controller/include" \
     "${project_root}/src/controller/src" \
     "${project_root}/src/controller/test" \
+    "${project_root}/src/dummy_controller/src" \
     "${project_root}/src/perception/include" \
     "${project_root}/src/perception/src" \
     "${project_root}/src/perception/test" \
+    -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o \
+    -name '*.h' -o -name '*.hh' -o -name '*.hpp' \) \
+    -print
+)
+
+mapfile -t simulator_cpp_paths < <(
+  find \
+    "${project_root}/src/simulation/src" \
+    "${project_root}/src/simulation/tcpimage" \
+    -path "${project_root}/src/simulation/src/json_nlohmann" -prune -o \
     -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o \
     -name '*.h' -o -name '*.hh' -o -name '*.hpp' \) \
     -print
@@ -38,7 +49,10 @@ python3 -m ament_flake8.main "${python_paths[@]}"
 python3 -m ament_pep257.main "${python_paths[@]}"
 
 echo 'Checking C++ style...'
-python3 -m ament_cpplint.main "${cpp_paths[@]}"
-python3 -m ament_uncrustify.main "${cpp_paths[@]}"
+python3 -m ament_cpplint.main "${team_cpp_paths[@]}"
+python3 -m ament_cpplint.main \
+  --filters=-legal/copyright,-build/include_subdir \
+  "${simulator_cpp_paths[@]}"
+python3 -m ament_uncrustify.main "${team_cpp_paths[@]}" "${simulator_cpp_paths[@]}"
 
 echo 'Code-quality checks passed.'

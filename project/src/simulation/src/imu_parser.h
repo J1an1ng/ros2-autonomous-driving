@@ -9,13 +9,17 @@
 #include "rgb_camera_parser.h"
 #include "unity_stream_parser.h"
 
-class IMUParser : public UnityStreamParser {
+class IMUParser: public UnityStreamParser {
 public:
-  explicit IMUParser(rclcpp::Node *node) : node_(node) {}
+  explicit IMUParser(rclcpp::Node *node)
+  : node_(node) {
+  }
 
-  bool ParseMessage(const UnityHeader &header,
-                    TCPStreamReader &stream_reader,
-                    double time_offset) override {
+  bool ParseMessage(
+    const UnityHeader & header,
+    TCPStreamReader & stream_reader,
+    double time_offset) override
+  {
     const float ax = stream_reader.ReadFloat();
     const float ay = stream_reader.ReadFloat();
     const float az = stream_reader.ReadFloat();
@@ -24,8 +28,8 @@ public:
     const float gz = stream_reader.ReadFloat();
 
     if (publishers_.find(header.name) == publishers_.end()) {
-      publishers_[header.name] = node_->create_publisher<sensor_msgs::msg::Imu>(
-          header.name, rclcpp::SensorDataQoS());
+      publishers_[header.name] = node_->create_publisher < sensor_msgs::msg::Imu > (
+        header.name, rclcpp::SensorDataQoS());
       RCLCPP_INFO(node_->get_logger(), "Publishing IMU '%s'", header.name.c_str());
     }
 
@@ -44,6 +48,7 @@ public:
   }
 
 private:
-  rclcpp::Node *node_;
-  std::unordered_map<std::string, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> publishers_;
+  rclcpp::Node * node_;
+  std::unordered_map < std::string,
+  rclcpp::Publisher < sensor_msgs::msg::Imu > ::SharedPtr > publishers_;
 };
