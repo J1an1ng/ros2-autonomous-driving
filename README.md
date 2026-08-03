@@ -15,7 +15,6 @@ introduction-to-ros-2026/
 ├── README.md                         # installation and single-launch instructions
 ├── DocumentationTeam20.pdf          # formal assignment documentation
 ├── DocumentationTeam20.md           # editable documentation source
-├── PresentationTeam20.md            # five-minute oral presentation script
 ├── RELEASE_NOTES.md                  # release history and retained validation notes
 └── project/                           # ROS 2 workspace
     ├── AutonomousDriving.pdf         # course assignment
@@ -370,8 +369,6 @@ manifest; ONNX Runtime remains separately licensed.
   [`project/AutonomousDriving.pdf`](project/AutonomousDriving.pdf).
 - [`DocumentationTeam20.md`](DocumentationTeam20.md): editable source for
   the formal documentation.
-- [`PresentationTeam20.md`](PresentationTeam20.md): approximately five-minute oral
-  presentation script covering implementation, results, limitations, issues, and feedback.
 - [`project/docs/ros_graph.svg`](project/docs/ros_graph.svg): editable/rendered ROS graph
   with module ownership.
 - [`project/src/README.md`](project/src/README.md): detailed package interfaces,
