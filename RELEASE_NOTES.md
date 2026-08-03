@@ -35,9 +35,9 @@ Improvements:
 - Resolves the `route_manager` flake8 and PEP 257 findings, simplifies the
   route-manager node structure, reformats the waypoint recorder, strengthens
   route-map validation, and adds regression coverage for malformed route data.
-- Introduces a shared repository style through `.editorconfig` and
-  `project/CODE_STYLE.md`. Release validation checked Team 20 Python and C++ plus the
-  maintained simulator bridge while preserving documented simulator exemptions.
+- Introduces a shared repository style through `.editorconfig` and the ROS 2
+  flake8/PEP 257/cpplint/uncrustify profiles. Release validation checked Team 20 Python
+  and C++ plus the maintained simulator bridge while preserving documented exemptions.
 - Applies consistent naming, imports, formatting, and documentation across
   perception, route management, trajectory generation, decision making,
   controller, simulation launch code, system bringup, tests, and project tools.

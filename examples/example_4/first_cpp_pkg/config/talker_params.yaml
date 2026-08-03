@@ -1,5 +1,0 @@
-robot_status_talker_param:
-  ros__parameters:
-    publish_frequency: 10.0
-    robot_name: "tutorial_bot2"
-    battery_drain_per_message: 0.333

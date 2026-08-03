@@ -433,9 +433,13 @@ installed as `share/perception/models/yolov8n.onnx`.
 
 ## Further documentation
 
-- [`../PROJECT_STATUS_SUMMARY.md`](../PROJECT_STATUS_SUMMARY.md): English architecture,
-  design choices, ownership, validation evidence, figures, and bibliography.
-- [`../项目现状.md`](../项目现状.md): Chinese version of the project-status summary.
+- [`../../DocumentationTeam20.pdf`](../../DocumentationTeam20.pdf): formal standalone project
+  documentation required by the assignment.
+- [`../../DocumentationTeam20.md`](../../DocumentationTeam20.md): editable documentation
+  source with architecture, node/package descriptions, ownership, limitations, results,
+  ROS graph, and bibliography.
+- [`../PROJECT_STATUS_SUMMARY.md`](../PROJECT_STATUS_SUMMARY.md): extended internal
+  architecture and validation record.
 - [`../INTEGRATION_README.md`](../INTEGRATION_README.md): staged readiness and scenario
   validation gates.
 - [`perception/README.md`](perception/README.md): RGB-D projection, traffic-light

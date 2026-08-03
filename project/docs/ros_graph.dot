@@ -69,8 +69,8 @@ digraph team20_ros_graph {
   }
 
   subgraph cluster_controller {
-    color="#7e57c2";
-    fillcolor="#ede7f6";
+    color="#ab47bc";
+    fillcolor="#f3e5f5";
     label="controller — Yida Lyu";
     style="rounded,filled";
     controller [label="controller_node"];
@@ -79,7 +79,7 @@ digraph team20_ros_graph {
   integration [
     color="#00838f",
     fillcolor="#e0f7fa",
-    label="system_bringup/full_system.launch.py\nshared integration: Yida Lyu / Tao Zhang / Jianing Huang",
+    label="system_bringup/full_system.launch.py\nshared integration: all four team members",
     shape=component
   ];
 

@@ -4,7 +4,7 @@
   <version>0.2.0</version>
   <description>ROS2 Jazzy port of the Unity simulator bridge package.</description>
   <maintainer email="markus.ryll@tum.de">Markus Ryll</maintainer>
-  <license>TODO</license>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

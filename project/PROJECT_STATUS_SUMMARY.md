@@ -1,6 +1,6 @@
 # Project Status: full-system-v1.9.0
 
-Updated: 2026-08-01
+Updated: 2026-08-03
 
 > This document is the written summary for full-system-v1.9.0. It covers the complete
 > system architecture, perception model, route and trajectory generation, decision and
@@ -123,7 +123,7 @@ and ROS node. Visualization nodes are included but do not feed autonomy decision
 | `decision_making` | `obstacle_monitor_node` | Yida Lyu: planning-corridor point-cloud distances plus vision/route fusion for front and merging obstacles. |
 | `decision_making` | `traffic_light_state_machine_node` | Yida Lyu: safety-priority behaviour state machine and final speed/stop intent. |
 | `controller` | `controller_node` | Yida Lyu: trajectory-indexed Pure Pursuit, most-restrictive speed selection, PID, safe stop, and `/car_command`. |
-| `system_bringup` | launch orchestration; optional `live_visualization`, `driving_overview`, `telemetry_charts` | Yida/Tao/Jianing shared integration: starts the production graph and optional diagnostics; visualization has no control authority. |
+| `system_bringup` | launch orchestration; optional `live_visualization`, `driving_overview`, `telemetry_charts` | Shared integration by all four members: starts the production graph and optional diagnostics; visualization has no control authority. |
 | `dummy_controller` | none in production | Course-supplied example retained unchanged and never launched with Team 20's controller. |
 
 ### 2.2 Main Models and Trade-offs
@@ -306,8 +306,8 @@ This release aligned Team 20's code style while documenting the newly added Team
 trajectory message and connecting it to the controller-facing interface:
 
 - fixed `route_manager` flake8 and PEP 257 issues and added malformed-route tests;
-- added the root `.editorconfig` and `project/CODE_STYLE.md` to align readability rules
-  across Python, C++, launch files, tests, and tools;
+- added the root `.editorconfig` and applied the ROS 2 lint/format profiles to align
+  readability rules across Python, C++, launch files, tests, and tools;
 - applied Python flake8/PEP 257 and C++ cpplint/uncrustify during release validation;
 - kept the course-supplied `dummy_controller` at the v1.8.0 baseline and outside Team 20
   style modifications;
@@ -355,7 +355,8 @@ requirements-yolo-training.txt
 
 # v1.9.0 code quality and project-level documentation
 ../.editorconfig
-CODE_STYLE.md
+../DocumentationTeam20.md
+../DocumentationTeam20.pdf
 tools/analyze_mission_run.py
 docs/ros_graph.svg
 mission_results/README.md
@@ -404,10 +405,10 @@ the shared integration work, so this document does not invent one.
 | `decision_making` | Team-written / substantively developed | Traffic-light state machine, obstacle fusion, following/merge/emergency priorities, timeouts/latches, tests, and documentation; led by Yida Lyu. |
 | `controller` | Team-written / substantively developed | Project implementation of Pure Pursuit/PID, input validation, output limits, safe stop, parameters, tests, and documentation; led by Yida Lyu. |
 | YOLO RGB-D and project mapping logic in `perception` | Team-written / substantively developed around a reused model and libraries | ROS nodes, RGB-D reprojection, candidate selection, HSV/temporal rules, occupancy outputs, configuration, tests, and documentation; led by Tao Zhang. |
-| `system_bringup`, project configuration, integration tests/documentation | Team integration | Single launch entry, module switches, safe defaults, RViz, interface integration, and validation; shared by Yida/Tao/Jianing. |
+| `system_bringup`, project configuration, integration tests/documentation | Team integration | Single launch entry, module switches, safe defaults, RViz, interface integration, and validation; shared by all four members. |
 | `simulation` / Unity bridge and assets | Course-supplied, retained/reused | Supplies sensors, vehicle state, and command transport. Team 20 invokes it through `system_bringup` and project configuration and does not claim the simulator, bridge, or original ROS 2 port as its own work. |
 | `dummy_controller` | Course-supplied, not production | Example controller retained at the project baseline; it is not part of Team 20's production control or code-style assessment scope. |
-| `.editorconfig`, `CODE_STYLE.md`, quality gate, and project-level READMEs | Shared Team 20 deliverables | Style alignment, quality checking, traceability, run instructions, and release documentation; no finer individual split is claimed. |
+| `.editorconfig`, quality gate, standalone documentation, and project-level READMEs | Shared Team 20 deliverables | Style alignment, quality checking, traceability, run instructions, and release documentation; no finer individual split is claimed. |
 
 Reused algorithms and implementation boundaries:
 
@@ -648,9 +649,9 @@ ros2 launch system_bringup full_system.launch.py \
   over the resulting zero-length horizon and the controller safe-stops. Planning the
   final stop in advance would require an upstream final-waypoint semantic before the
   reach event.
-- `mission_results` persists compact metrics and figures, but large raw rosbags are not
-  stored in Git. Complete third-party replay therefore requires a long-term raw
-  bag/config archive; a separate no-event control run remains useful comparative evidence.
+- `mission_results` persists compact metrics and figures. The latest accepted raw bag and
+  matching logs are retained through Git LFS under `Rosbag_reproduction/`; ordinary runs
+  stay Git-ignored. A separate no-event control run remains useful comparative evidence.
 - Final documentation must distinguish “Team 20's YOLO integration contribution” from
   the reused “YOLOv8n/COCO/ONNX Runtime/OpenCV/ROS 2” components. It must not state
   broadly that “YOLO was developed by us.”
